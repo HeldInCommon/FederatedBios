@@ -19,7 +19,7 @@ Basic build of a client-side Leptos 0.8 app
 
 ## System Diagram 
 
-[images/sys-architecture.png]
+![System Architecture](images/sys-architecture.png)
 
 ## Notes
 
