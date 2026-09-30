@@ -8,6 +8,9 @@ leptos = { version = "0.8", features = ["csr"] }
 gloo-net = { version = "0.6", default-features = false, features = ["http"] }
 gloo-timers = { version = "0.3", features = ["futures"] }
 console_error_panic_hook = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+web-sys = { version = "0.3", features = ["Blob", "File", "FileList", "HtmlInputElement", "Storage", "Url"] }
 
 [profile.release]
 opt-level = "z"
