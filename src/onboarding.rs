@@ -11,9 +11,12 @@ const NODE_ATTEMPTS: u32 = 20;
 pub fn Onboarding() -> impl IntoView {
     let docker = RwSignal::new(CheckState::pending("Looking for Docker Desktop on this machine"));
     let image = RwSignal::new(CheckState::pending("Waiting for Docker"));
-    let node = RwSignal::new(CheckState::pending(format!("Waiting for {NODE_ADDR}")));
+    let node = RwSignal::new(CheckState::pending("Starts once the node image is running"));
 
-    // Each runner resets its own card and re-probes. None depends on another.
+    // Bumped on every node run. A poll whose number is stale (or whose
+    // counter has been disposed because the page was left) stops itself.
+    let node_run = StoredValue::new(0u32);
+
     let run_docker = move || {
         docker.set(CheckState::pending("Looking for Docker Desktop on this machine"));
         spawn_local(async move { docker.set(probes::docker().await) });
@@ -23,21 +26,41 @@ pub fn Onboarding() -> impl IntoView {
         spawn_local(async move { image.set(probes::image().await) });
     };
     let run_node = move || {
+        node_run.update_value(|n| *n += 1);
+        let this_run = node_run.get_value();
+        let still_current = move || node_run.try_get_value() == Some(this_run);
+
         spawn_local(async move {
             let result = probes::node(NODE_ATTEMPTS, move |n| {
+                if !still_current() {
+                    return false;
+                }
                 node.set(CheckState::pending(format!(
                     "Waiting for {NODE_ADDR} (attempt {n} of {NODE_ATTEMPTS})"
                 )));
+                true
             })
             .await;
-            node.set(result);
+            if let Some(result) = result.filter(|_| still_current()) {
+                node.set(result);
+            }
         });
     };
 
-    // Kick everything off once, on mount.
+    // Docker and the image are checked straight away. The node is only polled
+    // once the image reports it has started; before that there is nothing on
+    // localhost:4321 to answer. If the image check is retried, any poll in
+    // flight is cancelled and the node card goes back to waiting.
     run_docker();
     run_image();
-    run_node();
+    Effect::new(move |_| {
+        if image.with(CheckState::is_ok) {
+            run_node();
+        } else {
+            node_run.update_value(|n| *n += 1);
+            node.set(CheckState::pending("Starts once the node image is running"));
+        }
+    });
 
     // The only gate: nothing about a profile until the node answers.
     let node_ready = move || node.with(CheckState::is_ok);
@@ -98,6 +121,9 @@ pub fn Onboarding() -> impl IntoView {
                 >
                     "Set up your profile"
                 </a>
+                <a class="help-link" href="#/profile" class:hidden=node_ready>
+                    "Skip for now"
+                </a>
                 <a class="help-link" href="#/help/docker">"Docker will not start"</a>
             </footer>
         </main>
@@ -105,7 +131,7 @@ pub fn Onboarding() -> impl IntoView {
 }
 
 #[component]
-fn Stepper(current: u8) -> impl IntoView {
+pub fn Stepper(current: u8) -> impl IntoView {
     const STEPS: [&str; 4] = ["Install", "Profile", "Visibility", "Publish"];
 
     view! {

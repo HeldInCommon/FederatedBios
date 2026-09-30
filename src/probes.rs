@@ -36,23 +36,27 @@ pub async fn image() -> CheckState {
 }
 
 /// Polls `GET http://localhost:4321/health` until it answers or we give up.
-/// `on_attempt` lets the card show progress while waiting.
+/// `on_attempt` lets the card show progress while waiting. It returns `false`
+/// when the caller no longer wants the result (a newer run started, or the page
+/// was left), in which case polling stops and this returns `None`.
 ///
 /// The node must send `Access-Control-Allow-Origin` for the page's origin,
 /// otherwise the browser will block the response.
-pub async fn node(max_attempts: u32, on_attempt: impl Fn(u32)) -> CheckState {
+pub async fn node(max_attempts: u32, on_attempt: impl Fn(u32) -> bool) -> Option<CheckState> {
     let url = format!("http://{NODE_ADDR}/health");
     let mut last_error = String::new();
 
     for attempt in 1..=max_attempts {
-        on_attempt(attempt);
+        if !on_attempt(attempt) {
+            return None;
+        }
         match Request::get(&url).send().await {
-            Ok(resp) if resp.ok() => return CheckState::ok(NODE_ADDR),
+            Ok(resp) if resp.ok() => return Some(CheckState::ok(NODE_ADDR)),
             Ok(resp) => last_error = format!("The node answered with HTTP {}.", resp.status()),
             Err(_) => last_error = format!("Nothing is answering on {NODE_ADDR}."),
         }
         TimeoutFuture::new(1500).await;
     }
 
-    CheckState::failed(last_error, "Try again")
+    Some(CheckState::failed(last_error, "Try again"))
 }
