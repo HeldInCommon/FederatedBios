@@ -4,10 +4,11 @@
 Basic build of a client-side Leptos 0.8 app
 
 ## Run
-
-    rustup target add wasm32-unknown-unknown
-    cargo install trunk --locked 
-    trunk serve --open
+```
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked 
+trunk serve --open
+```
 
 ## Layout
 
