@@ -28,3 +28,32 @@ trunk serve --open
 - Set `SIMULATE_DOCKER_FAILURE = true` in `probes.rs` to preview the failure states.
 - Moving to Tauri: keep the UI as is and replace the bodies of `docker()` / `image()` with
   `invoke` calls to Rust commands that shell out to Docker.
+
+## The node
+
+`node/` is the service the onboarding page talks to on `localhost:4321`: a separate
+Rust crate (axum) packaged as the `heldincommon/node` Docker image. It stores the
+profile and visibility choice as JSON files in `/data`.
+
+| Route         | Methods   | Body                                        |
+|---------------|-----------|---------------------------------------------|
+| `/health`     | GET       | `{"status":"ok","version":"0.1.0"}`         |
+| `/profile`    | GET, PUT  | the `Draft` shape from `src/profile.rs`     |
+| `/visibility` | GET, PUT  | `{"reach":"public" \| "commons" \| "members"}` |
+
+GET returns 404 until something has been saved.
+
+Run it without Docker while developing:
+```
+cd node && cargo run
+```
+
+Build and run the image:
+```
+docker build -t heldincommon/node:dev node
+docker run -d --name hic-node -p 127.0.0.1:4321:4321 -v hic-data:/data heldincommon/node:dev
+```
+
+Settings (environment variables): `HIC_ADDR`, `HIC_DATA_DIR`, and
+`HIC_ALLOWED_ORIGINS` (comma-separated; defaults to the `trunk serve` origins).
+Add an origin there if the UI is served from anywhere else.

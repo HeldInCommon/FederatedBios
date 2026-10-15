@@ -1,0 +1,3 @@
+[watch]
+# The node is a separate crate; editing it should not rebuild the UI.
+ignore = ["node"]
