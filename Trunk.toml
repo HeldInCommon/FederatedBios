@@ -1,0 +1,8 @@
+[watch]
+# Changes to the desktop shell shouldn't rebuild the web frontend.
+ignore = ["./src-tauri", "./node"]
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080
+ws_protocol = "ws"
