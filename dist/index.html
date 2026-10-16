@@ -10,8 +10,8 @@
     <link rel="stylesheet" href="/style-c44578ae578559dd.css" integrity="sha384-1NCo+NmNvMwP6QyWqJPtKTiQ9zULIeqSN2mILIeuyQurTVGoDABtpbNFqrdePzWo"/>
     
 <script type="module">
-import init, * as bindings from '/hic-onboarding-bf4015d251f8ca55.js';
-const wasm = await init({ module_or_path: '/hic-onboarding-bf4015d251f8ca55_bg.wasm' });
+import init, * as bindings from '/hic-onboarding-139734759260feb5.js';
+const wasm = await init({ module_or_path: '/hic-onboarding-139734759260feb5_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -20,7 +20,7 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-  <link rel="modulepreload" href="/hic-onboarding-bf4015d251f8ca55.js" crossorigin="anonymous" integrity="sha384-38uEMs5JpyXfVkrVc9YnOxTg4qliTFm8jQXb/IdmNLBBBBe6CdoENCWPp875DBot"><link rel="preload" href="/hic-onboarding-bf4015d251f8ca55_bg.wasm" crossorigin="anonymous" integrity="sha384-H00y9tHppVrktmuAt6joIpEGwUUxHyDYk6K4cdSjx77uP8/eMmPtCUeQkUs6sBuN" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/hic-onboarding-139734759260feb5.js" crossorigin="anonymous" integrity="sha384-OYQQSqtXpihpOb/3Vp9bGZPUl+rPWphP0Nv9ULj9Y+V5SwOWib4eddUj3gT/5UNZ"><link rel="preload" href="/hic-onboarding-139734759260feb5_bg.wasm" crossorigin="anonymous" integrity="sha384-Wl+p9wW/9CBY0lYoA09PX16MV+0qG3+5Q7bEYBEiN/0rhzJNCEPwnisuAXIZ+snr" as="fetch" type="application/wasm"></head>
   <body>
 
   <script>"use strict";
@@ -29,7 +29,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
     const address = '{{__TRUNK_ADDRESS__}}';
     const base = '{{__TRUNK_WS_BASE__}}';
-    let protocol = '';
+    let protocol = 'ws';
     protocol =
         protocol
             ? protocol

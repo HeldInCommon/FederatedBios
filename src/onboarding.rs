@@ -96,7 +96,7 @@ pub fn Onboarding() -> impl IntoView {
                     state=image
                     on_action=Callback::new(move |_| run_image())
                     command=RUN_COMMAND
-                    on_view_log=Callback::new(|_| leptos::logging::log!("TODO: open container log"))
+                    on_view_log=Callback::new(|_| spawn_local(async { leptos::logging::log!("{}", probes::node_log().await) }))
                 />
                 <Check
                     titles=Titles {

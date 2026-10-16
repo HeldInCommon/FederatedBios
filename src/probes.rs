@@ -1,38 +1,69 @@
 //! The three checks. Each is an independent async fn returning a `CheckState`,
 //! so each card resolves (or fails) on its own.
 //!
-//! A browser tab cannot see Docker, so `docker()` and `image()` are stubs here.
-//! In a Tauri build, replace their bodies with `invoke("docker_status")` etc.
-//! `node()` is real: it polls the node's health endpoint over HTTP.
+//! `docker()` and `image()` call Rust commands in the Tauri shell, which shell
+//! out to Docker. In a plain browser tab (`trunk serve`) there is no shell, so
+//! they report as skipped and you start the container yourself with
+//! `RUN_COMMAND`. `node()` polls the node's health endpoint over HTTP either way.
 
 use crate::check::CheckState;
 use gloo_net::http::Request;
 use gloo_timers::future::TimeoutFuture;
+use wasm_bindgen::prelude::*;
 
 pub const NODE_ADDR: &str = "localhost:4321";
-pub const RUN_COMMAND: &str = "docker run -d -p 4321:4321 heldincommon/node";
+pub const RUN_COMMAND: &str =
+    "docker run -d --name hic-node -p 4321:4321 -v hic-node-data:/data --restart unless-stopped heldincommon/node";
 
-/// Flip to see the failure states without breaking your real setup.
-const SIMULATE_DOCKER_FAILURE: bool = false;
+#[wasm_bindgen]
+extern "C" {
+    // Needs `"withGlobalTauri": true` under `app` in tauri.conf.json.
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
+    async fn invoke(cmd: &str) -> Result<JsValue, JsValue>;
+}
+
+/// True inside the Tauri webview, false in an ordinary browser tab.
+fn in_tauri() -> bool {
+    js_sys::Reflect::has(&js_sys::global(), &JsValue::from_str("__TAURI__")).unwrap_or(false)
+}
+
+/// Shown on the Docker cards when running in a browser tab.
+const BROWSER_SKIP: &str = "Skipped in the browser · start the container yourself";
+
+/// Runs a Tauri command that returns `Result<String, String>`.
+async fn call(cmd: &str) -> Result<String, String> {
+    match invoke(cmd).await {
+        Ok(v) => Ok(v.as_string().unwrap_or_default()),
+        Err(e) => Err(e.as_string().unwrap_or_else(|| format!("{e:?}"))),
+    }
+}
 
 pub async fn docker() -> CheckState {
-    // TODO(tauri): run `docker version --format '{{.Server.Version}}'` host-side.
-    TimeoutFuture::new(700).await;
-    if SIMULATE_DOCKER_FAILURE {
-        CheckState::failed("Docker Desktop is installed but not running.", "Try again")
-    } else {
-        CheckState::ok("Version 4.38 · running")
+    if !in_tauri() {
+        return CheckState::ok(BROWSER_SKIP);
+    }
+    match call("docker_status").await {
+        Ok(version) => CheckState::ok(format!("Version {version} · running")),
+        Err(reason) => CheckState::failed(reason, "Try again"),
     }
 }
 
 pub async fn image() -> CheckState {
-    // TODO(tauri): `docker pull heldincommon/node` then `docker run …`, streaming the log.
-    TimeoutFuture::new(1600).await;
-    if SIMULATE_DOCKER_FAILURE {
-        CheckState::failed("The node image could not be pulled because Docker is not running.", "Try again")
-    } else {
-        CheckState::ok("heldincommon/node · 41 MB")
+    if !in_tauri() {
+        return CheckState::ok(BROWSER_SKIP);
     }
+    match call("start_node").await {
+        Ok(detail) => CheckState::ok(detail),
+        Err(reason) => CheckState::failed(reason, "Try again"),
+    }
+}
+
+/// Last lines of the container log, for the "View log" button.
+pub async fn node_log() -> String {
+    if !in_tauri() {
+        return "Logs need the desktop app. In a terminal: docker logs hic-node".into();
+    }
+    call("node_log").await.unwrap_or_else(|e| e)
 }
 
 /// Polls `GET http://localhost:4321/health` until it answers or we give up.
