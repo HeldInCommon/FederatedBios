@@ -789,6 +789,29 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
     shell("Directory", me.as_deref(), body)
 }
 
+/// A readable label for a commons URL — its host, without scheme or trailing slash.
+fn commons_label(url: &str) -> String {
+    url.strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url)
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// De-duplicated, order-stable list of commons the owner can share to with one
+/// click: the configured default first (if set), then everything already shared
+/// to. This is what turns "paste a URL" into "pick one and click".
+fn known_commons(default: &str, shared_to: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for u in std::iter::once(default).chain(shared_to.iter().map(|s| s.as_str())) {
+        let u = u.trim().trim_end_matches('/');
+        if !u.is_empty() && !out.iter().any(|x| x == u) {
+            out.push(u.to_string());
+        }
+    }
+    out
+}
+
 async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, headers: HeaderMap) -> Response {
     let me = session_handle(&st, &headers);
     let Some(h) = load_handle(&st, &handle) else {
@@ -853,17 +876,39 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
             div class="owner-panel" {
                 div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
                 @if shareable {
-                    form method="post" action="/share" class="share-form" {
-                        input type="hidden" name="handle" value=(h.handle);
-                        input type="hidden" name="csrf" value=(csrf);
-                        label class="field-label" for="commons_url" { "Share to a commons" }
-                        p class="hint" { "Push a signed, verifiable copy to a shared commons. Members-only versions never leave your node." }
-                        div class="share-row" {
-                            input id="commons_url" name="commons_url" type="url" value=(share_default) placeholder="https://commons.example";
-                            button class="secondary" type="submit" { "Share" }
+                    @let known = known_commons(&share_default, &h.shared_to);
+                    section class="share-panel" {
+                        h2 class="field-label" { "Share to a commons" }
+                        p class="hint" { "Push a signed, verifiable copy to a shared commons \u{2014} one click. Members-only versions never leave your node." }
+                        @if !known.is_empty() {
+                            ul class="commons-list" {
+                                @for c in &known {
+                                    @let shared = h.shared_to.iter().any(|s| s == c);
+                                    li class="commons-item" {
+                                        form method="post" action="/share" class="commons-share" {
+                                            input type="hidden" name="handle" value=(h.handle);
+                                            input type="hidden" name="csrf" value=(csrf);
+                                            input type="hidden" name="commons_url" value=(c);
+                                            span class="commons-meta" {
+                                                span class="commons-name" { (commons_label(c)) }
+                                                @if shared { span class="commons-status" { "shared \u{2713}" } }
+                                            }
+                                            button class="secondary" type="submit" { (if shared { "Re-share" } else { "Share" }) }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        @if !h.shared_to.is_empty() {
-                            p class="shared-note" { "Shared to: " (h.shared_to.join(", ")) }
+                        details class="add-commons" open[known.is_empty()] {
+                            summary { (if known.is_empty() { "Add a commons" } else { "Share to a different commons" }) }
+                            form method="post" action="/share" class="share-form" {
+                                input type="hidden" name="handle" value=(h.handle);
+                                input type="hidden" name="csrf" value=(csrf);
+                                div class="share-row" {
+                                    input name="commons_url" type="url" placeholder="https://commons.example";
+                                    button class="secondary" type="submit" { "Share" }
+                                }
+                            }
                         }
                     }
                 }
