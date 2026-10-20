@@ -60,17 +60,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code-signing + notarization is OPT-IN so the build ALWAYS yields
-          # an (unsigned) .dmg. Signing is attempted only when the repo/org variable
-          # ENABLE_MAC_SIGNING == 'true'. Flip it on ONLY once a real Developer ID
-          # Application cert is in the secrets below — otherwise tauri-action tries
-          # to import the cert and fails the whole macOS build (no .dmg produced).
-          APPLE_CERTIFICATE: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_ID: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          # NOTE: builds are intentionally UNSIGNED so the .dmg + Linux installers
+          # always build and are usable straight from the release (macOS users run
+          # `xattr -c` once — see docs/INSTALL.md). Do NOT add APPLE_* env vars here
+          # until a real Developer ID Application cert exists: the tauri bundler
+          # signs whenever APPLE_CERTIFICATE is *defined* (even empty), and the bad
+          # org-inherited cert makes `security import` fail the whole macOS build.
+          # To enable signing later, re-add the APPLE_* vars AND provide a valid
+          # Developer ID .p12 — see .github/workflows/README or git history.
         with:
           tagName: node-app-preview
           releaseName: "Held In Common"
