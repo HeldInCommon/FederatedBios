@@ -1,6 +1,8 @@
 name: desktop-app
 on:
   workflow_dispatch:
+  push:
+    tags: ['node-app-v*']
 permissions:
   contents: write
 jobs:
