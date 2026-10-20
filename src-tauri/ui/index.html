@@ -23,9 +23,17 @@
   h1{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0}
   .dot{color:var(--pink)}
   .sub{color:#6f6f6f;margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
-  .fallback{margin-top:22px;font-size:14px;color:#8a8a8a;opacity:0;transition:opacity .4s}
-  .fallback.show{opacity:1}
+  /* manual start — hidden until auto-start stalls */
+  .actions{margin-top:26px;opacity:0;transform:translateY(6px);transition:opacity .4s,transform .4s;pointer-events:none}
+  .actions.show{opacity:1;transform:none;pointer-events:auto}
+  .btn{cursor:pointer;border:0;padding:13px 22px;font:700 13px/1 ui-monospace,"SF Mono",Menlo,monospace;
+       letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--blue);
+       box-shadow:0 2px 12px rgba(31,92,255,.35);transition:background .2s,transform .06s}
+  .btn:hover{background:#1748d6} .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.55;cursor:default;box-shadow:none}
+  .fallback{margin-top:16px;font-size:14px;color:#8a8a8a}
   .fallback a{color:var(--blue);text-decoration:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;border-bottom:1px solid var(--blue)}
+  .err{margin-top:14px;font-size:13.5px;color:#b00052;min-height:1.1em;max-width:30em}
   @media(prefers-reduced-motion:reduce){ .loader .ring,.loader .core{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} }
 </style></head>
 <body>
@@ -37,19 +45,53 @@
     </div>
     <h1>Starting your node<span class="dot">.</span></h1>
     <p class="sub" id="s">Warming up the commons…</p>
-    <p class="fallback" id="fb">Taking a while? Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser.</p>
+    <div class="actions" id="actions">
+      <button class="btn" id="start">Start the node</button>
+      <p class="err" id="err"></p>
+      <p class="fallback">Still nothing? Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser.</p>
+    </div>
   </div>
   <script>
     const url = 'http://localhost:8080';
+    const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
     const msgs = ['Warming up the commons…','Minting your keys…','Opening your node…'];
     const s = document.getElementById('s');
-    let n = 0;
+    const actions = document.getElementById('actions');
+    const startBtn = document.getElementById('start');
+    const err = document.getElementById('err');
+    let n = 0, done = false;
+
+    // Is the node listening? Prefer the host-side command (a fetch to
+    // http://localhost from this secure origin is blocked as mixed content). Fall
+    // back to fetch when running outside the app (e.g. opened in a browser).
+    async function isUp(){
+      if (invoke){ try { return await invoke('node_up'); } catch(e){ return false; } }
+      try { const r = await fetch(url + '/health', {cache:'no-store'}); return r.ok; } catch(e){ return false; }
+    }
+
+    async function startNode(){
+      err.textContent = '';
+      if (!invoke){ location.href = url; return; }
+      startBtn.disabled = true;
+      const was = startBtn.textContent;
+      startBtn.textContent = 'Starting…';
+      s.textContent = 'Starting your node…';
+      try { await invoke('restart_node'); }
+      catch(e){ err.textContent = (''+e) || 'Could not start the node.'; }
+      setTimeout(() => { startBtn.disabled = false; startBtn.textContent = was; }, 1200);
+    }
+    startBtn.addEventListener('click', startNode);
+
     async function go(){
+      if (done) return;
       n++;
       if (n <= msgs.length * 3) s.textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
-      try { const r = await fetch(url + '/health', {cache:'no-store'}); if (r.ok){ location.href = url; return; } } catch(e){}
-      if (n > 40){ s.textContent = 'Still starting… this can take a moment on first run.';
-        document.getElementById('fb').classList.add('show'); }
+      if (await isUp()){ done = true; location.href = url; return; }
+      // ~12s of patience, then reveal the manual Start button + fallback link.
+      if (n > 20){
+        s.textContent = 'Taking longer than usual.';
+        actions.classList.add('show');
+      }
       setTimeout(go, 600);
     }
     go();
