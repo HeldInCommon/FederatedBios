@@ -8,8 +8,9 @@ use tauri::Manager;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
-/// The shared commons prefilled in the node's "Share to a commons" form.
-const SHARE_DEFAULT: &str = "https://drh1in8ipba68q-8080.proxy.runpod.net";
+// The commons address prefilled in the node's "Share to a commons" form is read
+// from the host HIC_SHARE_DEFAULT env var. Blank by default: no URL is baked into
+// the app — workshop users paste the address their facilitator shares.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,7 +28,7 @@ pub fn run() {
                 .env("HIC_DATA", node_data.to_string_lossy().to_string())
                 .env("PORT", "8080")
                 .env("HIC_INSTANCE", "My node")
-                .env("HIC_SHARE_DEFAULT", SHARE_DEFAULT);
+                .env("HIC_SHARE_DEFAULT", std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default());
 
             let (mut rx, child) = sidecar.spawn()?;
             tauri::async_runtime::spawn(async move {
