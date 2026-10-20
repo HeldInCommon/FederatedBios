@@ -144,10 +144,15 @@ struct Canonical<'a> {
     body: &'a serde_json::Value,
 }
 
+struct Sess {
+    handle: String,
+    csrf: String,
+}
+
 struct AppState {
     data_dir: PathBuf,
-    sessions: Mutex<HashMap<String, String>>, // cookie token -> handle
-    write: Mutex<()>,                          // serialize all writes
+    sessions: Mutex<HashMap<String, Sess>>, // cookie token -> session
+    write: Mutex<()>,                        // serialize all writes
     base_url: String,
     domain: String,
 }
@@ -245,13 +250,12 @@ fn valid_handle(h: &str) -> bool {
     n >= 2 && n <= 30 && h.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
-/// Create a fresh identity. Returns (record, one-time secret shown to the user).
-fn mint_identity(handle: &str, display_name: &str) -> (HandleRec, String) {
+/// Create a fresh identity whose credential is the passphrase the member chose.
+fn mint_identity(handle: &str, display_name: &str, passphrase: &str) -> HandleRec {
     let ed = SigningKey::generate(&mut rand::rngs::OsRng);
     let bx = BoxSecret::generate(&mut BoxRng);
-    let secret = rand_hex(24); // 192-bit credential
     let salt = rand_hex(16);
-    let rec = HandleRec {
+    HandleRec {
         handle: handle.to_string(),
         display_name: display_name.to_string(),
         created_at: now(),
@@ -260,10 +264,9 @@ fn mint_identity(handle: &str, display_name: &str) -> (HandleRec, String) {
         box_pub: hex::encode(bx.public_key().as_bytes()),
         box_priv: hex::encode(bx.to_bytes()),
         secret_salt: salt.clone(),
-        secret_hash: hash_secret(&salt, &secret),
+        secret_hash: hash_secret(&salt, passphrase),
         current_cid: None,
-    };
-    (rec, secret)
+    }
 }
 
 fn box_pub_from_hex(h: &str) -> Option<BoxPublic> {
@@ -337,7 +340,21 @@ fn cookie_token(headers: &HeaderMap) -> Option<String> {
 
 fn session_handle(st: &AppState, headers: &HeaderMap) -> Option<String> {
     let tok = cookie_token(headers)?;
-    st.sessions.lock().unwrap().get(&tok).cloned()
+    st.sessions.lock().unwrap().get(&tok).map(|s| s.handle.clone())
+}
+
+fn session_csrf(st: &AppState, headers: &HeaderMap) -> Option<String> {
+    let tok = cookie_token(headers)?;
+    st.sessions.lock().unwrap().get(&tok).map(|s| s.csrf.clone())
+}
+
+/// Start a session for `handle` and return the cookie token. The per-session
+/// CSRF token guards the cookie-authorised publish form.
+fn new_session(st: &AppState, handle: &str) -> String {
+    let token = rand_hex(32);
+    let csrf = rand_hex(16);
+    st.sessions.lock().unwrap().insert(token.clone(), Sess { handle: handle.to_string(), csrf });
+    token
 }
 
 fn set_session_cookie(token: &str) -> HeaderValue {
@@ -551,6 +568,9 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
                 }
             }
         }
+        @if me.as_deref() == Some(h.handle.as_str()) {
+            div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
+        }
     };
     shell(&format!("@{}", h.handle), me.as_deref(), body)
 }
@@ -572,6 +592,11 @@ async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
                 label class="field-label" for="display_name" { "Display name" }
                 input id="display_name" name="display_name" type="text" maxlength="80" placeholder="Tega Brain" required;
             }
+            div class="field" {
+                label class="field-label" for="passphrase" { "Passphrase" }
+                input id="passphrase" name="passphrase" type="password" minlength="8" maxlength="200" placeholder="At least 8 characters" required;
+                p class="hint" { "You'll use this to sign in and to publish. Choose something you'll remember — we store only a salted hash and can't recover it." }
+            }
             div class="actions" { button class="primary" type="submit" { "Create handle" } }
         }
     };
@@ -582,39 +607,69 @@ async fn join_submit(State(st): State<Shared>, body: String) -> Response {
     let f = parse_form(&body);
     let handle = clamp(one(&f, "handle").to_lowercase(), 30);
     let display = clamp(one(&f, "display_name"), 80);
+    let passphrase = one(&f, "passphrase");
     if !valid_handle(&handle) {
         return error_page("That handle isn't valid — use 2–30 lowercase letters, numbers or underscores.");
     }
     if display.is_empty() {
         return error_page("Please add a display name.");
     }
+    if passphrase.chars().count() < 8 {
+        return error_page("Please choose a passphrase of at least 8 characters.");
+    }
     let _g = st.write.lock().unwrap();
     if load_handle(&st, &handle).is_some() {
         return error_page("That handle is taken. Try another.");
     }
-    let (rec, secret) = mint_identity(&handle, &display);
+    let rec = mint_identity(&handle, &display, &passphrase);
     if save_handle(&st, &rec).is_err() {
         return error_page("Could not save the new handle. Try again.");
     }
-    // Show the one-time secret. This is the credential to publish/sign in.
+    // Sign them straight in and send them to the publish form.
+    let token = new_session(&st, &handle);
+    let mut h = HeaderMap::new();
+    h.insert(header::SET_COOKIE, set_session_cookie(&token));
+    h.insert(header::LOCATION, HeaderValue::from_static("/new"));
+    (StatusCode::SEE_OTHER, h).into_response()
+}
+
+/// The publish / edit form for a signed-in member, prefilled from their current
+/// version where it can be read.
+async fn new_profile(State(st): State<Shared>, headers: HeaderMap) -> Response {
+    let Some(me) = session_handle(&st, &headers) else {
+        return redirect("/login");
+    };
+    let csrf = session_csrf(&st, &headers).unwrap_or_default();
+    let rec = load_handle(&st, &me);
+    let current = rec.as_ref().and_then(|r| r.current_cid.as_ref()).and_then(|c| load_version(&st, c));
+    let (profile, sel_vis, sel_sig) = match &current {
+        Some(v) => {
+            let p = match v.visibility.as_str() {
+                "members" => decrypt_for(&st, v, &me).unwrap_or_default(),
+                _ => v.payload.clone().unwrap_or_default(),
+            };
+            (p, v.visibility.clone(), v.signals.clone())
+        }
+        None => (Profile::default(), "public".to_string(), Vec::new()),
+    };
+    let first_time = current.is_none();
     let body = html! {
         header class="intro" {
-            h1 { "You're in, @" (handle) }
-            p class="lede" { "Save this secret somewhere safe. It's how you publish and sign in as @" (handle) ". We only keep a hash — we can't show it again." }
-        }
-        div class="secret-box" {
-            span class="secret-label" { "Your secret" }
-            code class="secret" { (secret) }
+            h1 { @if first_time { "Your profile" } @else { "Update your profile" } }
+            p class="lede" {
+                @if first_time { "You're signed in as @" (me) ". Fill this in and publish it to the commons." }
+                @else { "Signed in as @" (me) ". Change anything and republish — each version gets its own content address." }
+            }
         }
         form method="post" action="/publish" class="stack-form" {
-            input type="hidden" name="handle" value=(handle);
-            input type="hidden" name="secret" value=(secret);
-            (profile_fields(&Profile::default()))
-            (visibility_and_governance("public", &[]))
-            div class="actions" { button class="primary" type="submit" { "Publish your profile" } }
+            input type="hidden" name="handle" value=(me);
+            input type="hidden" name="csrf" value=(csrf);
+            (profile_fields(&profile))
+            (visibility_and_governance(&sel_vis, &sel_sig))
+            div class="actions" { button class="primary" type="submit" { "Publish to the commons" } }
         }
     };
-    shell("Welcome", Some(&handle), body)
+    shell("Publish", Some(&me), body)
 }
 
 fn profile_fields(p: &Profile) -> Markup {
@@ -637,10 +692,11 @@ fn profile_fields(p: &Profile) -> Markup {
             label class="field-label" for="bio" { "Short bio" }
             textarea id="bio" name="bio" maxlength="600" placeholder="A couple of sentences about your work." { (p.bio) }
         }
+        @let place = p.places.first();
         div class="field" {
             label class="field-label" for="place" { "Where you work" }
-            input id="place" name="place_name" type="text" maxlength="120" placeholder="Studio or institution";
-            input id="place_city" name="place_city" type="text" maxlength="80" placeholder="City" class="city-input";
+            input id="place" name="place_name" type="text" maxlength="120" value=(place.map(|x| x.name.as_str()).unwrap_or("")) placeholder="Studio or institution";
+            input id="place_city" name="place_city" type="text" maxlength="80" value=(place.map(|x| x.city.as_str()).unwrap_or("")) placeholder="City" class="city-input";
         }
     }
 }
@@ -688,16 +744,18 @@ fn visibility_and_governance(sel_vis: &str, sel_sig: &[String]) -> Markup {
     }
 }
 
-async fn publish(State(st): State<Shared>, body: String) -> Response {
+async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
     let f = parse_form(&body);
     let handle = clamp(one(&f, "handle").to_lowercase(), 30);
-    let secret = one(&f, "secret");
+    // Authorise via the signed-in session + a per-session CSRF token.
+    let authed = session_handle(&st, &headers).as_deref() == Some(handle.as_str())
+        && session_csrf(&st, &headers).map_or(false, |c| !c.is_empty() && ct_eq(&c, &one(&f, "csrf")));
+    if !authed {
+        return error_page("Please sign in as this handle to publish.");
+    }
     let Some(rec) = load_handle(&st, &handle) else {
         return error_page("Unknown handle.");
     };
-    if !ct_eq(&hash_secret(&rec.secret_salt, &secret), &rec.secret_hash) {
-        return error_page("That secret doesn't match this handle.");
-    }
 
     let mut places = Vec::new();
     let pname = clamp(one(&f, "place_name"), 120);
@@ -772,8 +830,8 @@ async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
                 div class="handle-input" { span class="at" { "@" } input id="handle" name="handle" type="text" maxlength="30" required; }
             }
             div class="field" {
-                label class="field-label" for="secret" { "Secret" }
-                input id="secret" name="secret" type="password" maxlength="200" required;
+                label class="field-label" for="passphrase" { "Passphrase" }
+                input id="passphrase" name="passphrase" type="password" maxlength="200" required;
             }
             div class="actions" { button class="primary" type="submit" { "Sign in" } }
         }
@@ -784,15 +842,14 @@ async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
 async fn login_submit(State(st): State<Shared>, body: String) -> Response {
     let f = parse_form(&body);
     let handle = clamp(one(&f, "handle").to_lowercase(), 30);
-    let secret = one(&f, "secret");
+    let passphrase = one(&f, "passphrase");
     let Some(rec) = load_handle(&st, &handle) else {
-        return error_page("No such handle, or the secret is wrong.");
+        return error_page("No such handle, or the passphrase is wrong.");
     };
-    if !ct_eq(&hash_secret(&rec.secret_salt, &secret), &rec.secret_hash) {
-        return error_page("No such handle, or the secret is wrong.");
+    if !ct_eq(&hash_secret(&rec.secret_salt, &passphrase), &rec.secret_hash) {
+        return error_page("No such handle, or the passphrase is wrong.");
     }
-    let token = rand_hex(32);
-    st.sessions.lock().unwrap().insert(token.clone(), handle.clone());
+    let token = new_session(&st, &handle);
     let mut h = HeaderMap::new();
     h.insert(header::SET_COOKIE, set_session_cookie(&token));
     h.insert(header::LOCATION, HeaderValue::from_str(&format!("/@{handle}")).unwrap());
@@ -1054,6 +1111,7 @@ async fn main() {
         .route("/", get(directory))
         .route("/about", get(about))
         .route("/join", get(join_form).post(join_submit))
+        .route("/new", get(new_profile))
         .route("/publish", post(publish))
         .route("/login", get(login_form).post(login_submit))
         .route("/logout", post(logout))
