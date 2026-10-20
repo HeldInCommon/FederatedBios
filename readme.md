@@ -1,87 +1,111 @@
-# Held in Common — onboarding (Leptos)
+# Held in Common
 
-A client-side Leptos 0.8 app for setting up a local node, a small Tauri shell
-that lets it run Docker, and the node itself.
+A **federated commons for creative work.** Everyone runs their own **node** — a
+personal commons on a machine they control — and can **share signed copies** to a
+**commons** that anyone can host. Your work stays on your machine unless you
+choose to send a copy, and you attach the terms (license + CC signals) it travels
+under. Members-only work is **encrypted** and never leaves your node readable.
 
-## Layout
+- **Node** — the app on your own computer. Holds your profile, works, and datasets.
+- **Commons** — a shared directory others can browse. Anyone can host one; the same
+  binary is both a node and a commons.
+- **Federation** — your node posts a signed, content-addressed copy to a commons'
+  `/inbox`; the commons verifies the signature + fingerprint and lists it.
 
-```
-node/          the local node: an HTTP service on :4321, built into the heldincommon/node image
-src/           the onboarding UI (Leptos, compiled to WASM by Trunk)
-src-tauri/     the desktop shell: Rust commands that call the Docker CLI
-```
+**How it all fits together (slides):** https://phoenixperry.github.io/FederatedBios/architecture.html
 
-- `src/check.rs`: the `Check` card and `CheckState` (pending / ok / failed). Presentational only.
-- `src/probes.rs`: one async fn per check. `docker()` and `image()` call Tauri commands;
-  `node()` polls `http://localhost:4321/health`.
-- `src/onboarding.rs`: wires the three checks, the stepper, and the gated "Set up your profile" button.
-- `src-tauri/src/docker.rs`: `status`, `start_node` and `logs`, which shell out to `docker`.
-- `node/src/main.rs`: answers `GET /health` with CORS headers for the UI's origins.
+**Architecture deep-dive (for developers):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## Prerequisites
+**Shipping from the org (maintainers):** [docs/MAINTAINER.md](docs/MAINTAINER.md)
 
-```
-rustup target add wasm32-unknown-unknown
-cargo install trunk --locked
-cargo install tauri-cli --version "^2" --locked
-```
+---
 
-Docker Desktop must be installed. On Linux, Tauri also needs the webview
-libraries (on Debian/Ubuntu: `libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev`).
+## Run it — no building required
 
-## 1. Build the node image
+Non-technical users should follow the **[workshop install guide](docs/INSTALL.md)**.
+Three paths:
 
-The image is not on a registry yet, so build it locally. `start_node` only pulls
-when the image is missing, so a local build is enough.
+1. **Hosted commons** — open the workshop address, nothing to install.
+2. **Desktop app** — download the unsigned preview (macOS Apple Silicon / Linux),
+   open it, and you're a node. See [docs/INSTALL.md](docs/INSTALL.md).
+3. **Docker** — `ghcr.io/<owner>/hic-node:latest` (see [commons/README.md](commons/README.md)).
 
-```
-docker build -t heldincommon/node ./node
-```
+---
 
-## 2a. Run the desktop app (all three checks are real)
+## Build from source (developers)
 
-```
-cargo tauri dev
-```
+**Prerequisites:** [Rust](https://rustup.rs) (stable). For the desktop app also:
+`cargo install tauri-cli --version "^2" --locked`, and on Linux the webview libs
+(`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf`).
 
-This starts `trunk serve` on 127.0.0.1:8080 and opens the app window. The app
-checks Docker, starts the `hic-node` container (or reuses it), then polls the node.
+### 1. The node / commons server (`commons/`)
 
-## 2b. Or run in a browser (only the node check is real)
-
-A browser tab can't run Docker, so the first two cards report "Skipped in the
-browser". Start the container yourself, then serve the UI:
+A self-contained axum server — this one binary is both a node and a commons.
 
 ```
-docker run -d --name hic-node -p 4321:4321 -v hic-node-data:/data --restart unless-stopped heldincommon/node
-trunk serve --open
+cargo run --manifest-path commons/Cargo.toml
 ```
 
-## Useful commands
+Open **http://localhost:8080**. Configure with env vars:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Port to listen on |
+| `HIC_DATA` | `./data` | Directory for this node's data |
+| `HIC_INSTANCE` | `My node` | Human label for this instance |
+| `HIC_SHARE_DEFAULT` | *(blank)* | Commons address pre-filled in "Share to a commons" |
+| `HIC_BASE_URL` | `http://localhost:$PORT` | Public base URL (for federation/ActivityPub) |
+
+### 2. The desktop app (`src-tauri/`)
+
+A native Tauri shell that bundles the `hic-commons` server as a **sidecar** and
+starts it — no Docker, no terminal. The sidecar binary is gitignored, so build
+and place it first (named for your platform triple):
 
 ```
-curl -i -H "Origin: http://127.0.0.1:8080" http://localhost:4321/health   # health + CORS header
-docker logs hic-node                                                      # node output
-docker rm -f hic-node                                                     # reset; the data volume is kept
-docker volume rm hic-node-data                                            # wipe the local store
+# build the node server
+cargo build --release --manifest-path commons/Cargo.toml
+
+# copy it in as the Tauri sidecar for your platform
+TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+mkdir -p src-tauri/binaries
+cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
+
+# run the app
+cargo tauri dev            # or: cargo tauri build
 ```
 
-To see the failure states in the app, quit Docker Desktop and press "Try again".
+The app opens to **http://localhost:8080** — your node. CI
+(`.github/workflows/desktop-app.yml`) does these same steps to build the
+macOS + Linux installers.
 
-## System Diagram
+---
 
-![System Architecture](images/sys-architecture.png)
+## Test the federation
 
-## Notes
+End-to-end check — stands up a node and a separate commons, then proves
+publish → sign → federate, tamper rejection, and the members-only guard:
 
-- The node must send CORS headers for the page's origin, or the health check fails.
-  The allowed origins default to `trunk serve` and Tauri's webview; override them with
-  `ALLOWED_ORIGINS` (comma-separated) on the container.
-- The node binds `0.0.0.0` inside the container. Binding `127.0.0.1` would make it
-  unreachable from the host even with `-p 4321:4321`.
-- The volume `hic-node-data` is mounted at `/data`, ready for the local store
-  (profile, datasets, keys). Nothing writes to it yet.
-- The icons in `src-tauri/icons` are placeholders. Replace them with
-  `cargo tauri icon path/to/logo.png`.
-- Not built yet: draft endpoints on the node, so `profile.rs` and `visibility.rs` can
-  stop using localStorage, and a log panel (View log prints to the console for now).
+```
+./scripts/test-federation.sh
+```
+
+## Repo layout
+
+```
+commons/       the node + commons server (Rust / axum) — identity, content-addressed
+               signed publishing, encrypted members-only, CC governance, directory,
+               JSON API, ActivityPub + /inbox federation. Dockerfile here.
+src-tauri/     the native desktop app that runs the server as a sidecar
+docs/          INSTALL.md (workshop guide) + architecture.html (reveal.js slides)
+node/, src/    legacy Leptos onboarding prototype (Docker-based, port 4321) — kept
+               for reference; the current product is commons/ + src-tauri/
+```
+
+## License / governance model
+
+- **Visibility** — *Public* (listed + searchable), *Commons* (listed, out of search),
+  *Members-only* (encrypted to a member set; never federates).
+- **License** — Creative Commons: how people may reuse the work.
+- **CC signals** — how AI models may learn from it (Credit / Direct contribution /
+  Ecosystem / Open). Terms travel with every copy.
