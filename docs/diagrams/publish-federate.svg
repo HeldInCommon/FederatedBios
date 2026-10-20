@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" font-family="ui-monospace,Menlo,monospace">
+  <rect width="900" height="470" fill="#ffffff"/>
+  <style>.t{font-size:14px;font-weight:700;fill:#111}.m{font-size:12px;fill:#444}.k{font-size:12px;fill:#0a7a54}.bad{font-size:12px;fill:#c0245f}</style>
+  <!-- NODE column -->
+  <rect x="30" y="40" width="330" height="390" rx="12" fill="#fff" stroke="#ff2d9b" stroke-width="2.5"/>
+  <text x="50" y="70" class="t" fill="#ff2d9b">YOUR NODE (hic-commons)</text>
+  <rect x="55" y="92" width="280" height="64" rx="8" fill="#faf2f7" stroke="#ff2d9b" stroke-width="1.5"/>
+  <text x="70" y="118" class="t">1 · publish</text><text x="70" y="138" class="m">compose profile · pick visibility,</text><text x="70" y="152" class="m">license, CC signals</text>
+  <rect x="55" y="172" width="280" height="86" rx="8" fill="#faf2f7" stroke="#ff2d9b" stroke-width="1.5"/>
+  <text x="70" y="198" class="t">2 · content-address + sign</text>
+  <text x="70" y="218" class="k">cid = sha256(handle,vis,license,</text><text x="70" y="232" class="k">            signals,ts,body)</text>
+  <text x="70" y="250" class="k">sig = Ed25519.sign(cid)</text>
+  <rect x="55" y="274" width="280" height="64" rx="8" fill="#faf2f7" stroke="#ff2d9b" stroke-width="1.5"/>
+  <text x="70" y="300" class="t">3 · store Version locally</text><text x="70" y="320" class="m">data/versions/&lt;cid&gt;.json</text>
+  <rect x="55" y="354" width="280" height="56" rx="8" fill="#faf2f7" stroke="#ff2d9b" stroke-width="1.5"/>
+  <text x="70" y="380" class="t">4 · /share → build AP Create</text><text x="70" y="398" class="m">POST to &lt;commons&gt;/inbox</text>
+  <!-- arrow -->
+  <line x1="360" y1="382" x2="540" y2="382" stroke="#111" stroke-width="2.5"/>
+  <polygon points="540,382 528,376 528,388" fill="#111"/>
+  <text x="365" y="372" class="m">signed Create (JSON)</text>
+  <!-- COMMONS column -->
+  <rect x="540" y="40" width="330" height="390" rx="12" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
+  <text x="560" y="70" class="t" fill="#1f5cff">THE COMMONS (/inbox)</text>
+  <text x="560" y="104" class="t">verify_inbound():</text>
+  <rect x="560" y="118" width="290" height="150" rx="8" fill="#f1f5ff" stroke="#1f5cff" stroke-width="1.5"/>
+  <text x="575" y="144" class="k">✓ recompute cid → tamper check</text>
+  <text x="575" y="168" class="k">✓ Ed25519.verify(sig, cid, key)</text>
+  <text x="575" y="192" class="k">✓ TOFU-pin (handle, origin) → key</text>
+  <text x="575" y="216" class="bad">✗ mismatch / bad json → 400</text>
+  <text x="575" y="240" class="bad">✗ key conflict for handle → 409</text>
+  <rect x="560" y="286" width="290" height="60" rx="8" fill="#f1f5ff" stroke="#1f5cff" stroke-width="1.5"/>
+  <text x="575" y="312" class="t">store RemoteEntry → 202</text><text x="575" y="330" class="m">data/remote/&lt;keyid&gt;.json</text>
+  <rect x="560" y="362" width="290" height="48" rx="8" fill="#f1f5ff" stroke="#1f5cff" stroke-width="1.5"/>
+  <text x="575" y="391" class="t">directory lists it as “federated”</text>
+</svg>
