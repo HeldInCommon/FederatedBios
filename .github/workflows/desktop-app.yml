@@ -1,0 +1,52 @@
+# Builds the native node app for macOS / Windows / Linux and attaches
+# installers to the 'node-app-preview' prerelease.
+#
+# Unsigned by default (users use the OS 'open anyway' step). To ship SIGNED
+# macOS builds, add these repo secrets (Settings -> Secrets -> Actions):
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+# Windows signing is a follow-up (needs a code-signing cert + a sign step).
+name: desktop-app
+on:
+  workflow_dispatch:
+  push:
+    tags: ['node-app-v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # Apple Silicon .dmg/.app
+          - os: ubuntu-22.04       # .deb + .AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+      - name: Build node sidecar for this OS
+        shell: bash
+        run: |
+          TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          cargo build --release --manifest-path commons/Cargo.toml
+          mkdir -p src-tauri/binaries
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp commons/target/release/hic-commons.exe "src-tauri/binaries/hic-commons-$TRIPLE.exe"
+          else
+            cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
+          fi
+      - name: Build + release the desktop app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: node-app-preview
+          releaseName: "Held In Common"
+          releaseBody: "Unsigned preview builds. macOS: right-click → Open. Windows: More info → Run anyway. Linux: .AppImage or .deb."
+          prerelease: true

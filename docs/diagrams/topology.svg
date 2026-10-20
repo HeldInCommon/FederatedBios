@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" font-family="ui-monospace,Menlo,monospace">
+  <style>.l{font-size:14px;font-weight:700}.m{font-size:12px;fill:#6f6f6f}</style>
+  <rect width="780" height="380" fill="#ffffff"/>
+  <!-- connectors -->
+  <g stroke="#111" stroke-opacity=".35" stroke-width="2">
+    <line x1="150" y1="95" x2="360" y2="175"/><line x1="630" y1="95" x2="420" y2="175"/>
+    <line x1="150" y1="285" x2="360" y2="205"/><line x1="630" y1="285" x2="420" y2="205"/>
+  </g>
+  <!-- signed copies travelling in -->
+  <g><rect x="248" y="124" width="16" height="20" rx="3" fill="#ff2d9b"/><rect x="516" y="124" width="16" height="20" rx="3" fill="#1f5cff"/>
+     <rect x="248" y="236" width="16" height="20" rx="3" fill="#12b37d"/><rect x="516" y="236" width="16" height="20" rx="3" fill="#8b3fd9"/></g>
+  <!-- nodes -->
+  <g fill="#fff">
+    <rect x="70" y="60" width="150" height="70" rx="10" stroke="#ff2d9b" stroke-width="3"/>
+    <rect x="560" y="60" width="150" height="70" rx="10" stroke="#111" stroke-width="3"/>
+    <rect x="70" y="250" width="150" height="70" rx="10" stroke="#111" stroke-width="3"/>
+    <rect x="560" y="250" width="150" height="70" rx="10" stroke="#111" stroke-width="3"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="145" y="92" class="l" fill="#ff2d9b">YOUR NODE</text><text x="145" y="112" class="m">artist · laptop</text>
+    <text x="635" y="92" class="l">NODE</text><text x="635" y="112" class="m">another studio</text>
+    <text x="145" y="282" class="l">NODE</text><text x="145" y="302" class="m">a collaborator</text>
+    <text x="635" y="282" class="l">NODE</text><text x="635" y="302" class="m">a gallery · DGX</text>
+  </g>
+  <!-- commons hub -->
+  <circle cx="390" cy="190" r="58" fill="#fff" stroke="#1f5cff" stroke-width="4"/>
+  <g stroke="#1f5cff" stroke-width="2" stroke-opacity=".6"><line x1="390" y1="190" x2="366" y2="170"/><line x1="390" y1="190" x2="414" y2="170"/><line x1="390" y1="190" x2="366" y2="212"/><line x1="390" y1="190" x2="414" y2="212"/></g>
+  <g fill="#1f5cff"><circle cx="366" cy="170" r="5"/><circle cx="414" cy="170" r="5"/><circle cx="366" cy="212" r="5"/><circle cx="414" cy="212" r="5"/></g>
+  <circle cx="390" cy="190" r="6" fill="#ff2d9b"/>
+  <text x="390" y="275" text-anchor="middle" class="l" fill="#1f5cff">THE COMMONS</text>
+  <text x="390" y="295" text-anchor="middle" class="m">directory of signed copies · anyone can host</text>
+  <text x="390" y="30" text-anchor="middle" font-size="13" fill="#111">Each node POSTs a signed copy to the commons /inbox — originals never move</text>
+</svg>

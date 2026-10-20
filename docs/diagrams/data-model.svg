@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 300" font-family="ui-monospace,Menlo,monospace">
+  <rect width="1180" height="300" fill="#ffffff"/>
+  <g fill="none" stroke="#111" stroke-opacity=".32" stroke-width="2.5">
+    <path d="M100 150 H286"/>
+    <path d="M338 150 C 410 150, 410 83, 500 83"/><path d="M338 150 C 410 150, 410 233, 500 233"/>
+    <path d="M620 83 C 700 83, 700 150, 772 150"/><path d="M620 233 C 700 233, 700 150, 772 150"/>
+    <path d="M808 145 C 880 115, 880 97, 936 97"/><path d="M808 155 C 880 187, 880 209, 936 209"/>
+  </g>
+  <g text-anchor="middle">
+    <circle cx="78" cy="150" r="15" fill="#111"/><text x="78" y="197" font-size="22" font-weight="700" fill="#111">YOU</text><text x="78" y="223" font-size="19" fill="#6f6f6f" font-family="sans-serif">handle + keys</text>
+    <circle cx="311" cy="150" r="15" fill="#ff2d9b"/><text x="311" y="197" font-size="22" font-weight="700">PROFILE</text><text x="311" y="223" font-size="19" fill="#6f6f6f" font-family="sans-serif">current_cid →</text>
+    <circle cx="765" cy="150" r="15" fill="#111"/><circle cx="765" cy="150" r="6" fill="#ff2d9b"/><text x="765" y="197" font-size="22" font-weight="700">VERSION</text><text x="765" y="223" font-size="18" fill="#6f6f6f" font-family="sans-serif">cid · sig · signals</text>
+  </g>
+  <g>
+    <circle cx="548" cy="83" r="13" fill="#1f5cff"/><text x="573" y="90" font-size="21" font-weight="700">WORKS</text>
+    <circle cx="548" cy="233" r="13" fill="#1f5cff"/><text x="573" y="240" font-size="21" font-weight="700">DATASETS</text>
+    <circle cx="936" cy="97" r="12" fill="#12b37d"/><text x="960" y="104" font-size="21" font-weight="700" fill="#0a7a54">LICENSE</text>
+    <circle cx="936" cy="209" r="12" fill="#12b37d"/><text x="960" y="216" font-size="21" font-weight="700" fill="#0a7a54">CC SIGNALS</text>
+  </g>
+</svg>

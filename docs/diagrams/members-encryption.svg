@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 420" font-family="ui-monospace,Menlo,monospace">
+  <rect width="860" height="420" fill="#ffffff"/>
+  <style>.t{font-size:14px;font-weight:700;fill:#111}.m{font-size:12px;fill:#444}.c{font-size:12px;fill:#6a2caf}</style>
+  <text x="30" y="36" font-size="15" font-weight="700" fill="#111">Members-only = encrypt-to-member-set (Option B) — never federates</text>
+  <!-- plaintext + content key -->
+  <rect x="30" y="60" width="210" height="70" rx="10" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="46" y="88" class="t">profile (plaintext)</text><text x="46" y="110" class="m">stays on your node</text>
+  <rect x="30" y="150" width="210" height="60" rx="10" fill="#f6f0fb" stroke="#8b3fd9" stroke-width="2"/>
+  <text x="46" y="176" class="t" fill="#6a2caf">random content key K</text><text x="46" y="196" class="c">fresh per version</text>
+  <!-- encrypt -->
+  <line x1="240" y1="95" x2="330" y2="95" stroke="#111" stroke-width="2"/><polygon points="330,95 318,89 318,101" fill="#111"/>
+  <line x1="240" y1="180" x2="330" y2="120" stroke="#8b3fd9" stroke-width="2"/>
+  <rect x="330" y="66" width="190" height="90" rx="10" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="346" y="92" class="t">ChaChaBox(K)</text><text x="346" y="114" class="m">→ ciphertext</text><text x="346" y="138" class="m">data/versions/&lt;cid&gt;.json</text>
+  <!-- wrap K to each member -->
+  <line x1="135" y1="210" x2="135" y2="250" stroke="#8b3fd9" stroke-width="2"/><polygon points="135,250 129,238 141,238" fill="#8b3fd9"/>
+  <text x="30" y="272" class="t" fill="#6a2caf">wrap K to each member pubkey (sealed box):</text>
+  <g>
+    <rect x="30" y="286" width="150" height="54" rx="8" fill="#f6f0fb" stroke="#8b3fd9" stroke-width="1.5"/><text x="45" y="312" class="c">box → member A</text><text x="45" y="330" class="c">(X25519 pub)</text>
+    <rect x="195" y="286" width="150" height="54" rx="8" fill="#f6f0fb" stroke="#8b3fd9" stroke-width="1.5"/><text x="210" y="312" class="c">box → member B</text><text x="210" y="330" class="c">(X25519 pub)</text>
+    <rect x="360" y="286" width="150" height="54" rx="8" fill="#f6f0fb" stroke="#8b3fd9" stroke-width="1.5"/><text x="375" y="312" class="c">box → member C</text><text x="375" y="330" class="c">(X25519 pub)</text>
+  </g>
+  <!-- never federates -->
+  <rect x="560" y="60" width="270" height="300" rx="12" fill="#fff" stroke="#c0245f" stroke-width="2.5" stroke-dasharray="6 6"/>
+  <text x="580" y="92" class="t" fill="#c0245f">NEVER LEAVES THE NODE</text>
+  <text x="580" y="124" class="m">· /share rejects members-only</text>
+  <text x="580" y="148" class="m">· the commons never sees it</text>
+  <text x="580" y="172" class="m">· not used to train models</text>
+  <text x="580" y="214" class="t">a signed-in member reads it:</text>
+  <text x="580" y="240" class="c">unwrap their box → K</text>
+  <text x="580" y="264" class="c">decrypt ciphertext → profile</text>
+  <text x="580" y="308" class="m">narrowing visibility stops new</text>
+  <text x="580" y="328" class="m">reads; a copy already fetched</text>
+  <text x="580" y="348" class="m">stays with the fetcher</text>
+</svg>

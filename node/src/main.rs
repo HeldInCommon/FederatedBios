@@ -26,7 +26,7 @@ async fn main() {
         .unwrap_or_else(|_| DEFAULT_ORIGINS.to_string())
         .split(',')
         .filter_map(|o| o.trim().parse().ok())
-        .collect();:
+        .collect();
 
     let app = Router::new()
         .route("/health", get(health))

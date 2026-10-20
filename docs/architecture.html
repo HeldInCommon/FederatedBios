@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Held in Common — How it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css" />
+<style>
+  :root{
+    --pink:#ff2d9b; --blue:#1f5cff; --jade:#12b37d; --jade-ink:#0a7a54;
+    --violet:#8b3fd9; --violet-ink:#6a2caf; --ink:#111; --gray:#6f6f6f;
+    --bg:#f2f1ed; --line:rgba(17,17,17,.14);
+    --grot:"Space Grotesk",system-ui,sans-serif; --mono:"Space Mono",monospace; --serif:"Cormorant",Georgia,serif;
+    --ease:cubic-bezier(.22,1,.36,1); --ease-draw:cubic-bezier(.65,0,.35,1);
+  }
+  html,body{background:var(--bg);}
+  #field{position:fixed; inset:0; z-index:0; pointer-events:none;}
+  .reveal{background:transparent; font-family:var(--grot); color:var(--ink); font-size:36px;}
+  .reveal .slides{text-align:left;}
+  .reveal .slides section{padding:0;}
+  .pad{padding:0 8%; box-sizing:border-box;}
+
+  /* type scale */
+  .reveal h1{font-family:var(--mono); font-weight:700; font-size:148px; line-height:.98; letter-spacing:-.02em; margin:0;}
+  .reveal h2{font-family:var(--mono); font-weight:700; font-size:100px; line-height:1.04; letter-spacing:-.02em; margin:0;}
+  .reveal h2.sm{font-size:82px;}
+  .reveal .dot{color:var(--pink);}
+  .reveal .kicker{font-family:var(--mono); font-weight:700; font-size:22px; letter-spacing:.24em; text-transform:uppercase; color:var(--gray); margin:0 0 40px; display:block;}
+  .reveal .sub{font-family:var(--serif); font-style:italic; font-weight:500; font-size:58px; line-height:1.18; color:var(--ink); max-width:26ch; margin:48px 0 0;}
+  .reveal .body{font-family:var(--grot); font-size:37px; line-height:1.5; max-width:34ch; margin:38px 0 0; color:#1a1a1a;}
+  .reveal .body.wide{max-width:44ch;}
+  .reveal strong{font-weight:700;}
+  .reveal .accent-p{color:var(--pink);} .reveal .accent-b{color:var(--blue);} .reveal .accent-j{color:var(--jade-ink);}
+  .reveal .lead{font-family:var(--serif); font-style:italic; font-size:46px; line-height:1.24; color:var(--ink); border-left:3px solid var(--pink); padding-left:28px; margin-top:44px; max-width:28ch;}
+
+  /* two-column: text + supporting glyph */
+  .cols{display:grid; grid-template-columns:1.12fr .88fr; gap:0 6%; align-items:center;}
+  .cols.flip{grid-template-columns:.88fr 1.12fr;}
+  .cols .gfx{display:grid; place-items:center;}
+  .cols .gfx svg{width:100%; max-width:400px; height:auto;}
+
+  /* thin brand bars — global frame */
+  .bars{position:fixed; top:0; left:0; right:0; height:10px; display:flex; z-index:50;}
+  .bars i{height:100%; display:block;} .bars .p{flex:0 0 62%; background:var(--pink);} .bars .b{flex:1; background:var(--blue);}
+
+  /* icon cards — Common Signal section dividers */
+  .reveal section.card{height:100%;}
+  .card .inner{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:7.5% 8%; box-sizing:border-box; color:#fff;}
+  .card .seal{position:relative; width:84px; height:84px; display:inline-grid; place-items:center;}
+  .card .seal svg{position:absolute; inset:0; width:100%; height:100%;}
+  .card .seal b{position:relative; font-family:var(--mono); font-weight:700; font-size:34px;}
+  .card .ic{align-self:center; width:300px; height:300px; margin:auto 0;}
+  .card h2{color:#fff; font-size:104px;} .card h2 .dot{color:#fff;}
+  .card .csub{font-family:var(--grot); font-weight:500; font-size:42px; color:#fff; opacity:.95; margin:20px 0 0; max-width:24ch;}
+  .card .stepno{font-family:var(--mono); font-weight:700; font-size:22px; letter-spacing:.24em; color:#fff; opacity:.8;}
+
+  /* widening-circles journey */
+  .reach{display:grid; grid-template-columns:400px 1fr; gap:0 7%; align-items:center;}
+  .reach .ringwrap{display:grid; place-items:center;}
+  .tiers{display:flex; flex-direction:column; gap:32px;}
+  .tier{display:grid; grid-template-columns:18px 1fr; gap:0 22px; align-items:start;}
+  .tier .swatch{width:16px; height:16px; border-radius:50%; margin-top:11px;}
+  .tier .nm{font-family:var(--mono); font-weight:700; font-size:31px; letter-spacing:.01em; line-height:1.1;}
+  .tier .ds{font-family:var(--grot); font-size:25px; color:#2a2a2a; margin-top:6px; max-width:34ch; line-height:1.4;}
+
+  /* big centered diagrams */
+  .fig{display:grid; place-items:center; margin-top:6px;}
+  .fig svg{width:100%; height:auto;}
+  .fig.fed svg{max-width:980px;} .fig.flow svg{max-width:1080px;}
+  .caption{font-family:var(--grot); font-size:26px; color:var(--gray); margin-top:22px;}
+
+  /* numbered steps */
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:26px 7%; margin-top:14px;}
+  .step{display:grid; grid-template-columns:72px 1fr; gap:0 22px; align-items:start;}
+  .step .no{font-family:var(--mono); font-weight:700; font-size:36px; color:var(--pink); line-height:1.05;}
+  .step .tt{font-family:var(--mono); font-weight:700; font-size:27px; line-height:1.15;}
+  .step .dd{font-family:var(--grot); font-size:24px; color:#2a2a2a; margin-top:6px; line-height:1.4;}
+
+  /* motion */
+  .reveal svg *{stroke-linecap:round; stroke-linejoin:round;}
+  .reveal .fragment.rise{opacity:0; transform:translateY(22px); transition:opacity .6s var(--ease), transform .6s var(--ease);}
+  .reveal .fragment.rise.visible{opacity:1; transform:none;}
+  .draw{fill:none; stroke-dasharray:var(--len,1400); stroke-dashoffset:var(--len,1400);}
+  .reveal .fragment.draw.visible{animation:draw 1.2s var(--ease-draw) forwards;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+  .reveal .fragment.pop{opacity:0; transform:scale(.6); transition:opacity .5s var(--ease), transform .5s var(--ease);}
+  .reveal .fragment.pop.visible{opacity:1; transform:none;}
+  .reveal .controls{color:var(--pink);} .reveal .progress{color:var(--pink);}
+  .foot{position:fixed; bottom:28px; left:40px; font-family:var(--mono); font-size:15px; letter-spacing:.14em; text-transform:uppercase; color:var(--gray); z-index:40;}
+  .foot .dot{color:var(--pink);}
+  @media(prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} .draw{stroke-dashoffset:0!important} .fragment.rise,.fragment.pop{opacity:1!important; transform:none!important} }
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<div class="bars"><i class="p"></i><i class="b"></i></div>
+<div class="foot">Held in Common<span class="dot">.</span></div>
+<div class="reveal"><div class="slides">
+
+<!-- 1 · Title -->
+<section><div class="pad">
+  <span class="kicker">A federated commons for creative work</span>
+  <h1>Held in<br/>Common<span class="dot">.</span></h1>
+  <p class="sub fragment rise" style="max-width:32ch">Your work stays on a machine you control — and travels only as far as you choose.</p>
+</div></section>
+
+<!-- 2 · The problem (persona) -->
+<section><div class="pad">
+  <span class="kicker">For the people who make the work</span>
+  <h2 class="sm">You made it.<br/>A model learned from it.<br/><span class="fragment rise">Who holds the say<span class="dot">?</span></span></h2>
+  <p class="body wide fragment rise" style="max-width:40ch; margin-top:52px">You're a painter, a musician, a writer. Your work is <strong>data</strong> now — feeding the models that remix culture. Held in Common puts that back in your hands.</p>
+</div></section>
+
+<!-- 3 · The idea -->
+<section><div class="pad">
+  <span class="kicker">The whole idea, in three moves</span>
+  <h2>Keep the original.<br/><span class="fragment rise accent-p">Share a copy.</span><br/><span class="fragment rise">Set the terms<span class="dot">.</span></span></h2>
+  <p class="body wide fragment rise" style="max-width:42ch; margin-top:48px">Nothing is uploaded to a company. Your work lives on your own machine. You decide what leaves, who sees it, and how it may be used.</p>
+</div></section>
+
+<!-- 4 · CARD Storage -->
+<section class="card" data-background-color="#ff2d9b"><div class="inner">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start">
+    <div class="seal"><svg viewBox="0 0 24 24"><use href="#seal"/></svg><b style="color:#ff2d9b">1</b></div>
+    <span class="stepno">Where your work lives</span>
+  </div>
+  <svg class="ic" viewBox="0 0 200 200">
+    <g fill="none" stroke="#fff" stroke-width="7"><circle cx="100" cy="62" r="38"/><circle cx="133" cy="119" r="38"/><circle cx="67" cy="119" r="38"/></g>
+    <circle cx="100" cy="100" r="6" fill="#fff"/></svg>
+  <div><h2>Storage<span class="dot">.</span></h2><p class="csub">Your work rests on a node you control.</p></div>
+</div></section>
+
+<!-- 5 · A node is an app you run -->
+<section><div class="pad"><div class="cols">
+  <div>
+    <span class="kicker">First word: node</span>
+    <h2 class="sm">A node is<br/>an app you run<span class="dot">.</span></h2>
+    <p class="body fragment rise" style="margin-top:40px">You install Held in Common on <strong>your own computer</strong> — Mac or Linux. It opens like any app and holds your work at full quality. No company account; your <strong>keys stay on your machine</strong>.</p>
+  </div>
+  <div class="gfx fragment rise">
+    <svg viewBox="0 0 220 200" aria-hidden="true">
+      <rect x="20" y="26" width="180" height="134" rx="12" fill="none" stroke="#111" stroke-width="5"/>
+      <line x1="20" y1="56" x2="200" y2="56" stroke="#111" stroke-width="5"/>
+      <circle cx="36" cy="41" r="4" fill="#ff2d9b"/><circle cx="50" cy="41" r="4" fill="#111"/><circle cx="64" cy="41" r="4" fill="#111"/>
+      <circle cx="110" cy="108" r="30" fill="none" stroke="#ff2d9b" stroke-width="5"/>
+      <circle cx="110" cy="108" r="6" fill="#111"/>
+      <path d="M92 182 h36 M110 160 v22" stroke="#111" stroke-width="5"/>
+    </svg>
+  </div>
+</div></div></section>
+
+<!-- 6 · How your data relates (the data model) -->
+<section><div class="pad">
+  <span class="kicker">What's inside your node — the data model</span>
+  <h2 class="sm" style="margin-bottom:8px">How your work is held<span class="dot">.</span></h2>
+  <div class="fig flow">
+    <svg viewBox="0 0 1180 330" aria-hidden="true" font-family="Space Mono">
+      <!-- connectors -->
+      <g fill="none" stroke="#111" opacity=".32" stroke-width="2.5">
+        <path class="fragment draw" data-fragment-index="0" d="M100 165 H286"/>
+        <path class="fragment draw" data-fragment-index="1" d="M338 165 C 410 165, 410 98, 500 98"/>
+        <path class="fragment draw" data-fragment-index="1" d="M338 165 C 410 165, 410 248, 500 248"/>
+        <path class="fragment draw" data-fragment-index="2" d="M620 98 C 700 98, 700 165, 772 165"/>
+        <path class="fragment draw" data-fragment-index="2" d="M620 248 C 700 248, 700 165, 772 165"/>
+        <path class="fragment draw" data-fragment-index="3" d="M808 160 C 880 130, 880 112, 936 112"/>
+        <path class="fragment draw" data-fragment-index="3" d="M808 170 C 880 202, 880 224, 936 224"/>
+      </g>
+      <!-- nodes -->
+      <g class="fragment pop" data-fragment-index="0">
+        <circle cx="78" cy="165" r="15" fill="#111"/>
+        <text x="78" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">YOU</text>
+        <text x="78" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="19" fill="#6f6f6f">handle + key</text>
+      </g>
+      <g class="fragment pop" data-fragment-index="0">
+        <circle cx="311" cy="165" r="15" fill="#ff2d9b"/>
+        <text x="311" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">PROFILE</text>
+        <text x="311" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="19" fill="#6f6f6f">who you are</text>
+      </g>
+      <g class="fragment pop" data-fragment-index="1">
+        <circle cx="548" cy="98" r="13" fill="#1f5cff"/>
+        <text x="573" y="91" font-size="21" font-weight="700" fill="#111">WORKS</text>
+        <text x="573" y="115" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">images, sound, text</text>
+        <circle cx="548" cy="248" r="13" fill="#1f5cff"/>
+        <text x="573" y="241" font-size="21" font-weight="700" fill="#111">DATASETS</text>
+        <text x="573" y="265" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">collections</text>
+      </g>
+      <g class="fragment pop" data-fragment-index="2">
+        <circle cx="790" cy="165" r="15" fill="#111"/><circle cx="790" cy="165" r="6" fill="#ff2d9b"/>
+        <text x="790" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">VERSION</text>
+        <text x="790" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">cid · fingerprint</text>
+      </g>
+      <g class="fragment pop" data-fragment-index="3">
+        <circle cx="936" cy="112" r="12" fill="#12b37d"/>
+        <text x="960" y="119" font-size="21" font-weight="700" fill="#0a7a54">LICENSE</text>
+        <circle cx="936" cy="224" r="12" fill="#12b37d"/>
+        <text x="960" y="231" font-size="21" font-weight="700" fill="#0a7a54">CC SIGNALS</text>
+      </g>
+    </svg>
+  </div>
+  <p class="body wide fragment rise" data-fragment-index="3" style="max-width:66ch; margin-top:14px; font-size:30px">Read it left to right: <strong>you</strong> hold a handle and a key. Your <strong>profile</strong> points to your <strong>works</strong> and <strong>datasets</strong>. Every change is saved as a <strong>version</strong> with a permanent fingerprint — and each version carries its <strong class="accent-j">license</strong> and <strong class="accent-j">signals</strong>.</p>
+</div></section>
+
+<!-- 7 · CARD Circulation -->
+<section class="card" data-background-color="#1f5cff"><div class="inner">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start">
+    <div class="seal"><svg viewBox="0 0 24 24"><use href="#seal"/></svg><b style="color:#1f5cff">2</b></div>
+    <span class="stepno">How it moves</span>
+  </div>
+  <svg class="ic" viewBox="0 0 200 200">
+    <path d="M28 162 C 78 162, 72 86, 116 92 S 160 56, 176 40" fill="none" stroke="#fff" stroke-width="7" opacity=".55"/>
+    <circle cx="31" cy="160" r="9" fill="#fff"/><circle cx="116" cy="92" r="11" fill="#fff"/><circle cx="150" cy="64" r="8" fill="#fff"/>
+    <path d="M150 28 L184 34 L162 64 Z" fill="#fff"/></svg>
+  <div><h2>Circulation<span class="dot">.</span></h2><p class="csub">You choose how far each piece travels.</p></div>
+</div></section>
+
+<!-- 8 · Commons = shared room -->
+<section><div class="pad"><div class="cols">
+  <div>
+    <span class="kicker">Second word: commons</span>
+    <h2 class="sm">A commons is<br/>a shared room<span class="dot">.</span></h2>
+    <p class="body fragment rise" style="margin-top:40px">Anyone can host one — your <strong>collective</strong>, a <strong>festival</strong>, a <strong>gallery</strong>. You bring copies in; the originals stay in your studio. Walk out and they're still yours.</p>
+    <p class="body fragment rise" style="margin-top:24px; color:var(--blue)">And it's the same app: point your node outward to receive, and <strong>you're hosting a commons too</strong>.</p>
+  </div>
+  <div class="gfx fragment rise">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <g fill="none" stroke="#1f5cff" stroke-width="5">
+        <circle cx="134" cy="100" r="34"/><circle cx="117" cy="129" r="34"/><circle cx="83" cy="129" r="34"/>
+        <circle cx="66" cy="100" r="34"/><circle cx="83" cy="71" r="34"/><circle cx="117" cy="71" r="34"/></g>
+      <circle cx="100" cy="100" r="7" fill="#ff2d9b"/>
+    </svg>
+  </div>
+</div></div></section>
+
+<!-- 9 · The widening circles (journey centerpiece) -->
+<section><div class="pad">
+  <span class="kicker">Say you've just finished a series</span>
+  <h2 class="sm" style="margin-bottom:44px">How far should it travel<span class="dot">?</span></h2>
+  <div class="reach">
+    <div class="ringwrap">
+      <svg viewBox="0 0 320 320" style="width:388px; height:388px">
+        <circle class="fragment draw" data-fragment-index="3" cx="160" cy="160" r="142" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="3 8"/>
+        <circle class="fragment draw" data-fragment-index="2" cx="160" cy="160" r="104" fill="none" stroke="#1f5cff" stroke-width="2.5"/>
+        <circle class="fragment draw" data-fragment-index="1" cx="160" cy="160" r="62" fill="none" stroke="#ff2d9b" stroke-width="2.5"/>
+        <circle class="fragment pop" data-fragment-index="0" cx="160" cy="160" r="10" fill="#111"/>
+        <text class="fragment rise" data-fragment-index="0" x="160" y="205" text-anchor="middle" font-family="Space Mono" font-size="13" fill="#6f6f6f">you</text>
+      </svg>
+    </div>
+    <div class="tiers">
+      <div class="tier fragment rise" data-fragment-index="0"><span class="swatch" style="background:#111"></span><div><div class="nm">Just me</div><div class="ds">It stays in your studio. Nothing is shared at all.</div></div></div>
+      <div class="tier fragment rise" data-fragment-index="1"><span class="swatch" style="background:#ff2d9b"></span><div><div class="nm accent-p">My collective</div><div class="ds">Members-only — encrypted so only the people you name can open it.</div></div></div>
+      <div class="tier fragment rise" data-fragment-index="2"><span class="swatch" style="background:#1f5cff"></span><div><div class="nm accent-b">Collaborators</div><div class="ds">In the commons, shared by link — present, but kept out of search.</div></div></div>
+      <div class="tier fragment rise" data-fragment-index="3"><span class="swatch" style="background:#111; opacity:.4"></span><div><div class="nm">A festival or gallery</div><div class="ds">Public — listed in the commons and open for anyone to find.</div></div></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- 10 · Members-only sealed -->
+<section><div class="pad"><div class="cols">
+  <div>
+    <span class="kicker">Your collective's circle</span>
+    <h2 class="sm">Locked to the<br/>people you name<span class="dot">.</span></h2>
+    <p class="body fragment rise" style="margin-top:40px">Members-only work is <strong>scrambled</strong> so only your collective's keys can open it. It never leaves your studio readable — <strong>not even the commons can see inside</strong>, and it's never used to train a model.</p>
+  </div>
+  <div class="gfx fragment rise">
+    <svg viewBox="0 0 220 220" aria-hidden="true">
+      <rect x="54" y="98" width="112" height="92" rx="12" fill="none" stroke="#111" stroke-width="5"/>
+      <path d="M78 98 v-18 a32 32 0 0 1 64 0 v18" fill="none" stroke="#ff2d9b" stroke-width="5"/>
+      <circle cx="110" cy="134" r="11" fill="none" stroke="#111" stroke-width="5"/>
+      <line x1="110" y1="145" x2="110" y2="166" stroke="#111" stroke-width="5"/>
+    </svg>
+  </div>
+</div></div></section>
+
+<!-- 11 · Federation (key architecture diagram) -->
+<section><div class="pad">
+  <span class="kicker">How studios share — the architecture</span>
+  <h2 class="sm" style="margin-bottom:6px">Nodes federate<br/>into a commons<span class="dot">.</span></h2>
+  <div class="fig fed">
+    <svg viewBox="0 0 980 400" aria-hidden="true">
+      <g stroke="#111" opacity=".3" stroke-width="2.5">
+        <line class="fragment draw" data-fragment-index="2" x1="170" y1="110" x2="470" y2="200"/>
+        <line class="fragment draw" data-fragment-index="2" x1="810" y1="110" x2="510" y2="200"/>
+        <line class="fragment draw" data-fragment-index="2" x1="170" y1="320" x2="470" y2="230"/>
+        <line class="fragment draw" data-fragment-index="2" x1="810" y1="320" x2="510" y2="230"/>
+      </g>
+      <g class="fragment pop" data-fragment-index="3">
+        <rect x="300" y="140" width="20" height="26" rx="3" fill="#ff2d9b"/>
+        <rect x="662" y="140" width="20" height="26" rx="3" fill="#1f5cff"/>
+        <rect x="300" y="266" width="20" height="26" rx="3" fill="#12b37d"/>
+        <rect x="662" y="266" width="20" height="26" rx="3" fill="#8b3fd9"/>
+      </g>
+      <g class="fragment rise" data-fragment-index="0">
+        <g transform="translate(110,70)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#ff2d9b" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#ff2d9b"/></g>
+        <g transform="translate(750,70)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
+        <g transform="translate(110,280)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
+        <g transform="translate(750,280)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
+      </g>
+      <g class="fragment pop" data-fragment-index="1">
+        <circle cx="490" cy="215" r="64" fill="var(--bg)" stroke="#1f5cff" stroke-width="5"/>
+        <g stroke="#1f5cff" stroke-width="2.5" opacity=".55">
+          <line x1="490" y1="215" x2="463" y2="192"/><line x1="490" y1="215" x2="517" y2="192"/>
+          <line x1="490" y1="215" x2="463" y2="240"/><line x1="490" y1="215" x2="517" y2="240"/></g>
+        <g fill="#1f5cff"><circle cx="463" cy="192" r="6"/><circle cx="517" cy="192" r="6"/><circle cx="463" cy="240" r="6"/><circle cx="517" cy="240" r="6"/></g>
+        <circle cx="490" cy="215" r="7" fill="#ff2d9b"/>
+      </g>
+      <g class="fragment rise" data-fragment-index="0" font-family="Space Mono" font-size="17" fill="#6f6f6f">
+        <text x="170" y="175" text-anchor="middle" fill="#ff2d9b" font-weight="700">YOUR NODE</text>
+        <text x="810" y="175" text-anchor="middle">ANOTHER STUDIO</text>
+        <text x="170" y="385" text-anchor="middle">A COLLABORATOR</text>
+        <text x="810" y="385" text-anchor="middle">A GALLERY'S NODE</text>
+      </g>
+      <text class="fragment rise" data-fragment-index="1" x="490" y="312" text-anchor="middle" font-family="Space Mono" font-size="19" fill="#1f5cff" font-weight="700">THE COMMONS</text>
+    </svg>
+  </div>
+  <p class="body wide fragment rise" data-fragment-index="3" style="max-width:64ch; margin-top:12px; font-size:30px">You send a <strong>signed copy</strong> to a commons; your original never moves. It gathers everyone's copies into one directory people can browse — <strong>no central vault, no landlord</strong>.</p>
+</div></section>
+
+<!-- 12 · What happens when you share (step-by-step) -->
+<section><div class="pad">
+  <span class="kicker">How you actually use it</span>
+  <h2 class="sm" style="margin-bottom:34px">From install to shared, step by step<span class="dot">.</span></h2>
+  <div class="steps">
+    <div class="step fragment rise"><div class="no">01</div><div><div class="tt">Open the app</div><div class="dd">It starts your node on your computer and opens its page in your browser.</div></div></div>
+    <div class="step fragment rise"><div class="no">02</div><div><div class="tt">Make a handle</div><div class="dd">The app creates your keys and keeps them on your machine. No email, no company.</div></div></div>
+    <div class="step fragment rise"><div class="no">03</div><div><div class="tt">Add your work</div><div class="dd">Each piece gets a fingerprint and your signature, stored on your node.</div></div></div>
+    <div class="step fragment rise"><div class="no">04</div><div><div class="tt">Choose its reach</div><div class="dd">Public, commons, or members-only — encrypted to the people you name.</div></div></div>
+    <div class="step fragment rise" style="grid-column:1 / -1"><div class="no">05</div><div><div class="tt">Send it to a commons</div><div class="dd">Your node posts a signed copy; the commons checks the signature and fingerprint, then lists it. Members-only never leaves.</div></div></div>
+  </div>
+</div></section>
+
+<!-- 13 · Trust / the seal -->
+<section><div class="pad"><div class="cols">
+  <div>
+    <span class="kicker">Why it can be trusted</span>
+    <h2 class="sm">No one can<br/>fake your work<span class="dot">.</span></h2>
+    <p class="body fragment rise" style="margin-top:40px">Every copy is <strong>signed</strong> with your key and carries a <strong>fingerprint</strong>. Change one character and the commons rejects it. The seal is how a stranger knows a work is really yours.</p>
+  </div>
+  <div class="gfx">
+    <svg viewBox="0 0 128 132" style="width:330px">
+      <polygon class="fragment draw" fill="none" stroke="#ff2d9b" stroke-width="2.5" points="64,10 73,22 87,14 91,29 106,26 104,42 119,47 111,60 124,69 111,77 119,91 104,96 106,112 91,109 87,124 73,115 64,126 55,115 41,124 37,109 22,112 24,96 9,91 17,77 4,69 17,60 9,47 24,42 22,26 37,29 41,14 55,22"/>
+      <path class="fragment draw" d="M46,66 l12,13 l24,-28" fill="none" stroke="#111" stroke-width="4.5"/></svg>
+  </div>
+</div></div></section>
+
+<!-- 14 · CARD Learning -->
+<section class="card" data-background-color="#12b37d"><div class="inner">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start">
+    <div class="seal"><svg viewBox="0 0 24 24"><use href="#seal"/></svg><b style="color:#12b37d">3</b></div>
+    <span class="stepno">What the machines may learn</span>
+  </div>
+  <svg class="ic" viewBox="0 0 200 200">
+    <g stroke="#fff" stroke-width="3.4" opacity=".5"><line x1="44" y1="54" x2="100" y2="78"/><line x1="44" y1="100" x2="100" y2="78"/><line x1="44" y1="146" x2="100" y2="122"/><line x1="44" y1="54" x2="100" y2="122"/><line x1="100" y1="78" x2="156" y2="54"/><line x1="100" y1="78" x2="156" y2="100"/><line x1="100" y1="122" x2="156" y2="100"/><line x1="100" y1="122" x2="156" y2="146"/></g>
+    <g fill="#12b37d" stroke="#fff" stroke-width="5"><circle cx="44" cy="54" r="12"/><circle cx="44" cy="100" r="12"/><circle cx="44" cy="146" r="12"/><circle cx="100" cy="78" r="12"/><circle cx="100" cy="122" r="12"/><circle cx="156" cy="54" r="12"/><circle cx="156" cy="100" r="12"/><circle cx="156" cy="146" r="12"/></g>
+    <circle cx="100" cy="78" r="12" fill="#fff"/></svg>
+  <div><h2>Learning<span class="dot">.</span></h2><p class="csub">Models may learn — only on your terms.</p></div>
+</div></section>
+
+<!-- 15 · Learning explanation -->
+<section><div class="pad">
+  <span class="kicker">Govern the models, not only the data</span>
+  <h2 class="sm" style="margin-bottom:36px">Consent rides<br/>with the data<span class="dot">.</span></h2>
+  <p class="body wide fragment rise" style="max-width:46ch">A model can learn from the commons — but only within the terms each work carries. If you said <strong class="accent-j">credit me</strong>, or <strong class="accent-j">ask first</strong>, that choice travels with every copy. Members-only work is never used to train at all.</p>
+</div></section>
+
+<!-- 16 · CARD Govern -->
+<section class="card" data-background-color="#111111"><div class="inner">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start">
+    <div class="seal"><svg viewBox="0 0 24 24"><use href="#seal"/></svg><b style="color:#111">4</b></div>
+    <span class="stepno">Who makes the rules</span>
+  </div>
+  <svg class="ic" viewBox="0 0 200 200">
+    <circle cx="100" cy="100" r="86" fill="none" stroke="#fff" stroke-width="6"/>
+    <g stroke="#fff" stroke-width="3" opacity=".5"><line x1="66" y1="74" x2="100" y2="94"/><line x1="66" y1="126" x2="100" y2="94"/><line x1="100" y1="94" x2="134" y2="78"/><line x1="100" y1="94" x2="134" y2="130"/><line x1="66" y1="74" x2="100" y2="140"/><line x1="100" y1="140" x2="134" y2="130"/></g>
+    <g fill="#111" stroke="#fff" stroke-width="4.5"><circle cx="66" cy="74" r="10"/><circle cx="66" cy="126" r="10"/><circle cx="100" cy="94" r="10"/><circle cx="100" cy="140" r="10"/><circle cx="134" cy="78" r="10"/><circle cx="134" cy="130" r="10"/></g>
+    <circle cx="100" cy="94" r="10" fill="#12b37d" stroke="none"/><circle cx="134" cy="130" r="10" fill="#12b37d" stroke="none"/></svg>
+  <div><h2>Govern<span class="dot">.</span></h2><p class="csub">The community decides, in the open.</p></div>
+</div></section>
+
+<!-- 17 · Governance detail -->
+<section><div class="pad">
+  <span class="kicker">You set the terms</span>
+  <h2 class="sm" style="margin-bottom:36px">No landlord.<br/>You hold the rules<span class="dot">.</span></h2>
+  <p class="body wide fragment rise" style="max-width:48ch">A <strong>Creative Commons license</strong> says how people may reuse your work. <strong>CC signals</strong> say how AI may learn from it — <strong class="accent-j">Credit</strong>, <strong class="accent-j">Direct contribution</strong>, <strong class="accent-j">Ecosystem</strong>, <strong class="accent-j">Open</strong>. The people who share decide these together, out loud.</p>
+</div></section>
+
+<!-- 18 · Close -->
+<section><div class="pad">
+  <span class="kicker">In one breath</span>
+  <h1>You hold it<br/>in common<span class="dot">.</span></h1>
+  <p class="sub fragment rise" style="max-width:38ch">Your node, your keys, your terms. &nbsp;·&nbsp; heldincommon.org</p>
+  <p class="fragment rise" style="margin-top:40px; font-family:var(--mono); font-weight:700; font-size:30px; color:var(--blue)">Build it with us →&nbsp; <span style="color:var(--ink)">github.com/HeldInCommon/FederatedBios</span></p>
+</div></section>
+
+</div></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="seal" viewBox="0 0 24 24"><polygon points="12,0 13.87,2.58 16.59,0.91 17.33,4.02 20.49,3.51 19.98,6.67 23.09,7.41 21.42,10.13 24,12 21.42,13.87 23.09,16.59 19.98,17.33 20.49,20.49 17.33,19.98 16.59,23.09 13.87,21.42 12,24 10.13,21.42 7.41,23.09 6.67,19.98 3.51,20.49 4.02,17.33 0.91,16.59 2.58,13.87 0,12 2.58,10.13 0.91,7.41 4.02,6.67 3.51,3.51 6.67,4.02 7.41,0.91 10.13,2.58" fill="#fff"/></symbol>
+</defs></svg>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script>
+  Reveal.initialize({ hash:true, width:1920, height:1080, margin:0.08, minScale:0.4, maxScale:1.6, center:true,
+    transition:'fade', transitionSpeed:'slow', backgroundTransition:'fade', controlsColor:'#ff2d9b', fragmentInURL:true });
+  function setLens(){ document.querySelectorAll('.draw').forEach(function(el){ try{ el.style.setProperty('--len', el.getTotalLength()); }catch(e){} }); }
+  Reveal.on('ready', setLens); Reveal.on('slidechanged', setLens); setTimeout(setLens,400);
+  (function(){
+    var c=document.getElementById('field'), x=c.getContext('2d');
+    var DPR=Math.min(2,window.devicePixelRatio||1), W,H, dots=[], ripples=[], t=0;
+    var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+    function build(){ dots=[]; var g=48*DPR; for(var yy=g; yy<H; yy+=g){ for(var xx=g; xx<W; xx+=g){ dots.push({x:xx,y:yy,pink:Math.random()<0.04}); } } }
+    function resize(){ W=c.width=innerWidth*DPR; H=c.height=innerHeight*DPR; c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px'; build(); }
+    function spawn(){ var d=dots[(Math.random()*dots.length)|0]; if(d) ripples.push({x:d.x,y:d.y,r:0,max:(120+Math.random()*120)*DPR}); }
+    function draw(){ x.clearRect(0,0,W,H);
+      for(var i=0;i<dots.length;i++){ var d=dots[i]; x.beginPath(); x.arc(d.x,d.y,1.0*DPR,0,6.2832); x.fillStyle=d.pink?'rgba(255,45,155,0.42)':'rgba(17,17,17,0.10)'; x.fill(); }
+      for(var j=ripples.length-1;j>=0;j--){ var rp=ripples[j]; rp.r+=0.32*DPR; var a=1-rp.r/rp.max; if(a<=0){ ripples.splice(j,1); continue; } x.beginPath(); x.arc(rp.x,rp.y,rp.r,0,6.2832); x.strokeStyle='rgba(255,45,155,'+(a*0.10)+')'; x.lineWidth=1.1*DPR; x.stroke(); } }
+    function loop(){ draw(); t++; if(t%140===0 && ripples.length<3) spawn(); requestAnimationFrame(loop); }
+    addEventListener('resize', resize); resize();
+    if(reduce){ draw(); } else { spawn(); requestAnimationFrame(loop); }
+  })();
+</script>
+</body>
+</html>
