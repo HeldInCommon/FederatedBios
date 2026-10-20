@@ -21,7 +21,6 @@ jobs:
         include:
           - os: macos-latest      # Apple Silicon .dmg/.app
           - os: ubuntu-22.04       # .deb + .AppImage
-          - os: windows-latest     # .msi + .exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
