@@ -60,6 +60,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bake the default commons into the app at compile time (option_env! in
+          # src-tauri/src/lib.rs), so downloaded apps pre-fill "Share to a commons".
+          # Set as a repo/org Actions variable, NOT in source.
+          HIC_SHARE_DEFAULT: ${{ vars.HIC_SHARE_DEFAULT }}
           # NOTE: builds are intentionally UNSIGNED so the .dmg + Linux installers
           # always build and are usable straight from the release (macOS users run
           # `xattr -c` once — see docs/INSTALL.md). Do NOT add APPLE_* env vars here
