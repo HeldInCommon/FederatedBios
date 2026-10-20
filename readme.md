@@ -7,8 +7,11 @@ choose to send a copy, and you attach the terms (license + CC signals) it travel
 under. Members-only work is **encrypted** and never leaves your node readable.
 
 - **Node** — the app on your own computer. Holds your profile, works, and datasets.
+  This is where you create your identity and sign in.
 - **Commons** — a shared directory others can browse. Anyone can host one; the same
-  binary is both a node and a commons.
+  binary is both a node and a commons (set `HIC_ROLE=commons`). A commons is a
+  **federation target, not an identity store** — there's no sign-up on it. Open
+  one directly and you get the directory plus a "run a node to join" page.
 - **Federation** — your node posts a signed, content-addressed copy to a commons'
   `/inbox`; the commons verifies the signature + fingerprint and lists it.
 
@@ -23,12 +26,12 @@ under. Members-only work is **encrypted** and never leaves your node readable.
 ## Run it — no building required
 
 Non-technical users should follow the **[workshop install guide](docs/INSTALL.md)**.
-Three paths:
+Everyone runs a node, then shares up to a commons — there's no sign-up on the
+commons itself. Two paths:
 
-1. **Hosted commons** — open the workshop address, nothing to install.
-2. **Desktop app** — download the unsigned preview (macOS Apple Silicon / Linux),
+1. **Desktop app** — download the unsigned preview (macOS Apple Silicon / Linux),
    open it, and you're a node. See [docs/INSTALL.md](docs/INSTALL.md).
-3. **Docker** — `ghcr.io/<owner>/hic-node:latest` (see [commons/README.md](commons/README.md)).
+2. **Docker** — `ghcr.io/<owner>/hic-node:latest` (see [commons/README.md](commons/README.md)).
 
 ---
 
@@ -53,6 +56,7 @@ Open **http://localhost:8080**. Configure with env vars:
 | `PORT` | `8080` | Port to listen on |
 | `HIC_DATA` | `./data` | Directory for this node's data |
 | `HIC_INSTANCE` | `My node` | Human label for this instance |
+| `HIC_ROLE` | inferred | `node` or `commons`. Inferred from `HIC_INSTANCE` (contains "commons"/"federated" → `commons`). A `commons` gates `/join` + `/login` (federation-only); a `node` allows full sign-up |
 | `HIC_SHARE_DEFAULT` | *(blank)* | Commons address pre-filled in "Share to a commons" |
 | `HIC_BASE_URL` | `http://localhost:$PORT` | Public base URL (for federation/ActivityPub) |
 

@@ -50,12 +50,31 @@ pub fn run() {
             let node_data = base.join("node-data");
             std::fs::create_dir_all(&node_data).ok();
 
+            // Label this node so it is identifiable when federated into a commons
+            // ("federated from <label>"). Honour a host HIC_INSTANCE override; else
+            // derive one from the account name ("phoenixperry's node") so every
+            // install is self-identifying with zero config.
+            let instance = std::env::var("HIC_INSTANCE")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| {
+                    let who = std::env::var("USER")
+                        .or_else(|_| std::env::var("USERNAME"))
+                        .unwrap_or_default();
+                    let who = who.trim();
+                    if who.is_empty() {
+                        "a Held in Common node".to_string()
+                    } else {
+                        format!("{who}'s node")
+                    }
+                });
+
             let sidecar = app
                 .shell()
                 .sidecar("hic-commons")?
                 .env("HIC_DATA", node_data.to_string_lossy().to_string())
                 .env("PORT", "8080")
-                .env("HIC_INSTANCE", "My node")
+                .env("HIC_INSTANCE", instance)
                 .env("HIC_ROLE", "node")
                 .env("HIC_SHARE_DEFAULT", std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default());
 

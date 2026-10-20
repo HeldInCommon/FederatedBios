@@ -27,3 +27,14 @@ rustc-ice-*.txt
 # Tauri bundled sidecar binaries (built locally / by CI)
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+
+# Code-signing certificates / private keys — NEVER commit these.
+# Keep them out of the repo entirely; store signing material as CI secrets.
+*.p12
+*.pfx
+*.cer
+*.crt
+*.pem
+*.key
+*.p8
+*.mobileprovision

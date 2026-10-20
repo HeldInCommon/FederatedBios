@@ -248,6 +248,13 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .empty-note { font: italic 500 22px var(--serif); color: var(--gray); }
 .empty-note a { color: var(--blue); }
 
+/* Commons gate — shown in place of join/login on a shared commons */
+.gate { margin-top: 40px; border: 1px solid var(--ink); background: var(--white); padding: 32px; max-width: 640px; }
+.gate h2 { margin: 0 0 20px; font: 600 15px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.gate-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 14px; font-size: 18px; line-height: 1.5; }
+.gate-steps strong { font-weight: 600; }
+.gate .actions { margin-top: 32px; }
+
 /* Directory grid */
 .dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
 .dir-card { display: flex; flex-direction: column; border: 1px solid var(--ink); background: var(--white); text-decoration: none; color: var(--ink); }
@@ -328,6 +335,20 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .share-row { display: flex; gap: 12px; margin-top: 10px; align-items: stretch; }
 .share-row input { flex: 1; }
 .shared-note { margin: 12px 0 0; font: 400 14px var(--mono); color: var(--jade-ink); }
+
+/* Click-to-share: one row per known commons, no URL typing required. */
+.share-panel { margin-top: 28px; max-width: 640px; }
+.commons-list { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.commons-item { margin: 0; }
+.commons-share { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px solid var(--line); }
+.commons-meta { flex: 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.commons-name { font: 400 14px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commons-status { flex: none; font: 700 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--jade-ink); }
+.commons-share button { flex: none; }
+.add-commons { margin-top: 18px; }
+.add-commons summary { cursor: pointer; font: 700 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray); }
+.add-commons summary:hover { color: var(--ink); }
+.add-commons .share-form { margin-top: 14px; }
 
 /* --- profile picture --- */
 .avatar-preview { width: 104px; height: 104px; flex: none; object-fit: cover;

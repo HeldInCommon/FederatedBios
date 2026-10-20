@@ -599,6 +599,51 @@ fn role_banner() -> Markup {
     }
 }
 
+/// True when this instance runs as a shared commons (HIC_ROLE=commons) rather
+/// than someone's personal node. A commons is a federation target, not a place
+/// you mint an identity: there's no direct sign-up — profiles arrive only as
+/// signed copies federated from people's own nodes, so /join and /login steer
+/// people to run a node instead.
+fn is_commons() -> bool {
+    BANNER.get().map(|(r, _, _)| r == "commons").unwrap_or(false)
+}
+
+/// Shown in place of /join and /login on a shared commons. Your keys live on
+/// your node and never leave your machine, so the only way onto a commons is to
+/// run a node and share a signed copy up. This explains that node-first flow.
+fn commons_gate_page(me: Option<&str>) -> Response {
+    let (_, instance, _) = BANNER.get().cloned().unwrap_or_default();
+    let body = html! {
+        header class="intro" {
+            h1 { "This is a shared commons" }
+            p class="lede" {
+                "Profiles here are signed copies that people publish from their own nodes. "
+                "There's no sign-up on a commons — your identity and keys live on your node "
+                "and never leave your machine."
+            }
+        }
+        div class="gate" {
+            h2 { "To appear in this directory" }
+            ol class="gate-steps" {
+                li { "Run your own node — download the app (no account, no Docker)." }
+                li { "Create your handle and profile on your node." }
+                li {
+                    "Click " strong { "“Share to a commons”" } " and paste this commons's address"
+                    @if !instance.is_empty() { " (" (instance) ")" } "."
+                }
+            }
+            div class="actions" {
+                a class="primary" href="https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview" { "Get the app \u{2192}" }
+            }
+            p class="hint" {
+                "A signed copy of your profile then appears here. Members-only profiles stay "
+                "encrypted on your node and are never shared — not even to a commons."
+            }
+        }
+    };
+    shell("Shared commons", me, body)
+}
+
 fn shell(title: &str, me: Option<&str>, body: Markup) -> Response {
     let markup = html! {
         (DOCTYPE)
@@ -624,6 +669,8 @@ fn shell(title: &str, me: Option<&str>, body: Markup) -> Response {
                                 form method="post" action="/logout" class="inline-form" {
                                     button class="linklike" type="submit" { "Sign out" }
                                 }
+                            } @else if is_commons() {
+                                a href="/join" { "Run a node to join" }
                             } @else {
                                 a href="/join" { "Add your profile" }
                                 a href="/login" { "Sign in" }
@@ -692,7 +739,11 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }
         }
         @if cards.is_empty() && remotes.is_empty() {
-            p class="empty-note" { "Nothing here yet. " a href="/join" { "Add the first profile" } " — or run your own node and share it in." }
+            @if is_commons() {
+                p class="empty-note" { "Nothing here yet. " a href="/join" { "Run a node" } " and share your profile in — that's how profiles arrive here." }
+            } @else {
+                p class="empty-note" { "Nothing here yet. " a href="/join" { "Add the first profile" } " — or run your own node and share it in." }
+            }
         }
         div class="dir-grid" {
             @for r in &remotes {
@@ -728,10 +779,37 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
             }
         }
         div class="actions" {
-            a class="primary" href="/join" { "Add your profile" }
+            @if is_commons() {
+                a class="primary" href="/join" { "Run a node to join" }
+            } @else {
+                a class="primary" href="/join" { "Add your profile" }
+            }
         }
     };
     shell("Directory", me.as_deref(), body)
+}
+
+/// A readable label for a commons URL — its host, without scheme or trailing slash.
+fn commons_label(url: &str) -> String {
+    url.strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url)
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// De-duplicated, order-stable list of commons the owner can share to with one
+/// click: the configured default first (if set), then everything already shared
+/// to. This is what turns "paste a URL" into "pick one and click".
+fn known_commons(default: &str, shared_to: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for u in std::iter::once(default).chain(shared_to.iter().map(|s| s.as_str())) {
+        let u = u.trim().trim_end_matches('/');
+        if !u.is_empty() && !out.iter().any(|x| x == u) {
+            out.push(u.to_string());
+        }
+    }
+    out
 }
 
 async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, headers: HeaderMap) -> Response {
@@ -798,17 +876,39 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
             div class="owner-panel" {
                 div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
                 @if shareable {
-                    form method="post" action="/share" class="share-form" {
-                        input type="hidden" name="handle" value=(h.handle);
-                        input type="hidden" name="csrf" value=(csrf);
-                        label class="field-label" for="commons_url" { "Share to a commons" }
-                        p class="hint" { "Push a signed, verifiable copy to a shared commons. Members-only versions never leave your node." }
-                        div class="share-row" {
-                            input id="commons_url" name="commons_url" type="url" value=(share_default) placeholder="https://commons.example";
-                            button class="secondary" type="submit" { "Share" }
+                    @let known = known_commons(&share_default, &h.shared_to);
+                    section class="share-panel" {
+                        h2 class="field-label" { "Share to a commons" }
+                        p class="hint" { "Push a signed, verifiable copy to a shared commons \u{2014} one click. Members-only versions never leave your node." }
+                        @if !known.is_empty() {
+                            ul class="commons-list" {
+                                @for c in &known {
+                                    @let shared = h.shared_to.iter().any(|s| s == c);
+                                    li class="commons-item" {
+                                        form method="post" action="/share" class="commons-share" {
+                                            input type="hidden" name="handle" value=(h.handle);
+                                            input type="hidden" name="csrf" value=(csrf);
+                                            input type="hidden" name="commons_url" value=(c);
+                                            span class="commons-meta" {
+                                                span class="commons-name" { (commons_label(c)) }
+                                                @if shared { span class="commons-status" { "shared \u{2713}" } }
+                                            }
+                                            button class="secondary" type="submit" { (if shared { "Re-share" } else { "Share" }) }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        @if !h.shared_to.is_empty() {
-                            p class="shared-note" { "Shared to: " (h.shared_to.join(", ")) }
+                        details class="add-commons" open[known.is_empty()] {
+                            summary { (if known.is_empty() { "Add a commons" } else { "Share to a different commons" }) }
+                            form method="post" action="/share" class="share-form" {
+                                input type="hidden" name="handle" value=(h.handle);
+                                input type="hidden" name="csrf" value=(csrf);
+                                div class="share-row" {
+                                    input name="commons_url" type="url" placeholder="https://commons.example";
+                                    button class="secondary" type="submit" { "Share" }
+                                }
+                            }
                         }
                     }
                 }
@@ -820,6 +920,9 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
 
 async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session_handle(&st, &headers);
+    if is_commons() {
+        return commons_gate_page(me.as_deref());
+    }
     let body = html! {
         header class="intro" {
             h1 { "Join the commons" }
@@ -847,6 +950,9 @@ async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
 }
 
 async fn join_submit(State(st): State<Shared>, body: String) -> Response {
+    if is_commons() {
+        return commons_gate_page(None);
+    }
     let f = parse_form(&body);
     let handle = clamp(one(&f, "handle").to_lowercase(), 30);
     let display = clamp(one(&f, "display_name"), 80);
@@ -1092,6 +1198,9 @@ fn hex_to_32(h: &str) -> [u8; 32] {
 
 async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session_handle(&st, &headers);
+    if is_commons() {
+        return commons_gate_page(me.as_deref());
+    }
     let body = html! {
         header class="intro" { h1 { "Sign in" } p class="lede" { "Sign in as a member to read members-only profiles." } }
         form method="post" action="/login" class="stack-form" {
@@ -1110,6 +1219,9 @@ async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
 }
 
 async fn login_submit(State(st): State<Shared>, body: String) -> Response {
+    if is_commons() {
+        return commons_gate_page(None);
+    }
     let f = parse_form(&body);
     let handle = clamp(one(&f, "handle").to_lowercase(), 30);
     let passphrase = one(&f, "passphrase");

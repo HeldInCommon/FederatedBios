@@ -1,10 +1,16 @@
 # Builds the native node app for macOS / Windows / Linux and attaches
 # installers to the 'node-app-preview' prerelease.
 #
-# Unsigned by default (users use the OS 'open anyway' step). To ship SIGNED
-# macOS builds, add these repo secrets (Settings -> Secrets -> Actions):
-#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+# macOS builds are SIGNED + NOTARIZED when these repo secrets are present
+# (Settings -> Secrets and variables -> Actions):
+#   APPLE_CERTIFICATE          base64 of the Developer ID Application .p12
+#   APPLE_CERTIFICATE_PASSWORD password used when exporting that .p12
+#   APPLE_SIGNING_IDENTITY     "Developer ID Application: NAME (TEAMID)"
+#   APPLE_ID                   an Apple ID that is a member of the signing team
+#   APPLE_PASSWORD             an app-specific password for that Apple ID
+#   APPLE_TEAM_ID              the 10-char Team ID (e.g. University of the Arts London's)
+# If the secrets are absent the build still runs but stays unsigned (tauri-action
+# skips signing when APPLE_CERTIFICATE is empty) — so add ALL SIX together.
 # Windows signing is a follow-up (needs a code-signing cert + a sign step).
 name: desktop-app
 on:
@@ -25,6 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Cache ~/.cargo + target/ for both crates (sidecar and app) so repeat
+      # release builds skip recompiling the whole dependency graph. Keyed per OS
+      # and invalidated when either Cargo.lock changes.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            commons
+            src-tauri
+          key: ${{ matrix.os }}
       - name: Linux deps
         if: matrix.os == 'ubuntu-22.04'
         run: |
@@ -45,8 +60,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: builds are intentionally UNSIGNED so the .dmg + Linux installers
+          # always build and are usable straight from the release (macOS users run
+          # `xattr -c` once — see docs/INSTALL.md). Do NOT add APPLE_* env vars here
+          # until a real Developer ID Application cert exists: the tauri bundler
+          # signs whenever APPLE_CERTIFICATE is *defined* (even empty), and the bad
+          # org-inherited cert makes `security import` fail the whole macOS build.
+          # To enable signing later, re-add the APPLE_* vars AND provide a valid
+          # Developer ID .p12 — see .github/workflows/README or git history.
         with:
           tagName: node-app-preview
           releaseName: "Held In Common"
-          releaseBody: "Unsigned preview builds. macOS: right-click → Open. Windows: More info → Run anyway. Linux: .AppImage or .deb."
+          releaseBody: "Held in Common — desktop node app. Download the file for your OS (macOS Apple Silicon .dmg, Linux .deb/.AppImage/.rpm), open it, and you're a node. See docs/INSTALL.md."
           prerelease: true
