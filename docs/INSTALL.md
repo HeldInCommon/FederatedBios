@@ -13,7 +13,7 @@ own computer (recommended). Pick one.
 
 Best if you just want to be in the directory in two minutes.
 
-1. Open **https://drh1in8ipba68q-8080.proxy.runpod.net**
+1. Open the **workshop commons address** (your facilitator shares this separately — it is not committed to this repo)
 2. Click **Add your profile**.
 3. Choose a **handle** and a **passphrase** (you sign back in with these — there's no recovery, so pick something memorable).
 4. Fill in your profile → choose **who can see it** → pick a **license** and **CC signals** → **Publish**.
@@ -73,7 +73,7 @@ never leaves your node.
 ```
 docker run -d --name hic-node -p 8080:8080 -v hic-node:/data \
   -e HIC_INSTANCE="My node" \
-  -e HIC_SHARE_DEFAULT="https://drh1in8ipba68q-8080.proxy.runpod.net" \
+  -e HIC_SHARE_DEFAULT="<workshop commons address>" \
   ghcr.io/phoenixperry/hic-node:latest
 ```
 
