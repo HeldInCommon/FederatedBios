@@ -69,6 +69,16 @@ pub fn run() {
                     }
                 });
 
+            // Default commons to pre-fill in "Share to a commons". Prefer a host
+            // runtime override; else a build-time default baked in via the
+            // HIC_SHARE_DEFAULT env at compile time (set from a CI variable, NOT
+            // committed to source — stays blank in a plain `cargo build`).
+            let share_default = std::env::var("HIC_SHARE_DEFAULT")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| option_env!("HIC_SHARE_DEFAULT").map(str::to_string))
+                .unwrap_or_default();
+
             let sidecar = app
                 .shell()
                 .sidecar("hic-commons")?
@@ -76,7 +86,7 @@ pub fn run() {
                 .env("PORT", "8080")
                 .env("HIC_INSTANCE", instance)
                 .env("HIC_ROLE", "node")
-                .env("HIC_SHARE_DEFAULT", std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default());
+                .env("HIC_SHARE_DEFAULT", share_default);
 
             let (mut rx, child) = sidecar.spawn()?;
             tauri::async_runtime::spawn(async move {
