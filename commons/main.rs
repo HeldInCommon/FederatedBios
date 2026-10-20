@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
@@ -39,6 +39,12 @@ use crypto_box::{
 
 const STYLE_CSS: &str = include_str!("style.css");
 const AVATAR_JS: &str = include_str!("avatar.js");
+
+// (role, instance label, commons url) for the top role banner, set once at
+// startup. role is "node" (your personal node) or "commons" (a shared/federated
+// instance like the RunPod one). This makes "am I on my node or a remote commons"
+// obvious in ANY browser, not just the desktop app.
+static BANNER: OnceLock<(String, String, String)> = OnceLock::new();
 
 /// Content-Security-Policy: no scripts at all (every page is server-rendered),
 /// styles and fonts only from self + Google Fonts, images from self + data URIs.
@@ -575,6 +581,24 @@ fn clamp(s: String, max: usize) -> String {
 // HTML
 // ---------------------------------------------------------------------------
 
+fn role_banner() -> Markup {
+    let (role, instance, commons) = BANNER
+        .get()
+        .cloned()
+        .unwrap_or_else(|| ("node".into(), "Held in Common".into(), String::new()));
+    let is_commons = role == "commons";
+    html! {
+        div class={ "role-bar " (if is_commons { "role-commons" } else { "role-node" }) } {
+            span class="role-dot" {}
+            span class="role-label" { (if is_commons { "Shared commons" } else { "Your node" }) }
+            @if !instance.is_empty() { span class="role-instance" { "· " (instance) } }
+            @if !is_commons && !commons.is_empty() {
+                a class="role-link" href=(commons) { "Visit the commons \u{2197}" }
+            }
+        }
+    }
+}
+
 fn shell(title: &str, me: Option<&str>, body: Markup) -> Response {
     let markup = html! {
         (DOCTYPE)
@@ -589,6 +613,7 @@ fn shell(title: &str, me: Option<&str>, body: Markup) -> Response {
                 link rel="stylesheet" href="/style.css";
             }
             body {
+                (role_banner())
                 main class="page" {
                     nav class="topbar" {
                         a class="wordmark" href="/" { "Held in Common" span class="dot" { "." } }
@@ -1453,6 +1478,13 @@ async fn main() {
     let secure_cookie = base_url.starts_with("https://");
     let instance = std::env::var("HIC_INSTANCE").unwrap_or_else(|_| "Held in Common".into());
     let share_default = std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default();
+    // "node" vs "commons": explicit via HIC_ROLE, else inferred from the instance
+    // label (RunPod sets HIC_INSTANCE="Held in Common (federated)").
+    let role = std::env::var("HIC_ROLE").unwrap_or_else(|_| {
+        let i = instance.to_lowercase();
+        if i.contains("commons") || i.contains("federated") { "commons".into() } else { "node".into() }
+    });
+    let _ = BANNER.set((role, instance.clone(), share_default.clone()));
 
     let state = Arc::new(AppState {
         data_dir,

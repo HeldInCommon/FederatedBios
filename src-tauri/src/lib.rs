@@ -12,10 +12,38 @@ use tauri_plugin_shell::ShellExt;
 // from the host HIC_SHARE_DEFAULT env var. Blank by default: no URL is baked into
 // the app — workshop users paste the address their facilitator shares.
 
+// Injected into every loaded page (node or remote commons) so the user always
+// knows which they're looking at and can move between them. Local node = jade bar
+// with a "visit the commons" button; any remote commons = violet bar with a
+// "back to your node" button. The node can't edit a remote commons' HTML, but the
+// app can inject this from the host side, so it works everywhere.
+const APP_BAR_JS: &str = r#"(function(){
+  var NODE='http://localhost:8080';
+  var isNode=location.href.indexOf('localhost:8080')>-1||location.href.indexOf('127.0.0.1:8080')>-1;
+  var id='hic-back-node';
+  var old=document.getElementById(id); if(old){old.remove();}
+  if(isNode){return;}
+  var b=document.createElement('button'); b.id=id;
+  b.textContent='← Back to your node';
+  b.style.cssText='position:fixed;top:9px;right:12px;z-index:2147483647;cursor:pointer;border:0;padding:8px 12px;font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.07em;text-transform:uppercase;color:#fff;background:#0a7a54;box-shadow:0 2px 10px rgba(0,0,0,.3);';
+  b.onclick=function(){location.href=NODE;};
+  document.body.appendChild(b);
+})();"#;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .on_page_load(|window, payload| {
+            let url = payload.url().to_string();
+            let is_http = url.starts_with("http://") || url.starts_with("https://");
+            // skip the app's own loading screen (tauri.localhost); only decorate
+            // real node / commons pages.
+            if !is_http || url.contains("tauri.localhost") {
+                return;
+            }
+            let _ = window.eval(APP_BAR_JS);
+        })
         .setup(|app| {
             // Per-user writable store for this node's data.
             let base = app.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -28,6 +56,7 @@ pub fn run() {
                 .env("HIC_DATA", node_data.to_string_lossy().to_string())
                 .env("PORT", "8080")
                 .env("HIC_INSTANCE", "My node")
+                .env("HIC_ROLE", "node")
                 .env("HIC_SHARE_DEFAULT", std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default());
 
             let (mut rx, child) = sidecar.spawn()?;
