@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Held in Common Node",
+  "productName": "Held In Common",
   "version": "0.1.0",
   "identifier": "org.heldincommon.node",
   "build": {

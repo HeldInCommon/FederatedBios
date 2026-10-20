@@ -47,6 +47,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: node-app-preview
-          releaseName: "Held in Common Node — preview (all platforms)"
+          releaseName: "Held In Common"
           releaseBody: "Unsigned preview builds. macOS: right-click → Open. Windows: More info → Run anyway. Linux: .AppImage or .deb."
           prerelease: true
