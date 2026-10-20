@@ -1,38 +1,70 @@
 # Held in Common — Workshop Install Guide
 
 You're going to run a **node** — your own personal commons — and (if you want)
-**share** your profile to a shared commons so others can find it. Your work
-stays on your machine unless you choose to send a copy.
+**share** a copy of your profile to a shared commons so others can find it. Your
+work stays on your machine unless you choose to send a copy.
 
-Pick whichever path suits you. **Path 1 is the fastest for the workshop.**
+**In a hurry?** Path 1 needs nothing installed. Path 2 runs a real node on your
+own computer (recommended). Pick one.
 
 ---
 
 ## Path 1 — Use the shared commons (nothing to install)
 
+Best if you just want to be in the directory in two minutes.
+
 1. Open **https://drh1in8ipba68q-8080.proxy.runpod.net**
 2. Click **Add your profile**.
-3. Choose a **handle** and a **passphrase** (you'll use these to sign in again — there's no recovery, so pick something memorable).
+3. Choose a **handle** and a **passphrase** (you sign back in with these — there's no recovery, so pick something memorable).
 4. Fill in your profile → choose **who can see it** → pick a **license** and **CC signals** → **Publish**.
-5. You now appear in the directory. Done.
+5. ✅ You now appear in the directory. Done.
+
+> This shared commons is a **preview server** — treat it as scratch space; data may be reset between sessions.
 
 ---
 
 ## Path 2 — Run your own node: the app (no Docker) — recommended
 
-1. Download the installer for your computer from the releases page:
-   **https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview**
-   - **macOS (Apple Silicon):** `.dmg`
-   - **Windows:** `.msi` or `.exe`
-   - **Linux:** `.AppImage` or `.deb`
-2. Open it (these preview builds are **unsigned**, so your OS will warn once):
-   - **macOS:** right-click the app → **Open** → **Open**.
-   - **Windows:** "Windows protected your PC" → **More info** → **Run anyway**.
-   - **Linux:** `chmod +x *.AppImage` then run it, or install the `.deb`.
-3. The app starts your node and opens to **http://localhost:8080** — that's *your* node.
-4. Create your **handle + passphrase**, fill your profile, and **Publish** (it's saved on your machine).
-5. To appear in the shared commons: on your profile, use **"Share to a commons"** (the shared address is already filled in) → **Share**. A signed copy now shows in the shared directory.
-6. **Members-only** profiles stay **encrypted on your machine** — they are never shared.
+A node is just an app on your computer. These preview builds are **unsigned** (no
+Apple/Windows certificate yet), so your OS warns once — that's expected, and the
+steps below get past it.
+
+### 1. Download
+
+From the releases page: **https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview**
+
+| Your computer | Download this file |
+|---|---|
+| **macOS — Apple Silicon (M1/M2/M3/M4)** | `Held.in.Common.Node_0.1.0_aarch64.dmg` |
+| **Linux — Ubuntu / Debian** | `Held.in.Common.Node_0.1.0_amd64.deb` |
+| **Linux — any distro** | `Held.in.Common.Node_0.1.0_amd64.AppImage` |
+| **Linux — Fedora / RHEL** | `Held.in.Common.Node-0.1.0-1.x86_64.rpm` |
+
+> **Windows** and **Intel macOS** builds aren't ready yet — use **Path 1** or **Path 3 (Docker)** for now.
+
+### 2. Open it — get past the "unsigned" warning (one time only)
+
+- **macOS:** open the `.dmg`, drag the app into **Applications**. First launch: **right-click the app → Open → Open**. If macOS still blocks it ("…cannot be opened because Apple cannot check it for malicious software"), go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then launch the app again.
+- **Linux (.AppImage):** `chmod +x Held.in.Common.Node_0.1.0_amd64.AppImage`, then run it. (If it won't start, install `libfuse2`.)
+- **Linux (.deb):** `sudo apt install ./Held.in.Common.Node_0.1.0_amd64.deb`, then launch **Held in Common Node**.
+
+### 3. You're up and running when…
+
+The app opens your browser to **http://localhost:8080** and you see the Held in
+Common page. That's *your* node, running on your own machine.
+
+### 4. Make your profile
+
+Create your **handle + passphrase**, fill in your profile, choose visibility +
+license + CC signals, and **Publish**. It's saved on your computer.
+
+### 5. (Optional) Share to the commons
+
+On your profile, click **"Share to a commons"** (the shared address is pre-filled)
+→ **Share**. A **signed copy** now appears in the shared directory. Your original
+never leaves your node.
+
+> **Members-only** profiles stay **encrypted on your machine** and are never shared — not even to the commons.
 
 ---
 
@@ -45,7 +77,8 @@ docker run -d --name hic-node -p 8080:8080 -v hic-node:/data \
   ghcr.io/phoenixperry/hic-node:latest
 ```
 
-Open **http://localhost:8080**. Your data lives in the `hic-node` volume.
+Open **http://localhost:8080**. Your data lives in the `hic-node` volume (it
+survives restarts).
 
 ---
 
@@ -57,10 +90,11 @@ Open **http://localhost:8080**. Your data lives in the `hic-node` volume.
 
 ## Troubleshooting
 
-- **Port 8080 is busy** — quit whatever is using it, then reopen the app.
-- **"Can't be opened" (macOS)** — right-click the app → **Open** (only needed once).
+- **Port 8080 is busy** — quit whatever is using it, then reopen the app. (Docker: use `-p 8081:8080` and open `http://localhost:8081`.)
+- **macOS "cannot be opened / Apple cannot check it"** — right-click → **Open**, or **System Settings → Privacy & Security → Open Anyway** (only needed once).
+- **Linux AppImage won't run** — make sure it's executable (`chmod +x`), and install `libfuse2` on distros that need it.
 - **Forgot your passphrase** — there's no recovery (we store only a salted hash); create a new handle.
 
 ## How it all fits together (slides)
 
-**https://raw.githack.com/phoenixperry/FederatedBios/feat/federation/docs/architecture.html**
+**https://phoenixperry.github.io/FederatedBios/architecture.html**
