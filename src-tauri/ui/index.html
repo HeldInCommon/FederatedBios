@@ -1,23 +1,50 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8" />
-<title>Held in Common — Node</title>
+<title>Held in Common</title>
 <style>
-  body{margin:0;height:100vh;display:grid;place-items:center;background:#fff;color:#111;
+  :root{--pink:#ff2d9b;--blue:#1f5cff;--ink:#111;--bg:#f2f1ed;--e:cubic-bezier(.22,1,.36,1)}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
        font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-  .box{text-align:center}
+  /* brand bar */
+  .bars{position:fixed;top:0;left:0;right:0;height:8px;display:flex}
+  .bars i{height:100%} .bars .p{flex:0 0 62%;background:var(--pink)} .bars .b{flex:1;background:var(--blue)}
+  .box{text-align:center;padding:0 24px}
+  /* pulsing ripple loader */
+  .loader{position:relative;width:140px;height:140px;margin:0 auto 38px}
+  .loader .ring{position:absolute;inset:0;margin:auto;width:30px;height:30px;border:2px solid var(--pink);
+       border-radius:50%;opacity:0;animation:ripple 2.1s var(--e) infinite}
+  .loader .ring:nth-child(2){animation-delay:.7s}
+  .loader .ring:nth-child(3){animation-delay:1.4s}
+  .loader .core{position:absolute;inset:0;margin:auto;width:13px;height:13px;background:var(--pink);
+       border-radius:50%;animation:breathe 2.1s var(--e) infinite}
+  @keyframes ripple{0%{transform:scale(1);opacity:.85}70%{opacity:.1}100%{transform:scale(4.4);opacity:0}}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
   h1{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0}
-  .dot{color:#ff2d9b}
-  .sub{color:#6f6f6f;margin-top:10px}
+  .dot{color:var(--pink)}
+  .sub{color:#6f6f6f;margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
+  @media(prefers-reduced-motion:reduce){ .loader .ring,.loader .core{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} }
 </style></head>
 <body>
-  <div class="box"><h1>Starting your node<span class="dot">.</span></h1><p class="sub" id="s">Warming up the commons…</p></div>
+  <div class="bars"><i class="p"></i><i class="b"></i></div>
+  <div class="box">
+    <div class="loader" aria-hidden="true">
+      <span class="ring"></span><span class="ring"></span><span class="ring"></span>
+      <span class="core"></span>
+    </div>
+    <h1>Starting your node<span class="dot">.</span></h1>
+    <p class="sub" id="s">Warming up the commons…</p>
+  </div>
   <script>
     const url = 'http://localhost:8080';
+    const msgs = ['Warming up the commons…','Minting your keys…','Opening your node…'];
+    const s = document.getElementById('s');
     let n = 0;
     async function go(){
       n++;
+      if (n <= msgs.length * 3) s.textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
       try { const r = await fetch(url + '/health', {cache:'no-store'}); if (r.ok){ location.href = url; return; } } catch(e){}
-      if (n > 40) document.getElementById('s').textContent = 'Still starting… this can take a moment on first run.';
+      if (n > 40) s.textContent = 'Still starting… this can take a moment on first run.';
       setTimeout(go, 600);
     }
     go();
