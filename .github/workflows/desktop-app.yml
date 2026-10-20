@@ -75,5 +75,31 @@ jobs:
         with:
           tagName: node-app-preview
           releaseName: "Held In Common"
-          releaseBody: "Held in Common — desktop node app. Download the file for your OS (macOS Apple Silicon .dmg, Linux .deb/.AppImage/.rpm), open it, and you're a node. See docs/INSTALL.md."
+          # Kept here (not just hand-edited on the release) so each CI run re-applies
+          # it instead of clobbering the macOS one-paste install instructions.
+          releaseBody: |
+            **Held in Common — the desktop node app.** Download the file for your computer, open it, and you're running your own node.
+
+            | Your computer | Download |
+            |---|---|
+            | macOS — Apple Silicon (M1–M4) | `Held-In-Common-macOS-AppleSilicon.dmg` |
+            | Linux — Ubuntu / Debian | `Held-In-Common-Linux.deb` |
+            | Linux — any distro | `Held-In-Common-Linux.AppImage` |
+            | Linux — Fedora / RHEL | `Held-In-Common-Linux.rpm` |
+
+            These builds are **unsigned** (notarization is on the roadmap).
+
+            ### macOS — if you see "disk is damaged — move to Trash"
+
+            The download is fine; macOS just quarantines apps that aren't notarized yet. **Paste this one line into Terminal** — it clears the quarantine, installs the app to **Applications**, and launches it (no dragging):
+
+            ```bash
+            D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
+            ```
+
+            - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (Install `libfuse2` if it won't start.)
+            - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
+            - Full guide: `docs/INSTALL.md`.
+
+            _This is a rolling preview — assets are replaced in place with each new build._
           prerelease: true

@@ -4,8 +4,9 @@
 //! (`hic-commons`) as a sidecar, then the window shows the node's own web UI.
 //! No Docker, no terminal — double-click and you are a node.
 
+use std::sync::Mutex;
 use tauri::Manager;
-use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 // The commons address prefilled in the node's "Share to a commons" form is read
@@ -30,10 +31,88 @@ const APP_BAR_JS: &str = r#"(function(){
   document.body.appendChild(b);
 })();"#;
 
+/// Everything needed to (re)spawn the node sidecar. Computed once at startup and
+/// kept in managed state so the `restart_node` command can respawn with the same
+/// environment after a crash or a failed port bind.
+struct NodeConfig {
+    data_dir: String,
+    instance: String,
+    share_default: String,
+}
+
+/// Handle to the running sidecar. Kept alive here so the process lives as long as
+/// the app; `restart_node` takes it to kill a stuck child before respawning.
+struct NodeProc(Mutex<Option<CommandChild>>);
+
+/// Spawn the bundled `hic-commons` binary as our node on port 8080.
+fn spawn_node(app: &tauri::AppHandle, cfg: &NodeConfig) -> Result<CommandChild, String> {
+    let sidecar = app
+        .shell()
+        .sidecar("hic-commons")
+        .map_err(|e| format!("could not locate the node binary: {e}"))?
+        .env("HIC_DATA", &cfg.data_dir)
+        .env("PORT", "8080")
+        .env("HIC_INSTANCE", &cfg.instance)
+        .env("HIC_ROLE", "node")
+        .env("HIC_SHARE_DEFAULT", &cfg.share_default);
+
+    let (mut rx, child) = sidecar
+        .spawn()
+        .map_err(|e| format!("could not start the node: {e}"))?;
+    tauri::async_runtime::spawn(async move {
+        while let Some(ev) = rx.recv().await {
+            match ev {
+                CommandEvent::Stdout(l) | CommandEvent::Stderr(l) => {
+                    eprintln!("[node] {}", String::from_utf8_lossy(&l));
+                }
+                _ => {}
+            }
+        }
+    });
+    Ok(child)
+}
+
+/// Is the node's http server accepting connections on 8080? The loading screen
+/// polls this via `invoke` instead of `fetch` — a fetch from the app's secure
+/// origin to http://localhost is blocked as mixed content, so an in-page probe
+/// never fires. A TCP connect from the host side has no such restriction. As a
+/// bonus, if the user launched the app twice, the second window sees the first
+/// node already listening and simply navigates to it.
+#[tauri::command]
+fn node_up() -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(400)).is_ok()
+}
+
+/// Manually (re)start the node. Called by the "Start the node" button on the
+/// loading screen when auto-start stalls — e.g. the sidecar crashed, or port 8080
+/// was momentarily busy so the first bind failed. Kills any stuck child, then
+/// respawns. Returns a human-readable error the loading screen can show.
+#[tauri::command]
+fn restart_node(
+    app: tauri::AppHandle,
+    cfg: tauri::State<'_, NodeConfig>,
+    proc: tauri::State<'_, NodeProc>,
+) -> Result<(), String> {
+    // If a healthy node is already listening, nothing to do — just succeed so the
+    // screen navigates to it (covers the "something else is already on 8080" case
+    // without us killing it).
+    if node_up() {
+        return Ok(());
+    }
+    if let Some(child) = proc.0.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+    let child = spawn_node(&app, &cfg)?;
+    *proc.0.lock().unwrap() = Some(child);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![node_up, restart_node])
         .on_page_load(|window, payload| {
             let url = payload.url().to_string();
             let is_http = url.starts_with("http://") || url.starts_with("https://");
@@ -79,35 +158,23 @@ pub fn run() {
                 .or_else(|| option_env!("HIC_SHARE_DEFAULT").map(str::to_string))
                 .unwrap_or_default();
 
-            let sidecar = app
-                .shell()
-                .sidecar("hic-commons")?
-                .env("HIC_DATA", node_data.to_string_lossy().to_string())
-                .env("PORT", "8080")
-                .env("HIC_INSTANCE", instance)
-                .env("HIC_ROLE", "node")
-                .env("HIC_SHARE_DEFAULT", share_default);
+            let cfg = NodeConfig {
+                data_dir: node_data.to_string_lossy().to_string(),
+                instance,
+                share_default,
+            };
 
-            let (mut rx, child) = sidecar.spawn()?;
-            tauri::async_runtime::spawn(async move {
-                // Keep the node process tied to the app's lifetime.
-                let _child = child;
-                while let Some(ev) = rx.recv().await {
-                    match ev {
-                        CommandEvent::Stdout(l) | CommandEvent::Stderr(l) => {
-                            eprintln!("[node] {}", String::from_utf8_lossy(&l));
-                        }
-                        _ => {}
-                    }
-                }
-            });
+            // Spawn the node, then keep both the config (for respawns) and the
+            // child handle (to keep the process alive) in managed state.
+            let child = spawn_node(&app.handle().clone(), &cfg)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            app.manage(cfg);
+            app.manage(NodeProc(Mutex::new(Some(child))));
 
             // Auto-open the node once its http server is listening. The loading
-            // screen can't detect readiness itself: a fetch() from the app's
-            // secure origin to http://localhost is blocked as mixed content, so
-            // the in-page probe never fires. Poll the port from here instead and
-            // navigate the window when it's up (a navigation isn't mixed-content
-            // blocked, which is why clicking the link already worked).
+            // screen also polls (via the node_up command), but this host-side
+            // poll is an independent backstop that works even if the webview JS
+            // stalls: navigate the window as soon as the port answers.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -124,6 +191,19 @@ pub fn run() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|handle, event| {
+            // Reap the node sidecar when the app exits. tauri-plugin-shell does not
+            // kill spawned sidecars on exit, so without this a quit or force-quit
+            // leaves an orphan `hic-commons` holding port 8080 — which then wedges
+            // the next launch. Take the child out of state and kill it on exit.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(proc) = handle.try_state::<NodeProc>() {
+                    if let Some(child) = proc.0.lock().unwrap().take() {
+                        let _ = child.kill();
+                    }
+                }
+            }
+        });
 }
