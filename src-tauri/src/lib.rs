@@ -43,6 +43,27 @@ pub fn run() {
                     }
                 }
             });
+
+            // Auto-open the node once its http server is listening. The loading
+            // screen can't detect readiness itself: a fetch() from the app's
+            // secure origin to http://localhost is blocked as mixed content, so
+            // the in-page probe never fires. Poll the port from here instead and
+            // navigate the window when it's up (a navigation isn't mixed-content
+            // blocked, which is why clicking the link already worked).
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+                for _ in 0..600 {
+                    if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500)).is_ok() {
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                        if let Some((_, win)) = handle.webview_windows().iter().next() {
+                            let _ = win.eval("location.replace('http://localhost:8080')");
+                        }
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(400));
+                }
+            });
             Ok(())
         })
         .run(tauri::generate_context!())

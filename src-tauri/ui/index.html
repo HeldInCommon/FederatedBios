@@ -23,6 +23,9 @@
   h1{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0}
   .dot{color:var(--pink)}
   .sub{color:#6f6f6f;margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
+  .fallback{margin-top:22px;font-size:14px;color:#8a8a8a;opacity:0;transition:opacity .4s}
+  .fallback.show{opacity:1}
+  .fallback a{color:var(--blue);text-decoration:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;border-bottom:1px solid var(--blue)}
   @media(prefers-reduced-motion:reduce){ .loader .ring,.loader .core{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} }
 </style></head>
 <body>
@@ -34,6 +37,7 @@
     </div>
     <h1>Starting your node<span class="dot">.</span></h1>
     <p class="sub" id="s">Warming up the commons…</p>
+    <p class="fallback" id="fb">Taking a while? Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser.</p>
   </div>
   <script>
     const url = 'http://localhost:8080';
@@ -44,7 +48,8 @@
       n++;
       if (n <= msgs.length * 3) s.textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
       try { const r = await fetch(url + '/health', {cache:'no-store'}); if (r.ok){ location.href = url; return; } } catch(e){}
-      if (n > 40) s.textContent = 'Still starting… this can take a moment on first run.';
+      if (n > 40){ s.textContent = 'Still starting… this can take a moment on first run.';
+        document.getElementById('fb').classList.add('show'); }
       setTimeout(go, 600);
     }
     go();
