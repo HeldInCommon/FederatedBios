@@ -39,6 +39,16 @@ From the releases page: **https://github.com/phoenixperry/FederatedBios/releases
 ### 2. Open it — get past the "unsigned" warning (one time only)
 
 - **macOS:** open the `.dmg`, drag the app into **Applications**. First launch: **right-click the app → Open → Open**. If macOS still blocks it ("…cannot be opened because Apple cannot check it for malicious software"), go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then launch the app again.
+  - **If the `.dmg` itself says "disk is damaged — move to Trash" and won't even open:** that's not a broken download — it's macOS quarantining an app that isn't notarized yet. Clear the quarantine flag in **Terminal**, then open it:
+    ```bash
+    xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
+    open ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
+    ```
+    Drag the app into **Applications**, then clear it on the app too and launch:
+    ```bash
+    xattr -cr "/Applications/Held In Common.app"
+    open "/Applications/Held In Common.app"
+    ```
 - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (If it won't start, install `libfuse2`.)
 - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
 
@@ -86,6 +96,7 @@ survives restarts).
 
 - **Port 8080 is busy** — quit whatever is using it, then reopen the app. (Docker: use `-p 8081:8080` and open `http://localhost:8081`.)
 - **macOS "cannot be opened / Apple cannot check it"** — right-click → **Open**, or **System Settings → Privacy & Security → Open Anyway** (only needed once).
+- **macOS "disk is damaged — move to Trash" (the `.dmg` won't open at all)** — the download is fine; macOS is quarantining an app that isn't notarized. In **Terminal**: `xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg` then open it. After moving the app to **Applications**: `xattr -cr "/Applications/Held In Common.app"`, then open it.
 - **Linux AppImage won't run** — make sure it's executable (`chmod +x`), and install `libfuse2` on distros that need it.
 - **Forgot your passphrase** — there's no recovery (we store only a salted hash); create a new handle.
 
