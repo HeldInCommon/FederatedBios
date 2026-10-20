@@ -633,7 +633,7 @@ fn commons_gate_page(me: Option<&str>) -> Response {
                 }
             }
             div class="actions" {
-                a class="primary" href="https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview" { "Get the app \u{2192}" }
+                a class="primary" href="https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview" { "Get the app \u{2192}" }
             }
             p class="hint" {
                 "A signed copy of your profile then appears here. Members-only profiles stay "

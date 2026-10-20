@@ -55,7 +55,7 @@ CI (`.github/workflows/desktop-app.yml`) builds **macOS + Linux** via
    in `docs/INSTALL.md` to the org release.
 
 A working reference release (built from this branch) is on the fork:
-https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview
+https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview
 
 > **Not built yet:** Windows and Intel-mac. Add `windows-latest` / an
 > `x86_64-apple-darwin` target to the matrix when wanted (Windows needs a sign

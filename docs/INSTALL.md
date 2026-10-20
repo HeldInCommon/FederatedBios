@@ -25,7 +25,7 @@ steps below get past it.
 
 ### 1. Download
 
-From the releases page: **https://github.com/phoenixperry/FederatedBios/releases/tag/node-app-preview**
+From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview**
 
 | Your computer | Download this file |
 |---|---|
