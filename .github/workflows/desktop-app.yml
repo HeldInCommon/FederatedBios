@@ -51,14 +51,17 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code-signing + notarization. Empty on non-mac runners and when
-          # the secrets aren't set (tauri-action then skips signing cleanly).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS code-signing + notarization is OPT-IN so the build ALWAYS yields
+          # an (unsigned) .dmg. Signing is attempted only when the repo/org variable
+          # ENABLE_MAC_SIGNING == 'true'. Flip it on ONLY once a real Developer ID
+          # Application cert is in the secrets below — otherwise tauri-action tries
+          # to import the cert and fails the whole macOS build (no .dmg produced).
+          APPLE_CERTIFICATE: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ vars.ENABLE_MAC_SIGNING == 'true' && secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: node-app-preview
           releaseName: "Held In Common"
