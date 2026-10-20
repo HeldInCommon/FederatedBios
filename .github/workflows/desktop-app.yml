@@ -31,6 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Cache ~/.cargo + target/ for both crates (sidecar and app) so repeat
+      # release builds skip recompiling the whole dependency graph. Keyed per OS
+      # and invalidated when either Cargo.lock changes.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            commons
+            src-tauri
+          key: ${{ matrix.os }}
       - name: Linux deps
         if: matrix.os == 'ubuntu-22.04'
         run: |
