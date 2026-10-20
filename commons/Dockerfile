@@ -9,7 +9,7 @@
 # ---- build ----
 FROM rust:1-slim AS build
 WORKDIR /app
-COPY Cargo.toml main.rs style.css ./
+COPY Cargo.toml main.rs style.css avatar.js ./
 RUN cargo build --release
 
 # ---- runtime ----
