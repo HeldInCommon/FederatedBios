@@ -316,3 +316,15 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .prose { max-width: 70ch; margin-top: 16px; }
 .prose h2 { margin-top: 28px; }
 .prose p { font-size: 18px; line-height: 1.65; color: var(--ink); }
+
+/* ===================== Federation ===================== */
+.dir-bar.vis-federated { background: var(--violet); }
+.vis-badge.vis-federated { background: var(--violet); }
+.dir-origin { font: 700 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #6a2caf; margin-top: 4px; }
+.federated-origin { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
+.federated-origin a { color: var(--blue); }
+.owner-panel { margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--line); }
+.share-form { margin-top: 28px; max-width: 640px; }
+.share-row { display: flex; gap: 12px; margin-top: 10px; align-items: stretch; }
+.share-row input { flex: 1; }
+.shared-note { margin: 12px 0 0; font: 400 14px var(--mono); color: var(--jade-ink); }

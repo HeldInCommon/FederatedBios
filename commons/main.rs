@@ -25,7 +25,7 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use ed25519_dalek::{Signer, SigningKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -95,6 +95,8 @@ struct HandleRec {
     secret_salt: String,
     secret_hash: String,
     current_cid: Option<String>,
+    #[serde(default)]
+    shared_to: Vec<String>, // commons URLs this handle has federated to
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -155,8 +157,35 @@ struct AppState {
     write: Mutex<()>,                        // serialize all writes
     base_url: String,
     domain: String,
+    instance: String,       // human label for this instance ("Phoenix's node")
+    share_default: String,  // prefilled commons URL in the share form
 }
 type Shared = Arc<AppState>;
+
+/// A profile federated in from another node and stored here. The ed25519 public
+/// key is the portable identity; `cid` + `signature` make it tamper-evident.
+#[derive(Serialize, Deserialize, Clone)]
+struct RemoteEntry {
+    ed_pub: String,
+    box_pub: String,
+    handle: String,
+    display_name: String,
+    origin: String,       // node base url (may be a LAN/localhost addr; informational)
+    origin_label: String, // human label the node advertised
+    cid: String,
+    visibility: String,   // public | commons (never members)
+    license: String,
+    signals: Vec<String>,
+    created_at: u64,
+    profile: Profile,
+    signature: String,
+    received_at: u64,
+}
+
+/// Stable id for a federated identity: first 16 hex of sha256(ed_pub).
+fn keyid(ed_pub: &str) -> String {
+    hex::encode(Sha256::digest(ed_pub.as_bytes()))[..16].to_string()
+}
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -213,6 +242,133 @@ fn all_handles(st: &AppState) -> Vec<HandleRec> {
     out
 }
 
+fn remote_path(st: &AppState, ed_pub: &str) -> PathBuf {
+    st.data_dir.join("remote").join(format!("{}.json", keyid(ed_pub)))
+}
+fn save_remote(st: &AppState, r: &RemoteEntry) -> std::io::Result<()> {
+    let p = remote_path(st, &r.ed_pub);
+    std::fs::create_dir_all(p.parent().unwrap())?;
+    std::fs::write(p, serde_json::to_vec_pretty(r).unwrap())
+}
+fn load_remote(st: &AppState, kid: &str) -> Option<RemoteEntry> {
+    // kid is the keyid (already a safe hex slug); guard anyway.
+    if kid.len() != 16 || !kid.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let s = std::fs::read_to_string(st.data_dir.join("remote").join(format!("{kid}.json"))).ok()?;
+    serde_json::from_str(&s).ok()
+}
+fn all_remotes(st: &AppState) -> Vec<RemoteEntry> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(st.data_dir.join("remote")) {
+        for e in rd.flatten() {
+            if let Ok(s) = std::fs::read_to_string(e.path()) {
+                if let Ok(r) = serde_json::from_str::<RemoteEntry>(&s) {
+                    out.push(r);
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| b.received_at.cmp(&a.received_at));
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Federation: sign a share, verify an inbound share
+// ---------------------------------------------------------------------------
+
+/// Build the signed ActivityPub-shaped `Create` a node pushes to a commons.
+fn build_share_activity(st: &AppState, rec: &HandleRec, v: &Version) -> serde_json::Value {
+    let profile = v.payload.clone().unwrap_or_default();
+    serde_json::json!({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "actor": {
+            "type": "Person",
+            "preferredUsername": rec.handle,
+            "name": rec.display_name,
+            "id": format!("{}/ap/@{}", st.base_url, rec.handle),
+            "origin": st.base_url,
+            "originLabel": st.instance,
+            "ed25519PublicKey": rec.ed_pub,
+            "boxPublicKey": rec.box_pub,
+        },
+        "object": {
+            "type": "Profile",
+            "cid": v.cid,
+            "visibility": v.visibility,
+            "license": v.license,
+            "signals": v.signals,
+            "createdAt": v.created_at,
+            "profile": profile,
+        },
+        "signature": { "type": "ed25519", "value": v.signature },
+    })
+}
+
+/// Verify an inbound share and turn it into a RemoteEntry. Checks: the content
+/// hash the node claims matches the content it sent (no tampering), and the
+/// ed25519 signature over that hash is valid for the advertised key.
+fn verify_inbound(activity: &serde_json::Value) -> Result<RemoteEntry, String> {
+    let actor = activity.get("actor").ok_or("missing actor")?;
+    let object = activity.get("object").ok_or("missing object")?;
+    let ed_pub = actor.get("ed25519PublicKey").and_then(|v| v.as_str()).ok_or("missing key")?;
+    let handle = actor.get("preferredUsername").and_then(|v| v.as_str()).ok_or("missing handle")?;
+    if !valid_handle(handle) {
+        return Err("invalid handle".into());
+    }
+    let visibility = object.get("visibility").and_then(|v| v.as_str()).unwrap_or("public").to_string();
+    if visibility == "members" {
+        return Err("members-only profiles are not federated".into());
+    }
+    let license = object.get("license").and_then(|v| v.as_str()).unwrap_or("arr").to_string();
+    let signals: Vec<String> = object
+        .get("signals")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let created_at = object.get("createdAt").and_then(|v| v.as_u64()).unwrap_or(0);
+    let profile: Profile = serde_json::from_value(object.get("profile").cloned().unwrap_or_default())
+        .map_err(|_| "bad profile")?;
+    let claimed_cid = object.get("cid").and_then(|v| v.as_str()).ok_or("missing cid")?;
+    let sig_hex = activity
+        .get("signature")
+        .and_then(|s| s.get("value"))
+        .and_then(|v| v.as_str())
+        .ok_or("missing signature")?;
+
+    // Recompute the content address from what was actually sent (tamper check).
+    let body_json = serde_json::to_value(&profile).unwrap();
+    let cid = content_id(handle, &visibility, &license, &signals, created_at, &body_json);
+    if cid != claimed_cid {
+        return Err("content hash mismatch".into());
+    }
+
+    // Verify the signature over the cid with the advertised key.
+    let vk_bytes: [u8; 32] = hex::decode(ed_pub).ok().and_then(|b| b.try_into().ok()).ok_or("bad key")?;
+    let vk = VerifyingKey::from_bytes(&vk_bytes).map_err(|_| "bad key")?;
+    let sig_bytes: [u8; 64] = hex::decode(sig_hex).ok().and_then(|b| b.try_into().ok()).ok_or("bad signature")?;
+    let sig = Signature::from_bytes(&sig_bytes);
+    vk.verify(cid.as_bytes(), &sig).map_err(|_| "signature does not verify")?;
+
+    Ok(RemoteEntry {
+        ed_pub: ed_pub.to_string(),
+        box_pub: actor.get("boxPublicKey").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        handle: handle.to_string(),
+        display_name: actor.get("name").and_then(|v| v.as_str()).unwrap_or(handle).to_string(),
+        origin: actor.get("origin").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        origin_label: actor.get("originLabel").and_then(|v| v.as_str()).unwrap_or("a node").to_string(),
+        cid: cid.clone(),
+        visibility,
+        license,
+        signals,
+        created_at,
+        profile,
+        signature: sig_hex.to_string(),
+        received_at: now(),
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Identity, secrets, crypto
 // ---------------------------------------------------------------------------
@@ -266,6 +422,7 @@ fn mint_identity(handle: &str, display_name: &str, passphrase: &str) -> HandleRe
         secret_salt: salt.clone(),
         secret_hash: hash_secret(&salt, passphrase),
         current_cid: None,
+        shared_to: Vec::new(),
     }
 }
 
@@ -477,16 +634,28 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
         }
         cards.push((h, v));
     }
+    let remotes = all_remotes(&st);
 
     let body = html! {
         header class="intro" {
             h1 { "The commons" }
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }
         }
-        @if cards.is_empty() {
-            p class="empty-note" { "No profiles published yet. " a href="/join" { "Add the first one." } }
+        @if cards.is_empty() && remotes.is_empty() {
+            p class="empty-note" { "Nothing here yet. " a href="/join" { "Add the first profile" } " — or run your own node and share it in." }
         }
         div class="dir-grid" {
+            @for r in &remotes {
+                a class="dir-card" href={ "/federated/" (keyid(&r.ed_pub)) } {
+                    span class="dir-bar vis-federated" {}
+                    span class="dir-body" {
+                        span class="dir-name" { (if r.profile.name.is_empty() { r.handle.clone() } else { r.profile.name.clone() }) }
+                        span class="dir-handle" { "@" (r.handle) }
+                        @if !r.profile.role.is_empty() { span class="dir-role" { (r.profile.role) } }
+                        span class="dir-origin" { "federated from " (r.origin_label) }
+                    }
+                }
+            }
             @for (h, v) in &cards {
                 a class="dir-card" href={ "/@" (h.handle) } {
                     span class={ "dir-bar " (match v.visibility.as_str() { "public" => "vis-public", "commons" => "vis-commons", _ => "vis-members" }) } {}
@@ -519,6 +688,10 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
         return not_found(me.as_deref());
     };
     let version = h.current_cid.as_ref().and_then(|c| load_version(&st, c));
+    let is_owner = me.as_deref() == Some(h.handle.as_str());
+    let shareable = version.as_ref().map_or(false, |v| v.visibility != "members");
+    let csrf = if is_owner { session_csrf(&st, &headers).unwrap_or_default() } else { String::new() };
+    let share_default = st.share_default.clone();
 
     let body = html! {
         @match version {
@@ -568,8 +741,25 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
                 }
             }
         }
-        @if me.as_deref() == Some(h.handle.as_str()) {
-            div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
+        @if is_owner {
+            div class="owner-panel" {
+                div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
+                @if shareable {
+                    form method="post" action="/share" class="share-form" {
+                        input type="hidden" name="handle" value=(h.handle);
+                        input type="hidden" name="csrf" value=(csrf);
+                        label class="field-label" for="commons_url" { "Share to a commons" }
+                        p class="hint" { "Push a signed, verifiable copy to a shared commons. Members-only versions never leave your node." }
+                        div class="share-row" {
+                            input id="commons_url" name="commons_url" type="url" value=(share_default) placeholder="https://commons.example";
+                            button class="secondary" type="submit" { "Share" }
+                        }
+                        @if !h.shared_to.is_empty() {
+                            p class="shared-note" { "Shared to: " (h.shared_to.join(", ")) }
+                        }
+                    }
+                }
+            }
         }
     };
     shell(&format!("@{}", h.handle), me.as_deref(), body)
@@ -866,6 +1056,118 @@ async fn logout(State(st): State<Shared>, headers: HeaderMap) -> Response {
     (StatusCode::SEE_OTHER, h).into_response()
 }
 
+/// A node pushes its current public/commons version to a chosen commons.
+async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = parse_form(&body);
+    let handle = clamp(one(&f, "handle").to_lowercase(), 30);
+    let authed = session_handle(&st, &headers).as_deref() == Some(handle.as_str())
+        && session_csrf(&st, &headers).map_or(false, |c| !c.is_empty() && ct_eq(&c, &one(&f, "csrf")));
+    if !authed {
+        return error_page("Please sign in as this handle to share.");
+    }
+    let commons = one(&f, "commons_url");
+    let commons = commons.trim().trim_end_matches('/').to_string();
+    if !(commons.starts_with("http://") || commons.starts_with("https://")) {
+        return error_page("Enter the full address of a commons, e.g. https://example.proxy.runpod.net");
+    }
+    let Some(rec) = load_handle(&st, &handle) else {
+        return error_page("Unknown handle.");
+    };
+    let Some(v) = rec.current_cid.as_ref().and_then(|c| load_version(&st, c)) else {
+        return error_page("Publish a profile before sharing it.");
+    };
+    if v.visibility == "members" {
+        return error_page("Members-only profiles stay on your node — they are never shared.");
+    }
+    let activity = build_share_activity(&st, &rec, &v);
+    let url = format!("{commons}/inbox");
+    let send = reqwest::Client::new()
+        .post(&url)
+        .json(&activity)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
+    match send {
+        Ok(r) if r.status().is_success() => {
+            {
+                let _g = st.write.lock().unwrap();
+                if let Some(mut rec2) = load_handle(&st, &handle) {
+                    if !rec2.shared_to.contains(&commons) {
+                        rec2.shared_to.push(commons.clone());
+                        let _ = save_handle(&st, &rec2);
+                    }
+                }
+            }
+            let body = html! {
+                header class="intro" {
+                    h1 { "Shared" }
+                    p class="lede" { "Your profile is now federated to " a href=(commons) { (commons) } ". They have a signed, verifiable copy." }
+                }
+                div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
+            };
+            shell("Shared", Some(&handle), body)
+        }
+        Ok(r) => error_page(&format!("That commons rejected the share (HTTP {}). It may not accept federation.", r.status().as_u16())),
+        Err(e) => error_page(&format!("Could not reach that commons: {e}")),
+    }
+}
+
+/// Receive a federated share from another node.
+async fn inbox(State(st): State<Shared>, body: String) -> Response {
+    let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
+        return (StatusCode::BAD_REQUEST, "invalid json").into_response();
+    };
+    match verify_inbound(&activity) {
+        Ok(entry) => {
+            let _g = st.write.lock().unwrap();
+            // TOFU: pin a (handle, origin) pair to the first key we saw for it.
+            for ex in all_remotes(&st) {
+                if ex.handle == entry.handle && ex.origin_label == entry.origin_label && ex.ed_pub != entry.ed_pub {
+                    return (StatusCode::CONFLICT, "handle already federated from that origin under a different key").into_response();
+                }
+            }
+            if save_remote(&st, &entry).is_err() {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "could not store").into_response();
+            }
+            (StatusCode::ACCEPTED, "accepted").into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, format!("rejected: {e}")).into_response(),
+    }
+}
+
+/// View a profile that was federated in from another node.
+async fn federated_view(State(st): State<Shared>, Path(kid): Path<String>, headers: HeaderMap) -> Response {
+    let me = session_handle(&st, &headers);
+    let Some(r) = load_remote(&st, &kid) else {
+        return not_found(me.as_deref());
+    };
+    let p = r.profile.clone();
+    let body = html! {
+        header class="intro profile-head" {
+            span class="vis-badge vis-federated" { "Federated" }
+            h1 { (if p.name.is_empty() { r.handle.clone() } else { p.name.clone() }) }
+            @if !p.pronouns.is_empty() { p class="pronouns" { (p.pronouns) } }
+            @if !p.role.is_empty() { p class="lede" { (p.role) } }
+        }
+        @if !p.bio.is_empty() { section class="profile-bio" { p { (p.bio) } } }
+        @if !p.places.is_empty() {
+            section class="profile-places" {
+                h2 class="section-h" { "Where they work" }
+                ul { @for pl in &p.places { li { (pl.name) @if !pl.city.is_empty() { span class="place-city" { " · " (pl.city) } } } } }
+            }
+        }
+        section class="profile-meta" {
+            (gov_row(&r.license, &r.signals))
+            p class="federated-origin" {
+                "Lives on " strong { (r.origin_label) }
+                @if r.origin.starts_with("http") { " · " a href=(r.origin) { (r.origin) } }
+            }
+            p class="cid" { "Version " span class="mono" { (short(&r.cid)) } " · signed by key " span class="mono" { (short(&r.ed_pub)) } }
+        }
+    };
+    shell(&format!("@{} (federated)", r.handle), me.as_deref(), body)
+}
+
 async fn about(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session_handle(&st, &headers);
     let body = html! {
@@ -1084,10 +1386,13 @@ async fn main() {
     let data_dir = PathBuf::from(std::env::var("HIC_DATA").unwrap_or_else(|_| "./data".into()));
     std::fs::create_dir_all(data_dir.join("handles")).ok();
     std::fs::create_dir_all(data_dir.join("versions")).ok();
+    std::fs::create_dir_all(data_dir.join("remote")).ok();
 
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
     let base_url = std::env::var("HIC_BASE_URL").unwrap_or_else(|_| format!("http://localhost:{port}"));
     let domain = base_url.split("://").nth(1).unwrap_or("localhost").trim_end_matches('/').to_string();
+    let instance = std::env::var("HIC_INSTANCE").unwrap_or_else(|_| "Held in Common".into());
+    let share_default = std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default();
 
     let state = Arc::new(AppState {
         data_dir,
@@ -1095,6 +1400,8 @@ async fn main() {
         write: Mutex::new(()),
         base_url,
         domain,
+        instance,
+        share_default,
     });
 
     let security = tower::ServiceBuilder::new()
@@ -1113,6 +1420,9 @@ async fn main() {
         .route("/join", get(join_form).post(join_submit))
         .route("/new", get(new_profile))
         .route("/publish", post(publish))
+        .route("/share", post(share))
+        .route("/inbox", post(inbox))
+        .route("/federated/{kid}", get(federated_view))
         .route("/login", get(login_form).post(login_submit))
         .route("/logout", post(logout))
         .route("/@{handle}", get(profile_page))
