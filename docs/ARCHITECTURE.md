@@ -129,13 +129,13 @@ ciphertext lives on the node and **never federates**.
 |---|---|---|
 | GET | `/` | Directory (local + federated) |
 | GET | `/about` | How it works |
-| GET/POST | `/join` | Create a handle (mints keys, starts session) |
+| GET/POST | `/join` | Create a handle (mints keys, starts session). **Node only** — on a commons (`HIC_ROLE=commons`) this returns a "run a node and share" page and mints nothing |
 | GET | `/new` | Publish / edit form (auth) |
 | POST | `/publish` | Create a signed version (auth + CSRF) |
 | POST | `/share` | Federate a signed copy to a commons (auth + CSRF) |
-| POST | `/inbox` | Receive + verify a federated share |
+| POST | `/inbox` | Receive + verify a federated share (the only way onto a commons) |
 | GET | `/federated/{keyid}` | View a federated-in profile |
-| GET/POST | `/login`, POST `/logout` | Session |
+| GET/POST | `/login`, POST `/logout` | Session. `/login` is **node only** — gated the same way on a commons |
 | GET | `/@{handle}` | Profile page |
 | GET | `/health` | Liveness (used by the desktop app) |
 | GET | `/api/directory`, `/api/@{handle}` | JSON |

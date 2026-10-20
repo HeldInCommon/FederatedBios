@@ -248,6 +248,13 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .empty-note { font: italic 500 22px var(--serif); color: var(--gray); }
 .empty-note a { color: var(--blue); }
 
+/* Commons gate — shown in place of join/login on a shared commons */
+.gate { margin-top: 40px; border: 1px solid var(--ink); background: var(--white); padding: 32px; max-width: 640px; }
+.gate h2 { margin: 0 0 20px; font: 600 15px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.gate-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 14px; font-size: 18px; line-height: 1.5; }
+.gate-steps strong { font-weight: 600; }
+.gate .actions { margin-top: 32px; }
+
 /* Directory grid */
 .dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
 .dir-card { display: flex; flex-direction: column; border: 1px solid var(--ink); background: var(--white); text-decoration: none; color: var(--ink); }

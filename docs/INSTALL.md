@@ -4,26 +4,20 @@ You're going to run a **node** — your own personal commons — and (if you wan
 **share** a copy of your profile to a shared commons so others can find it. Your
 work stays on your machine unless you choose to send a copy.
 
-**In a hurry?** Path 1 needs nothing installed. Path 2 runs a real node on your
-own computer (recommended). Pick one.
+**How it works:** you run a **node** (the app or Docker), create your identity
+there, then **Share** a signed copy up to a shared commons. There is **no
+sign-up on the commons itself** — your keys live on your node and never leave
+your machine, so the only way to appear in a shared directory is to share from a
+node. Path 1 (the app) is recommended.
+
+> **Why can't I just sign up on the commons?** A shared commons is a *federation
+> target*, not an identity store. If you open one directly you'll see the
+> directory and a "Run a node to join" page — that's intentional. Author on your
+> node; share up.
 
 ---
 
-## Path 1 — Use the shared commons (nothing to install)
-
-Best if you just want to be in the directory in two minutes.
-
-1. Open the **workshop commons address** (your facilitator shares this separately — it is not committed to this repo)
-2. Click **Add your profile**.
-3. Choose a **handle** and a **passphrase** (you sign back in with these — there's no recovery, so pick something memorable).
-4. Fill in your profile → choose **who can see it** → pick a **license** and **CC signals** → **Publish**.
-5. ✅ You now appear in the directory. Done.
-
-> This shared commons is a **preview server** — treat it as scratch space; data may be reset between sessions.
-
----
-
-## Path 2 — Run your own node: the app (no Docker) — recommended
+## Path 1 — Run your own node: the app (no Docker) — recommended
 
 A node is just an app on your computer. These preview builds are **unsigned** (no
 Apple/Windows certificate yet), so your OS warns once — that's expected, and the
@@ -40,7 +34,7 @@ From the releases page: **https://github.com/phoenixperry/FederatedBios/releases
 | **Linux — any distro** | `Held-In-Common-Linux.AppImage` |
 | **Linux — Fedora / RHEL** | `Held-In-Common-Linux.rpm` |
 
-> **Windows** and **Intel macOS** builds aren't ready yet — use **Path 1** or **Path 3 (Docker)** for now.
+> **Windows** and **Intel macOS** app builds aren't ready yet — use **Path 2 (Docker)** for now.
 
 ### 2. Open it — get past the "unsigned" warning (one time only)
 
@@ -68,7 +62,7 @@ never leaves your node.
 
 ---
 
-## Path 3 — Run a node with Docker (technical)
+## Path 2 — Run a node with Docker (technical)
 
 ```
 docker run -d --name hic-node -p 8080:8080 -v hic-node:/data \

@@ -32,6 +32,15 @@ grep -rq 'tega' "$T/commons/remote/" 2>/dev/null && ok "commons stored verified 
 curl -s http://localhost:8091/ | grep -qi "tega" && ok "@tega in commons directory" || no "@tega not in directory"
 curl -s http://localhost:8091/api/directory | grep -q "tega" && no "tega wrongly local on commons" || ok "tega federated, not local"
 
+# The commons is a federation target, not an identity store: /join and /login are
+# gated (HIC_ROLE inferred "commons" from HIC_INSTANCE="Shared Commons").
+curl -s http://localhost:8091/join | grep -qi "shared commons" && ok "commons /join shows the gate page" || no "commons /join not gated"
+curl -s http://localhost:8091/login | grep -qi "shared commons" && ok "commons /login shows the gate page" || no "commons /login not gated"
+GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=sneak" --data-urlencode "display_name=Sneak" --data-urlencode "passphrase=supersecret9" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+[ -z "$GSID" ] && ok "commons /join mints no identity" || no "commons /join created a session"
+# ...while the node still allows normal sign-up (proven by @tega above).
+curl -s http://localhost:8090/join | grep -qi "join the commons" && ok "node /join still allows sign-up" || no "node /join wrongly gated"
+
 python3 - "$T/cap.json" <<'PY' & 
 import http.server,sys
 out=sys.argv[1]
