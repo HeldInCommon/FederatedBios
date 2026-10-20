@@ -38,17 +38,17 @@ From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases
 
 ### 2. Open it — get past the "unsigned" warning (one time only)
 
-- **macOS:** open the `.dmg`, drag the app into **Applications**. First launch: **right-click the app → Open → Open**. If macOS still blocks it ("…cannot be opened because Apple cannot check it for malicious software"), go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then launch the app again.
-  - **If the `.dmg` itself says "disk is damaged — move to Trash" and won't even open:** that's not a broken download — it's macOS quarantining an app that isn't notarized yet. Clear the quarantine flag in **Terminal**, then open it:
-    ```bash
-    xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
-    open ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
-    ```
-    Drag the app into **Applications**, then clear it on the app too and launch:
-    ```bash
-    xattr -cr "/Applications/Held In Common.app"
-    open "/Applications/Held In Common.app"
-    ```
+- **macOS (Apple Silicon):** these builds aren't notarized yet, so double-clicking the `.dmg` gives a misleading **"disk is damaged — move to Trash."** The download is fine — macOS just quarantines un-notarized apps. **Easiest fix: paste this one line into Terminal.** It clears the quarantine, installs the app to **Applications**, and launches it — no dragging:
+  ```bash
+  D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
+  ```
+  Prefer to drag it in yourself? Run this to clear the quarantine and open the `.dmg`, drag **Held In Common** into **Applications**, then run the second line to launch it:
+  ```bash
+  xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg && open ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
+  ```
+  ```bash
+  xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
+  ```
 - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (If it won't start, install `libfuse2`.)
 - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
 
@@ -96,7 +96,7 @@ survives restarts).
 
 - **Port 8080 is busy** — quit whatever is using it, then reopen the app. (Docker: use `-p 8081:8080` and open `http://localhost:8081`.)
 - **macOS "cannot be opened / Apple cannot check it"** — right-click → **Open**, or **System Settings → Privacy & Security → Open Anyway** (only needed once).
-- **macOS "disk is damaged — move to Trash" (the `.dmg` won't open at all)** — the download is fine; macOS is quarantining an app that isn't notarized. In **Terminal**: `xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg` then open it. After moving the app to **Applications**: `xattr -cr "/Applications/Held In Common.app"`, then open it.
+- **macOS "disk is damaged — move to Trash" (the `.dmg` won't open at all)** — the download is fine; macOS is quarantining an app that isn't notarized. One-paste install + launch (clears quarantine, copies to Applications, opens it): `D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"`
 - **Linux AppImage won't run** — make sure it's executable (`chmod +x`), and install `libfuse2` on distros that need it.
 - **Forgot your passphrase** — there's no recovery (we store only a salted hash); create a new handle.
 
