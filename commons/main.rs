@@ -1640,7 +1640,11 @@ async fn main() {
         .route("/ap/@{handle}", get(ap_actor))
         .route("/ap/@{handle}/outbox", get(ap_outbox))
         .layer(security)
-        .layer(RequestBodyLimitLayer::new(64 * 1024))
+        // Must comfortably exceed the avatar data-URI cap (600 KB in `publish`):
+        // the photo is base64 + form-urlencoded into the POST body, so a 64 KB cap
+        // rejected any real profile image with "length limit exceeded". 2 MB covers
+        // a capped avatar plus the rest of the form with headroom.
+        .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
