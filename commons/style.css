@@ -344,3 +344,13 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
   border: 1.5px solid var(--ink); margin: 0 0 22px; }
 .dir-avatar { width: 46px; height: 46px; object-fit: cover; display: block;
   border: 1px solid var(--ink); margin-bottom: 12px; }
+
+/* --- role banner: are you on your node, or a shared/remote commons? --- */
+.role-bar { display: flex; align-items: center; gap: 10px; padding: 8px 20px;
+  font: 700 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
+.role-bar.role-node { background: #0a7a54; }      /* your node — jade */
+.role-bar.role-commons { background: #8b3fd9; }   /* shared commons — violet */
+.role-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: none; }
+.role-instance { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .85; }
+.role-link { margin-left: auto; color: #fff; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.7); }
+.role-link:hover { border-bottom-color: #fff; }
