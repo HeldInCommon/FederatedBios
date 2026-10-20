@@ -6,41 +6,55 @@
 <title>Held in Common — How it works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css" />
 <style>
   :root{
     --pink:#ff2d9b; --blue:#1f5cff; --jade:#12b37d; --jade-ink:#0a7a54;
     --violet:#8b3fd9; --violet-ink:#6a2caf; --ink:#111111; --gray:#6f6f6f;
-    --white:#fff; --cream:#f2efe8; --line:rgba(17,17,17,.15);
+    --white:#fff; --cream:#f2efe8; --line:rgba(17,17,17,.14);
     --grot:"Space Grotesk",system-ui,sans-serif; --mono:"Space Mono",monospace; --serif:"Cormorant",Georgia,serif;
   }
-  .reveal{font-family:var(--grot); color:var(--ink); font-size:30px;}
+  /* body font is the default everywhere */
+  .reveal{font-family:var(--grot); color:var(--ink); font-size:27px; font-weight:400;}
   .reveal .slides{text-align:left;}
   .reveal section{top:0 !important;}
-  .reveal h1,.reveal h2{font-family:var(--mono); font-weight:700; letter-spacing:-.02em; line-height:1.02; color:var(--ink); text-transform:none; margin:0 0 .3em;}
-  .reveal h1{font-size:2.0em;}
-  .reveal h2{font-size:1.25em;}
+  /* headlines + small uppercase labels: the only mono */
+  .reveal h1,.reveal h2{font-family:var(--mono); font-weight:700; letter-spacing:-.02em; line-height:1.03; margin:0 0 .25em; text-transform:none;}
+  .reveal h1{font-size:1.95em;} .reveal h2{font-size:1.2em;}
   .reveal h1 .dot,.reveal h2 .dot{color:var(--pink);}
-  .reveal .lede{font-family:var(--serif); font-style:italic; font-weight:500; font-size:1.25em; line-height:1.3; color:var(--ink); max-width:24ch;}
-  .reveal .kicker{font-family:var(--mono); font-weight:700; font-size:.5em; letter-spacing:.16em; text-transform:uppercase; color:var(--gray); margin:0 0 .8em;}
-  .reveal p{line-height:1.45;}
-  .reveal .cols{display:flex; gap:48px; align-items:center;}
-  .reveal .cols .d{flex:1 1 56%;} .reveal .cols .t{flex:1 1 44%;}
+  .reveal .kicker{font-family:var(--mono); font-weight:700; font-size:.5em; letter-spacing:.17em; text-transform:uppercase; color:var(--gray); margin:0 0 .9em; display:block;}
+  /* body copy: Space Grotesk */
+  .reveal p{font-family:var(--grot); line-height:1.5; margin:.35em 0;}
+  .reveal .explain{font-size:.92em; max-width:30ch; color:var(--ink);}
+  .reveal .explain.wide{max-width:52ch;}
+  .reveal strong{font-weight:700;}
+  /* warm pull-quotes + leads: Cormorant italic */
+  .reveal .lede{font-family:var(--serif); font-style:italic; font-weight:500; font-size:1.3em; line-height:1.28; max-width:24ch;}
+  .reveal .quote{font-family:var(--serif); font-style:italic; font-weight:600; font-size:1.35em; line-height:1.3; color:var(--ink); border-left:4px solid var(--pink); padding-left:.6em; margin-top:.6em; max-width:26ch;}
   .reveal ul{margin:.2em 0 0; padding-left:0; list-style:none;}
-  .reveal li{position:relative; padding-left:1.1em; margin:.42em 0; line-height:1.35; font-size:.86em;}
-  .reveal li::before{content:""; position:absolute; left:0; top:.55em; width:.5em; height:.5em; background:var(--pink);}
+  .reveal li{font-family:var(--grot); position:relative; padding-left:1.15em; margin:.4em 0; line-height:1.4; font-size:.9em;}
+  .reveal li::before{content:""; position:absolute; left:0; top:.52em; width:.5em; height:.5em; background:var(--pink);}
   .reveal li.b::before{background:var(--blue);} .reveal li.j::before{background:var(--jade);} .reveal li.v::before{background:var(--violet);}
-  .reveal .chip{display:inline-block; font-family:var(--mono); font-weight:700; font-size:.6em; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; color:#fff;}
-  .reveal .tag-pink{background:var(--pink);} .reveal .tag-blue{background:var(--blue);} .reveal .tag-jade{background:var(--jade);} .reveal .tag-violet{background:var(--violet);} .reveal .tag-ink{background:var(--ink);}
-  .reveal svg text{font-family:var(--mono); fill:var(--ink);}
-  .reveal .cap{font-family:var(--mono); font-size:.5em; letter-spacing:.08em; text-transform:uppercase; color:var(--gray); margin-top:.6em;}
+  .reveal .define{display:flex; gap:16px; align-items:baseline; margin:.5em 0;}
+  .reveal .define .term{font-family:var(--mono); font-weight:700; color:var(--ink); white-space:nowrap;}
+  .reveal .define .term.n{color:var(--blue);} .reveal .define .term.c{color:var(--pink);}
+  .reveal .define .def{font-family:var(--grot); font-size:.92em; line-height:1.4;}
+  .reveal .cols{display:flex; gap:48px; align-items:center;}
+  .reveal .cols .d{flex:1 1 54%;} .reveal .cols .t{flex:1 1 46%;}
+  /* diagram text is the BODY font (not mono); only true code stays mono */
+  .reveal svg text{font-family:var(--grot); font-weight:600; fill:var(--ink);}
+  .reveal svg text.sub{font-weight:400; fill:var(--gray);}
+  .reveal svg text.m{font-family:var(--mono); font-weight:400;}
+  .reveal .cap{font-family:var(--grot); font-weight:500; font-size:.62em; color:var(--gray); margin-top:.5em;}
   .reveal section.pink{background:var(--pink);}
-  .reveal section.pink h1,.reveal section.pink h2,.reveal section.pink p,.reveal section.pink .lede{color:#fff;}
-  .reveal section.pink .kicker{color:rgba(255,255,255,.8);}
+  .reveal section.pink h1,.reveal section.pink h2,.reveal section.pink p,.reveal section.pink .lede,.reveal section.pink li{color:#fff;}
+  .reveal section.pink .kicker{color:rgba(255,255,255,.82);}
+  .reveal section.pink li::before{background:#fff;}
   .reveal .controls{color:var(--pink);} .reveal .progress{color:var(--pink);}
-  .foot{position:fixed; bottom:14px; left:22px; font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gray); z-index:40;}
+  .foot{position:fixed; bottom:14px; left:22px; font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gray); z-index:40;}
   .foot .dot{color:var(--pink);}
+  .num{font-family:var(--mono); font-weight:700; font-size:.5em; color:var(--pink); letter-spacing:.1em;}
 </style>
 </head>
 <body>
@@ -51,9 +65,9 @@
 <section class="pink" data-background-color="#ff2d9b">
   <div class="cols">
     <div class="t">
-      <p class="kicker">A federated commons for creative data</p>
+      <span class="kicker">A federated commons for creative data</span>
       <h1>Held in Common<span style="color:#111">.</span></h1>
-      <p class="lede" style="margin-top:.5em">How your work lives on a node — and how a commons is made.</p>
+      <p class="lede" style="margin-top:.5em">Your work lives on a machine you control — and travels only as far as you say.</p>
     </div>
     <div class="d" style="flex:0 0 300px; text-align:center">
       <svg viewBox="0 0 240 240" width="300" height="300" aria-label="interlocking rings">
@@ -65,304 +79,279 @@
   </div>
 </section>
 
-<!-- 2 ONE IDEA -->
+<!-- 2 WHY -->
 <section>
-  <p class="kicker">The whole idea in one line</p>
-  <h1>Your work stays with&nbsp;you<span class="dot">.</span></h1>
-  <p class="lede" style="max-width:30ch; margin-top:.4em">It lives on a <strong>node</strong> you run. A <strong>commons</strong> only ever holds a copy you chose to send — or nothing at all.</p>
-  <p class="cap">Govern the models, not only the data.</p>
-</section>
-
-<!-- 3 SHARED COMMONS -->
-<section>
+  <span class="kicker">Why we built this</span>
   <div class="cols">
-    <div class="d">
-      <svg viewBox="0 0 520 380" width="100%">
-        <!-- central commons -->
-        <rect x="200" y="150" width="120" height="78" fill="none" stroke="#111" stroke-width="2.5"/>
-        <rect x="200" y="150" width="120" height="10" fill="#ff2d9b"/>
-        <text x="260" y="196" text-anchor="middle" font-size="15" font-weight="700">COMMONS</text>
-        <text x="260" y="214" text-anchor="middle" font-size="11" fill="#6f6f6f">directory</text>
-        <!-- nodes -->
-        <g>
-          <circle cx="70" cy="70" r="26" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
-          <circle cx="260" cy="48" r="26" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
-          <circle cx="450" cy="70" r="26" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
-          <circle cx="60" cy="300" r="26" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
-          <circle cx="460" cy="300" r="26" fill="#fff" stroke="#1f5cff" stroke-width="2.5"/>
-          <g font-size="10" fill="#1f5cff" text-anchor="middle"><text x="70" y="74">node</text><text x="260" y="52">node</text><text x="450" y="74">node</text><text x="60" y="304">node</text><text x="460" y="304">node</text></g>
-        </g>
-        <!-- arrows in -->
-        <g stroke="#111" stroke-width="2" fill="none" marker-end="url(#ar)">
-          <path d="M92,86 L205,156"/><path d="M260,74 L260,146"/><path d="M428,86 L315,156"/>
-          <path d="M84,286 L205,224"/><path d="M436,286 L315,224"/>
-        </g>
-        <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker></defs>
-      </svg>
-      <p class="cap">Model A · everyone publishes to one directory</p>
+    <div class="t" style="flex:1 1 52%">
+      <h2>You made the work.<br/>You should keep the say<span class="dot">.</span></h2>
+      <p class="explain wide">Creative work is being swept up to train AI — usually without credit, consent, or a way to say no. Held in Common flips that around: your work stays <strong>with you</strong>, and you attach the terms it travels under.</p>
     </div>
-    <div class="t">
-      <h2>The shared commons<span class="dot">.</span></h2>
-      <ul>
-        <li class="b">Each person runs a <strong>node</strong></li>
-        <li>They <strong>share</strong> a copy to one commons</li>
-        <li>The commons is the <strong>directory</strong> everyone browses</li>
-        <li class="j">Simple, searchable — one place to look</li>
-      </ul>
+    <div class="d" style="flex:1 1 48%">
+      <p class="quote">Your work trained it. Now who owns what it learned?</p>
     </div>
   </div>
 </section>
 
-<!-- 4 FEDERATED -->
+<!-- 3 TWO WORDS (glossary) -->
 <section>
+  <span class="kicker">Two words you'll hear all day</span>
+  <h2>Node &amp; commons<span class="dot">.</span></h2>
+  <div class="define"><span class="term n">A NODE</span><span class="def">is the app running on <strong>your own computer</strong>. It holds your profile and your work. It's yours — nobody else can see what's on it unless you send them a copy.</span></div>
+  <div class="define"><span class="term c">A COMMONS</span><span class="def">is a <strong>shared directory</strong> other people can browse. You send a copy of your profile to it — or you don't. A commons can be run by anyone: a studio, a class, a festival, even another artist.</span></div>
+  <p class="quote" style="font-size:1.15em; margin-top:.7em">Your node is home. A commons is a place you choose to be seen.</p>
+</section>
+
+<!-- 4 SHARED COMMONS -->
+<section>
+  <span class="kicker">The simplest shape</span>
   <div class="cols">
     <div class="d">
-      <svg viewBox="0 0 520 380" width="100%">
-        <!-- artist node center-left -->
-        <rect x="40" y="150" width="120" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
-        <rect x="40" y="150" width="120" height="10" fill="#1f5cff"/>
-        <text x="100" y="196" text-anchor="middle" font-size="14" font-weight="700">YOUR NODE</text>
-        <text x="100" y="213" text-anchor="middle" font-size="10" fill="#6f6f6f">on your machine</text>
-        <!-- shared commons top right -->
-        <rect x="360" y="40" width="120" height="70" fill="none" stroke="#111" stroke-width="2.5"/>
-        <rect x="360" y="40" width="120" height="9" fill="#ff2d9b"/>
-        <text x="420" y="80" text-anchor="middle" font-size="13" font-weight="700">SHARED</text>
-        <text x="420" y="96" text-anchor="middle" font-size="10" fill="#6f6f6f">commons</text>
-        <!-- peer commons mid right -->
-        <rect x="360" y="165" width="120" height="70" fill="none" stroke="#111" stroke-width="2.5"/>
-        <rect x="360" y="165" width="120" height="9" fill="#8b3fd9"/>
-        <text x="420" y="205" text-anchor="middle" font-size="12" font-weight="700">A FRIEND'S</text>
-        <text x="420" y="221" text-anchor="middle" font-size="10" fill="#6f6f6f">commons</text>
-        <!-- own metal bottom right -->
-        <rect x="360" y="290" width="120" height="66" fill="#f2efe8" stroke="#111" stroke-width="2.5"/>
-        <text x="420" y="326" text-anchor="middle" font-size="12" font-weight="700">OWN METAL</text>
-        <text x="420" y="342" text-anchor="middle" font-size="10" fill="#6f6f6f">stays home</text>
-        <!-- arrows -->
-        <g fill="none" stroke-width="2.5">
-          <path d="M162,165 L356,80" stroke="#ff2d9b" marker-end="url(#arp)" stroke-dasharray="7 5"/>
-          <path d="M162,190 L356,195" stroke="#8b3fd9" marker-end="url(#arv)" stroke-dasharray="7 5"/>
-          <path d="M100,232 L100,300 L358,323" stroke="#111"/>
+      <svg viewBox="0 0 520 360" width="100%">
+        <rect x="200" y="145" width="120" height="78" fill="none" stroke="#111" stroke-width="2.5"/>
+        <rect x="200" y="145" width="120" height="10" fill="#ff2d9b"/>
+        <text x="260" y="189" text-anchor="middle" font-size="15">Commons</text>
+        <text x="260" y="208" text-anchor="middle" font-size="11" class="sub">one directory</text>
+        <g fill="#fff" stroke="#1f5cff" stroke-width="2.5">
+          <circle cx="70" cy="66" r="25"/><circle cx="260" cy="46" r="25"/><circle cx="450" cy="66" r="25"/><circle cx="62" cy="296" r="25"/><circle cx="458" cy="296" r="25"/>
         </g>
-        <text x="235" y="118" font-size="11" fill="#ff2d9b" font-weight="700">share</text>
-        <text x="250" y="186" font-size="11" fill="#8b3fd9" font-weight="700">or share</text>
-        <text x="150" y="285" font-size="11" fill="#111" font-weight="700">or keep private</text>
+        <g font-size="10" fill="#1f5cff" text-anchor="middle"><text x="70" y="69">node</text><text x="260" y="49">node</text><text x="450" y="69">node</text><text x="62" y="299">node</text><text x="458" y="299">node</text></g>
+        <g stroke="#111" stroke-width="2" fill="none" marker-end="url(#ar)">
+          <path d="M90,82 L205,151"/><path d="M260,71 L260,141"/><path d="M430,82 L315,151"/><path d="M84,283 L205,219"/><path d="M436,283 L315,219"/>
+        </g>
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker></defs>
+      </svg>
+      <p class="cap">Everyone runs a node · everyone sends a copy to one place</p>
+    </div>
+    <div class="t">
+      <h2>One shared commons<span class="dot">.</span></h2>
+      <p class="explain">The easiest way to start. Each person runs their own node, then <strong>shares a copy</strong> of their profile to a single commons — the directory everyone browses.</p>
+      <p class="explain" style="color:var(--jade-ink)"><strong>Good for:</strong> finding each other quickly, one place to look.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 FEDERATED -->
+<section>
+  <span class="kicker">The fuller shape</span>
+  <div class="cols">
+    <div class="d">
+      <svg viewBox="0 0 520 370" width="100%">
+        <rect x="36" y="150" width="124" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
+        <rect x="36" y="150" width="124" height="10" fill="#1f5cff"/>
+        <text x="98" y="190" text-anchor="middle" font-size="14">Your node</text>
+        <text x="98" y="209" text-anchor="middle" font-size="10" class="sub">on your machine</text>
+        <rect x="360" y="36" width="124" height="68" fill="none" stroke="#111" stroke-width="2.5"/>
+        <rect x="360" y="36" width="124" height="9" fill="#ff2d9b"/>
+        <text x="422" y="74" text-anchor="middle" font-size="12">Shared</text>
+        <text x="422" y="91" text-anchor="middle" font-size="10" class="sub">commons</text>
+        <rect x="360" y="160" width="124" height="68" fill="none" stroke="#111" stroke-width="2.5"/>
+        <rect x="360" y="160" width="124" height="9" fill="#8b3fd9"/>
+        <text x="422" y="198" text-anchor="middle" font-size="12">A friend's</text>
+        <text x="422" y="215" text-anchor="middle" font-size="10" class="sub">commons</text>
+        <rect x="360" y="284" width="124" height="66" fill="#f2efe8" stroke="#111" stroke-width="2.5"/>
+        <text x="422" y="320" text-anchor="middle" font-size="12">Your metal</text>
+        <text x="422" y="337" text-anchor="middle" font-size="10" class="sub">stays home</text>
+        <g fill="none" stroke-width="2.5">
+          <path d="M162,166 L356,74" stroke="#ff2d9b" marker-end="url(#arp)" stroke-dasharray="7 5"/>
+          <path d="M162,190 L356,192" stroke="#8b3fd9" marker-end="url(#arv)" stroke-dasharray="7 5"/>
+          <path d="M98,232 L98,316 L358,318" stroke="#111"/>
+        </g>
+        <text x="236" y="112" font-size="11" fill="#ff2d9b">share</text>
+        <text x="250" y="182" font-size="11" fill="#6a2caf">or share</text>
+        <text x="150" y="305" font-size="11" fill="#111">or keep private</text>
         <defs>
           <marker id="arp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff2d9b"/></marker>
           <marker id="arv" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b3fd9"/></marker>
         </defs>
       </svg>
-      <p class="cap">Model B · you choose where it travels</p>
+      <p class="cap">The same node, three choices — you decide each time</p>
     </div>
     <div class="t">
-      <h2>Federated nodes<span class="dot">.</span></h2>
-      <ul>
-        <li>Your node is <strong>yours</strong> — publish locally first</li>
-        <li class="b">Share to the <strong>shared commons</strong></li>
-        <li class="v">…or to a <strong>friend's commons</strong></li>
-        <li>…or keep it on <strong>your own metal</strong> (a DGX, a laptop)</li>
-      </ul>
+      <h2>You choose where it goes<span class="dot">.</span></h2>
+      <p class="explain">Publishing happens on your node first. Then, for each profile, you decide: push a copy to the <strong style="color:var(--pink)">shared commons</strong>, to a <strong style="color:var(--violet-ink)">friend's commons</strong>, or keep it <strong>on your own hardware</strong> — a laptop, a studio server, a DGX.</p>
     </div>
   </div>
 </section>
 
-<!-- 5 NODE = COMMONS -->
+<!-- 6 NODE = COMMONS -->
 <section>
-  <p class="kicker">The key move</p>
-  <h1>A node <em style="font-style:normal;color:var(--pink)">is</em> a commons<span style="color:#111">.</span></h1>
-  <div class="cols" style="margin-top:.3em">
-    <div class="d" style="flex:0 0 46%">
-      <svg viewBox="0 0 360 230" width="100%">
-        <rect x="110" y="70" width="150" height="92" fill="#fff" stroke="#111" stroke-width="2.5"/>
-        <rect x="110" y="70" width="150" height="11" fill="#12b37d"/>
-        <text x="185" y="112" text-anchor="middle" font-size="15" font-weight="700">ONE BINARY</text>
-        <text x="185" y="132" text-anchor="middle" font-size="11" fill="#6f6f6f">node + commons</text>
-        <g stroke="#111" stroke-width="2" fill="none" marker-end="url(#ar2)">
-          <path d="M30,40 L106,78"/><path d="M30,190 L106,154"/>
-        </g>
-        <text x="20" y="34" font-size="11" fill="#6f6f6f">others</text>
-        <text x="16" y="205" font-size="11" fill="#6f6f6f">others share in</text>
+  <span class="kicker">The idea that ties it together</span>
+  <h2>A node <em style="font-style:normal;color:var(--pink)">is</em> a commons<span style="color:#111">.</span></h2>
+  <div class="cols" style="margin-top:.2em">
+    <div class="d" style="flex:0 0 42%">
+      <svg viewBox="0 0 360 210" width="100%">
+        <rect x="108" y="62" width="150" height="90" fill="#fff" stroke="#111" stroke-width="2.5"/>
+        <rect x="108" y="62" width="150" height="11" fill="#12b37d"/>
+        <text x="183" y="104" text-anchor="middle" font-size="14">One app</text>
+        <text x="183" y="124" text-anchor="middle" font-size="11" class="sub">node + commons</text>
+        <g stroke="#111" stroke-width="2" fill="none" marker-end="url(#ar2)"><path d="M28,36 L104,70"/><path d="M28,180 L104,146"/></g>
+        <text x="16" y="30" font-size="11" class="sub">others</text>
+        <text x="12" y="196" font-size="11" class="sub">share in</text>
         <defs><marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker></defs>
       </svg>
     </div>
     <div class="t">
-      <p class="lede" style="max-width:26ch">The same software runs your node <em>and</em> receives others' shares. Point people at your node and you <strong>are</strong> their commons — on your own terms, on your own hardware.</p>
+      <p class="explain wide">There's no special "server" software. The <strong>same app</strong> that runs your node can also <strong>receive</strong> other people's shares. So the moment you let others point at you, you <em>are</em> a commons — hosting your scene on your own terms, on your own hardware.</p>
+      <p class="quote" style="font-size:1.1em">Anyone can host a commons. Even you.</p>
     </div>
   </div>
 </section>
 
-<!-- 6 DATA RELATIONS -->
+<!-- 7 DATA RELATIONS -->
 <section>
-  <h2>How the data relates<span class="dot">.</span></h2>
-  <svg viewBox="0 0 980 300" width="100%" style="margin-top:6px">
-    <!-- identity -->
+  <span class="kicker">What's inside a node</span>
+  <h2>How your data relates<span class="dot">.</span></h2>
+  <svg viewBox="0 0 980 250" width="100%" style="margin-top:4px">
     <g>
-      <rect x="10" y="110" width="150" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
-      <text x="85" y="145" text-anchor="middle" font-size="15" font-weight="700">YOU</text>
-      <text x="85" y="166" text-anchor="middle" font-size="10" fill="#6f6f6f">handle + key</text>
+      <rect x="10" y="95" width="150" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
+      <text x="85" y="130" text-anchor="middle" font-size="15">You</text>
+      <text x="85" y="150" text-anchor="middle" font-size="10" class="sub">handle + key</text>
     </g>
-    <!-- profile -->
     <g>
-      <rect x="230" y="110" width="150" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
-      <rect x="230" y="110" width="150" height="9" fill="#ff2d9b"/>
-      <text x="305" y="150" text-anchor="middle" font-size="15" font-weight="700">PROFILE</text>
-      <text x="305" y="170" text-anchor="middle" font-size="10" fill="#6f6f6f">who you are</text>
+      <rect x="230" y="95" width="150" height="80" fill="#fff" stroke="#111" stroke-width="2.5"/>
+      <rect x="230" y="95" width="150" height="9" fill="#ff2d9b"/>
+      <text x="305" y="135" text-anchor="middle" font-size="15">Profile</text>
+      <text x="305" y="155" text-anchor="middle" font-size="10" class="sub">who you are</text>
     </g>
-    <!-- works / datasets -->
     <g>
-      <rect x="450" y="30" width="150" height="70" fill="#fff" stroke="#111" stroke-width="2.5"/>
-      <rect x="450" y="30" width="150" height="9" fill="#1f5cff"/>
-      <text x="525" y="66" text-anchor="middle" font-size="14" font-weight="700">WORKS</text>
-      <text x="525" y="84" text-anchor="middle" font-size="10" fill="#6f6f6f">images, sound…</text>
-      <rect x="450" y="200" width="150" height="70" fill="#fff" stroke="#111" stroke-width="2.5"/>
-      <rect x="450" y="200" width="150" height="9" fill="#1f5cff"/>
-      <text x="525" y="236" text-anchor="middle" font-size="14" font-weight="700">DATASETS</text>
-      <text x="525" y="254" text-anchor="middle" font-size="10" fill="#6f6f6f">collections</text>
+      <rect x="450" y="20" width="150" height="66" fill="#fff" stroke="#111" stroke-width="2.5"/>
+      <rect x="450" y="20" width="150" height="9" fill="#1f5cff"/>
+      <text x="525" y="54" text-anchor="middle" font-size="13">Works</text>
+      <text x="525" y="72" text-anchor="middle" font-size="10" class="sub">images, sound…</text>
+      <rect x="450" y="184" width="150" height="66" fill="#fff" stroke="#111" stroke-width="2.5"/>
+      <rect x="450" y="184" width="150" height="9" fill="#1f5cff"/>
+      <text x="525" y="218" text-anchor="middle" font-size="13">Datasets</text>
+      <text x="525" y="236" text-anchor="middle" font-size="10" class="sub">collections</text>
     </g>
-    <!-- version / cid -->
     <g>
-      <rect x="670" y="110" width="150" height="80" fill="#f2efe8" stroke="#111" stroke-width="2.5"/>
-      <text x="745" y="145" text-anchor="middle" font-size="13" font-weight="700">VERSION</text>
-      <text x="745" y="166" text-anchor="middle" font-size="10" fill="#6f6f6f">cid · fingerprint</text>
+      <rect x="670" y="95" width="150" height="80" fill="#f2efe8" stroke="#111" stroke-width="2.5"/>
+      <text x="745" y="128" text-anchor="middle" font-size="13">Version</text>
+      <text x="745" y="150" text-anchor="middle" font-size="10" class="m">cid · fingerprint</text>
     </g>
-    <!-- governance -->
     <g>
-      <rect x="845" y="78" width="128" height="40" fill="none" stroke="#12b37d" stroke-width="2"/>
-      <text x="909" y="103" text-anchor="middle" font-size="11" font-weight="700" fill="#0a7a54">LICENSE</text>
-      <rect x="845" y="140" width="128" height="40" fill="none" stroke="#12b37d" stroke-width="2"/>
-      <text x="909" y="165" text-anchor="middle" font-size="11" font-weight="700" fill="#0a7a54">CC SIGNALS</text>
+      <rect x="846" y="66" width="126" height="36" fill="none" stroke="#12b37d" stroke-width="2"/>
+      <text x="909" y="89" text-anchor="middle" font-size="11" fill="#0a7a54">License</text>
+      <rect x="846" y="124" width="126" height="36" fill="none" stroke="#12b37d" stroke-width="2"/>
+      <text x="909" y="147" text-anchor="middle" font-size="11" fill="#0a7a54">CC signals</text>
     </g>
     <g stroke="#111" stroke-width="2" fill="none" marker-end="url(#ar3)">
-      <path d="M160,150 L226,150"/>
-      <path d="M380,140 L446,70"/><path d="M380,160 L446,232"/>
-      <path d="M600,65 L690,120"/><path d="M600,235 L690,180"/>
-      <path d="M820,135 L841,110"/><path d="M820,165 L841,158"/>
+      <path d="M160,135 L226,135"/><path d="M380,125 L446,58"/><path d="M380,145 L446,212"/>
+      <path d="M600,55 L690,105"/><path d="M600,215 L690,165"/><path d="M820,120 L842,96"/><path d="M820,150 L842,140"/>
     </g>
     <defs><marker id="ar3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker></defs>
   </svg>
-  <ul style="columns:2; margin-top:4px">
-    <li>You hold a <strong>handle</strong> and a key — your identity</li>
-    <li class="b">Your profile points to your <strong>works</strong> and <strong>datasets</strong></li>
-    <li>Every change is a <strong>version</strong> with a permanent fingerprint</li>
-    <li class="j">Each version carries a <strong>license</strong> + <strong>CC signals</strong></li>
-  </ul>
+  <p class="explain wide" style="margin-top:8px; max-width:none">Read it left to right: <strong>you</strong> hold a handle and a key (the app manages the key — you never touch it). Your <strong>profile</strong> points to your <strong>works</strong> and <strong>datasets</strong>. Every change is saved as a <strong>version</strong> with a permanent fingerprint, and each version carries a <strong>license</strong> and <strong>CC signals</strong>.</p>
 </section>
 
-<!-- 7 NODES FORM COMMONS -->
+<!-- 8 NODES FORM COMMONS -->
 <section>
+  <span class="kicker">Scaling out</span>
   <h2>How nodes form a commons<span class="dot">.</span></h2>
-  <svg viewBox="0 0 980 300" width="100%" style="margin-top:8px">
-    <!-- commons 1 -->
-    <circle cx="210" cy="150" r="118" fill="none" stroke="#ff2d9b" stroke-width="2" stroke-dasharray="5 6"/>
-    <text x="210" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#ff2d9b">A STUDIO'S COMMONS</text>
-    <g fill="#fff" stroke="#1f5cff" stroke-width="2.5">
-      <circle cx="150" cy="120" r="24"/><circle cx="250" cy="110" r="24"/><circle cx="160" cy="200" r="24"/><circle cx="255" cy="195" r="24"/>
-    </g>
-    <rect x="178" y="138" width="60" height="34" fill="#fff" stroke="#111" stroke-width="2.5"/>
-    <!-- commons 2 -->
-    <circle cx="700" cy="150" r="118" fill="none" stroke="#8b3fd9" stroke-width="2" stroke-dasharray="5 6"/>
-    <text x="700" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#6a2caf">A FESTIVAL'S COMMONS</text>
-    <g fill="#fff" stroke="#1f5cff" stroke-width="2.5">
-      <circle cx="640" cy="120" r="24"/><circle cx="745" cy="115" r="24"/><circle cx="660" cy="200" r="24"/><circle cx="755" cy="195" r="24"/>
-    </g>
-    <rect x="672" y="138" width="60" height="34" fill="#fff" stroke="#111" stroke-width="2.5"/>
-    <!-- link between commons -->
-    <path d="M330,150 L582,150" fill="none" stroke="#111" stroke-width="2.5" stroke-dasharray="2 7" marker-end="url(#ar4)" marker-start="url(#ar4b)"/>
-    <text x="456" y="140" text-anchor="middle" font-size="12" font-weight="700">federate</text>
+  <svg viewBox="0 0 980 250" width="100%" style="margin-top:6px">
+    <circle cx="210" cy="140" r="112" fill="none" stroke="#ff2d9b" stroke-width="2" stroke-dasharray="5 6"/>
+    <text x="210" y="40" text-anchor="middle" font-size="13" fill="#ff2d9b">A studio's commons</text>
+    <g fill="#fff" stroke="#1f5cff" stroke-width="2.5"><circle cx="152" cy="112" r="22"/><circle cx="250" cy="104" r="22"/><circle cx="162" cy="188" r="22"/><circle cx="254" cy="184" r="22"/></g>
+    <rect x="182" y="128" width="56" height="30" fill="#fff" stroke="#111" stroke-width="2.5"/>
+    <circle cx="700" cy="140" r="112" fill="none" stroke="#8b3fd9" stroke-width="2" stroke-dasharray="5 6"/>
+    <text x="700" y="40" text-anchor="middle" font-size="13" fill="#6a2caf">A festival's commons</text>
+    <g fill="#fff" stroke="#1f5cff" stroke-width="2.5"><circle cx="642" cy="112" r="22"/><circle cx="744" cy="108" r="22"/><circle cx="662" cy="188" r="22"/><circle cx="752" cy="184" r="22"/></g>
+    <rect x="672" y="128" width="56" height="30" fill="#fff" stroke="#111" stroke-width="2.5"/>
+    <path d="M326,140 L586,140" fill="none" stroke="#111" stroke-width="2.5" stroke-dasharray="2 7" marker-end="url(#ar4)" marker-start="url(#ar4b)"/>
+    <text x="456" y="130" text-anchor="middle" font-size="12">federate</text>
     <defs>
       <marker id="ar4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker>
       <marker id="ar4b" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#111"/></marker>
     </defs>
   </svg>
-  <ul style="columns:2; margin-top:2px">
-    <li class="b">Nodes that share into one inbox <strong>are</strong> a commons</li>
-    <li class="v">Anyone can run one — a studio, a festival, a class</li>
-    <li>A commons is just a node others point at</li>
-    <li class="j">Commons can federate to <strong>each other</strong></li>
-  </ul>
+  <p class="explain wide" style="margin-top:6px; max-width:none">A cluster of nodes sharing into one place <strong>is</strong> a commons. There can be many — a studio, a festival, a class — each on its own terms. And commons can <strong>federate to each other</strong>, so work can travel between scenes without anyone owning the whole thing.</p>
 </section>
 
-<!-- 8 VISIBILITY -->
+<!-- 9 VISIBILITY -->
 <section>
-  <h2>Who can see it<span class="dot">.</span></h2>
-  <svg viewBox="0 0 980 260" width="100%" style="margin-top:8px">
-    <g font-size="12" font-weight="700" text-anchor="middle">
-      <!-- stops header -->
-      <text x="120" y="24" fill="#6f6f6f">YOUR NODE</text>
-      <text x="370" y="24" fill="#6f6f6f">COMMONS</text>
-      <text x="620" y="24" fill="#6f6f6f">DIRECTORY</text>
-      <text x="870" y="24" fill="#6f6f6f">SEARCH</text>
-    </g>
-    <!-- public row -->
-    <g>
-      <text x="40" y="70" font-size="13" font-weight="700" fill="#ff2d9b">PUBLIC</text>
-      <g transform="translate(0,52)">
-        <rect x="70" y="0" width="100" height="34" fill="#111"/><rect x="320" y="0" width="100" height="34" fill="#111"/><rect x="570" y="0" width="100" height="34" fill="#111"/><rect x="820" y="0" width="100" height="34" fill="#111"/>
-      </g>
-    </g>
-    <!-- commons row -->
-    <g>
-      <text x="40" y="130" font-size="13" font-weight="700" fill="#1f5cff">COMMONS</text>
-      <g transform="translate(0,112)">
-        <rect x="70" y="0" width="100" height="34" fill="#111"/><rect x="320" y="0" width="100" height="34" fill="#111"/><rect x="570" y="0" width="100" height="34" fill="#111"/>
-        <rect x="820" y="0" width="100" height="34" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/>
-      </g>
-    </g>
-    <!-- members row -->
-    <g>
-      <text x="40" y="190" font-size="13" font-weight="700" fill="#111">MEMBERS</text>
-      <g transform="translate(0,172)">
-        <rect x="70" y="0" width="100" height="34" fill="#111"/>
-        <rect x="320" y="0" width="100" height="34" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/>
-        <rect x="570" y="0" width="100" height="34" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/>
-        <rect x="820" y="0" width="100" height="34" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/>
-      </g>
-      <text x="245" y="230" font-size="12" fill="#0a7a54" font-weight="700">encrypted — stays on your node</text>
-    </g>
-  </svg>
-  <p class="cap" style="margin-top:2px">Solid = it reaches there · dashed = it never does</p>
-</section>
-
-<!-- 9 TRUST -->
-<section>
-  <div class="cols">
-    <div class="d">
-      <svg viewBox="0 0 460 320" width="100%">
-        <rect x="30" y="40" width="170" height="110" fill="#fff" stroke="#111" stroke-width="2.5"/>
-        <rect x="30" y="40" width="170" height="10" fill="#1f5cff"/>
-        <text x="115" y="84" text-anchor="middle" font-size="14" font-weight="700">YOUR NODE</text>
-        <text x="115" y="106" text-anchor="middle" font-size="11" fill="#6f6f6f">signs with your key</text>
-        <text x="115" y="124" text-anchor="middle" font-size="11" fill="#6f6f6f">+ fingerprint</text>
-        <rect x="260" y="170" width="170" height="110" fill="#fff" stroke="#111" stroke-width="2.5"/>
-        <rect x="260" y="170" width="170" height="10" fill="#ff2d9b"/>
-        <text x="345" y="214" text-anchor="middle" font-size="14" font-weight="700">COMMONS</text>
-        <text x="345" y="236" text-anchor="middle" font-size="11" fill="#6f6f6f">checks signature</text>
-        <text x="345" y="254" text-anchor="middle" font-size="11" fill="#6f6f6f">+ re-hashes content</text>
-        <path d="M200,120 L258,200" fill="none" stroke="#12b37d" stroke-width="3" marker-end="url(#ar5)"/>
-        <text x="196" y="180" font-size="12" font-weight="700" fill="#0a7a54">signed share</text>
-        <defs><marker id="ar5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#12b37d"/></marker></defs>
+  <span class="kicker">Your call, every time</span>
+  <h2>Who gets to see it<span class="dot">.</span></h2>
+  <div class="cols" style="align-items:flex-start">
+    <div class="d" style="flex:1 1 56%">
+      <svg viewBox="0 0 560 240" width="100%" style="margin-top:6px">
+        <g font-size="11" text-anchor="middle" class="sub"><text x="95" y="20">your node</text><text x="235" y="20">commons</text><text x="375" y="20">directory</text><text x="500" y="20">search</text></g>
+        <text x="40" y="62" font-size="12" fill="#ff2d9b">Public</text>
+        <g transform="translate(0,46)"><rect x="55" y="0" width="80" height="28" fill="#111"/><rect x="195" y="0" width="80" height="28" fill="#111"/><rect x="335" y="0" width="80" height="28" fill="#111"/><rect x="460" y="0" width="80" height="28" fill="#111"/></g>
+        <text x="40" y="120" font-size="12" fill="#1f5cff">Commons</text>
+        <g transform="translate(0,104)"><rect x="55" y="0" width="80" height="28" fill="#111"/><rect x="195" y="0" width="80" height="28" fill="#111"/><rect x="335" y="0" width="80" height="28" fill="#111"/><rect x="460" y="0" width="80" height="28" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/></g>
+        <text x="40" y="178" font-size="12">Members</text>
+        <g transform="translate(0,162)"><rect x="55" y="0" width="80" height="28" fill="#111"/><rect x="195" y="0" width="80" height="28" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/><rect x="335" y="0" width="80" height="28" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/><rect x="460" y="0" width="80" height="28" fill="none" stroke="#111" stroke-width="2" stroke-dasharray="4 5"/></g>
       </svg>
+      <p class="cap">Solid = it reaches there · outline = it never does</p>
     </div>
-    <div class="t">
-      <h2>Why a share can be trusted<span class="dot">.</span></h2>
+    <div class="t" style="flex:1 1 44%">
       <ul>
-        <li class="j">Every share is <strong>signed by your key</strong></li>
-        <li>It carries a <strong>content fingerprint</strong> (cid)</li>
-        <li class="b">The commons re-checks both — <strong>tampering is rejected</strong></li>
-        <li class="v">Members-only is <strong>encrypted</strong> to the member set</li>
+        <li><strong>Public</strong> — in the directory and open to search engines.</li>
+        <li class="b"><strong>Commons</strong> — in the directory, but kept out of search. Shared by link.</li>
+        <li class="j"><strong>Members-only</strong> — encrypted, only signed-in members can read it. It never leaves your node unencrypted.</li>
       </ul>
     </div>
   </div>
 </section>
 
-<!-- 10 CLOSE -->
+<!-- 10 TRUST -->
+<section>
+  <span class="kicker">Why it can be trusted</span>
+  <div class="cols">
+    <div class="d" style="flex:1 1 46%">
+      <svg viewBox="0 0 440 300" width="100%">
+        <rect x="24" y="36" width="168" height="104" fill="#fff" stroke="#111" stroke-width="2.5"/>
+        <rect x="24" y="36" width="168" height="10" fill="#1f5cff"/>
+        <text x="108" y="78" text-anchor="middle" font-size="14">Your node</text>
+        <text x="108" y="100" text-anchor="middle" font-size="10" class="sub">signs with your key</text>
+        <text x="108" y="117" text-anchor="middle" font-size="10" class="sub">+ fingerprints it</text>
+        <rect x="248" y="160" width="168" height="104" fill="#fff" stroke="#111" stroke-width="2.5"/>
+        <rect x="248" y="160" width="168" height="10" fill="#ff2d9b"/>
+        <text x="332" y="202" text-anchor="middle" font-size="14">Commons</text>
+        <text x="332" y="224" text-anchor="middle" font-size="10" class="sub">checks the signature</text>
+        <text x="332" y="241" text-anchor="middle" font-size="10" class="sub">+ re-checks the hash</text>
+        <path d="M192,112 L246,188" fill="none" stroke="#12b37d" stroke-width="3" marker-end="url(#ar5)"/>
+        <text x="186" y="170" font-size="11" fill="#0a7a54">signed share</text>
+        <defs><marker id="ar5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#12b37d"/></marker></defs>
+      </svg>
+    </div>
+    <div class="t" style="flex:1 1 54%">
+      <h2>No one can fake your work<span class="dot">.</span></h2>
+      <p class="explain wide">Every share is <strong>signed</strong> with your key and carries a <strong>fingerprint</strong> of its contents. The receiving commons checks both — so if a single character is changed in transit, it's <strong>rejected</strong>. And members-only shares are <strong>encrypted</strong> to the member set, so even the commons can't read them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 GOVERNANCE -->
+<section>
+  <span class="kicker">Govern the models, not only the data</span>
+  <h2>You set the terms for AI<span class="dot">.</span></h2>
+  <div class="cols">
+    <div class="t" style="flex:1 1 54%">
+      <p class="explain wide">Each version carries two things anyone reusing it can read by machine: a <strong>Creative Commons license</strong> (how people may reuse the work) and <strong>CC signals</strong> — your preferences for how <strong>AI models</strong> may learn from it.</p>
+      <ul>
+        <li class="j"><strong>Credit</strong> — attribution expected</li>
+        <li class="j"><strong>Direct contribution</strong> — give back to the creators</li>
+        <li class="j"><strong>Ecosystem</strong> — sustain the open commons</li>
+        <li class="j"><strong>Open</strong> — keep what's built on it open</li>
+      </ul>
+    </div>
+    <div class="d" style="flex:1 1 46%">
+      <p class="quote">The community sets the terms of use — together, and in the open.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 12 CLOSE -->
 <section class="pink" data-background-color="#ff2d9b">
-  <p class="kicker">In short</p>
+  <span class="kicker">In one breath</span>
   <h1 style="color:#fff">You hold it in common<span style="color:#111">.</span></h1>
-  <ul style="margin-top:.4em; font-size:1.05em">
-    <li style="color:#fff">Your node, your keys, your terms</li>
-    <li style="color:#fff">Share to a commons — or keep it home</li>
-    <li style="color:#fff">Signed, fingerprinted, and governed by you</li>
+  <ul style="margin-top:.5em; font-size:1.08em">
+    <li>Your node, your keys, your terms</li>
+    <li>Share to a commons — or keep it home</li>
+    <li>Signed, fingerprinted, and governed by you</li>
   </ul>
+  <p class="lede" style="margin-top:.7em; color:#fff; max-width:30ch">heldincommon.org</p>
 </section>
 
 </div></div>
