@@ -35,18 +35,18 @@ From the releases page: **https://github.com/phoenixperry/FederatedBios/releases
 
 | Your computer | Download this file |
 |---|---|
-| **macOS — Apple Silicon (M1/M2/M3/M4)** | `Held.in.Common.Node_0.1.0_aarch64.dmg` |
-| **Linux — Ubuntu / Debian** | `Held.in.Common.Node_0.1.0_amd64.deb` |
-| **Linux — any distro** | `Held.in.Common.Node_0.1.0_amd64.AppImage` |
-| **Linux — Fedora / RHEL** | `Held.in.Common.Node-0.1.0-1.x86_64.rpm` |
+| **macOS — Apple Silicon (M1/M2/M3/M4)** | `Held-In-Common-macOS-AppleSilicon.dmg` |
+| **Linux — Ubuntu / Debian** | `Held-In-Common-Linux.deb` |
+| **Linux — any distro** | `Held-In-Common-Linux.AppImage` |
+| **Linux — Fedora / RHEL** | `Held-In-Common-Linux.rpm` |
 
 > **Windows** and **Intel macOS** builds aren't ready yet — use **Path 1** or **Path 3 (Docker)** for now.
 
 ### 2. Open it — get past the "unsigned" warning (one time only)
 
 - **macOS:** open the `.dmg`, drag the app into **Applications**. First launch: **right-click the app → Open → Open**. If macOS still blocks it ("…cannot be opened because Apple cannot check it for malicious software"), go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then launch the app again.
-- **Linux (.AppImage):** `chmod +x Held.in.Common.Node_0.1.0_amd64.AppImage`, then run it. (If it won't start, install `libfuse2`.)
-- **Linux (.deb):** `sudo apt install ./Held.in.Common.Node_0.1.0_amd64.deb`, then launch **Held in Common Node**.
+- **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (If it won't start, install `libfuse2`.)
+- **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
 
 ### 3. You're up and running when…
 
