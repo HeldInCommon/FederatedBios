@@ -775,12 +775,12 @@ async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
         form method="post" action="/join" class="stack-form" {
             div class="field" {
                 label class="field-label" for="handle" { "Handle" }
-                div class="handle-input" { span class="at" { "@" } input id="handle" name="handle" type="text" maxlength="30" placeholder="tega" required; }
+                div class="handle-input" { span class="at" { "@" } input id="handle" name="handle" type="text" maxlength="30" placeholder="phoenixperry" required; }
                 p class="hint" { "Lowercase letters, numbers and underscores. 2–30 characters." }
             }
             div class="field" {
                 label class="field-label" for="display_name" { "Display name" }
-                input id="display_name" name="display_name" type="text" maxlength="80" placeholder="Tega Brain" required;
+                input id="display_name" name="display_name" type="text" maxlength="80" placeholder="Phoenix Perry" required;
             }
             div class="field" {
                 label class="field-label" for="passphrase" { "Passphrase" }
@@ -867,7 +867,7 @@ fn profile_fields(p: &Profile) -> Markup {
         div class="field-row name-row" {
             div class="field" {
                 label class="field-label" for="name" { "Name" }
-                input id="name" name="name" type="text" maxlength="120" value=(p.name) placeholder="Tega Brain";
+                input id="name" name="name" type="text" maxlength="120" value=(p.name) placeholder="Phoenix Perry";
             }
             div class="field" {
                 label class="field-label" for="pronouns" { "Pronouns" }
@@ -1017,7 +1017,7 @@ async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
         form method="post" action="/login" class="stack-form" {
             div class="field" {
                 label class="field-label" for="handle" { "Handle" }
-                div class="handle-input" { span class="at" { "@" } input id="handle" name="handle" type="text" maxlength="30" required; }
+                div class="handle-input" { span class="at" { "@" } input id="handle" name="handle" type="text" maxlength="30" placeholder="phoenixperry" required; }
             }
             div class="field" {
                 label class="field-label" for="passphrase" { "Passphrase" }
