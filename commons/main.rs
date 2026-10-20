@@ -38,10 +38,11 @@ use crypto_box::{
 };
 
 const STYLE_CSS: &str = include_str!("style.css");
+const AVATAR_JS: &str = include_str!("avatar.js");
 
 /// Content-Security-Policy: no scripts at all (every page is server-rendered),
 /// styles and fonts only from self + Google Fonts, images from self + data URIs.
-const CSP: &str = "default-src 'none'; style-src 'self' https://fonts.googleapis.com; \
+const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; \
      font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; \
      base-uri 'none'; frame-ancestors 'none'";
 
@@ -106,6 +107,8 @@ struct Profile {
     role: String,
     bio: String,
     places: Vec<Place>,
+    #[serde(default)]
+    avatar: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -339,7 +342,7 @@ fn verify_inbound(activity: &serde_json::Value) -> Result<RemoteEntry, String> {
         .ok_or("missing signature")?;
 
     // Recompute the content address from what was actually sent (tamper check).
-    let body_json = serde_json::to_value(&profile).unwrap();
+    let body_json = hash_body(&profile);
     let cid = content_id(handle, &visibility, &license, &signals, created_at, &body_json);
     if cid != claimed_cid {
         return Err("content hash mismatch".into());
@@ -473,6 +476,19 @@ fn decrypt_for(st: &AppState, v: &Version, viewer: &str) -> Option<Profile> {
     let nonce = crypto_box::Nonce::from_slice(&nonce_bytes);
     let plain = boxx.decrypt(nonce, ct.as_ref()).ok()?;
     serde_json::from_slice(&plain).ok()
+}
+
+/// The profile JSON that feeds the content hash. The avatar is display metadata,
+/// not signed content: excluding it keeps the content address stable when a photo
+/// is added or changed, and — crucially — lets a node federate to a commons that
+/// predates the avatar field (it would otherwise recompute a different hash and
+/// reject the signature). Members-only bodies hash their ciphertext, not this.
+fn hash_body(profile: &Profile) -> serde_json::Value {
+    let mut v = serde_json::to_value(profile).unwrap_or(serde_json::Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        obj.remove("avatar");
+    }
+    v
 }
 
 fn content_id(handle: &str, visibility: &str, license: &str, signals: &[String], created_at: u64, body: &serde_json::Value) -> String {
@@ -658,6 +674,7 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
                 a class="dir-card" href={ "/federated/" (keyid(&r.ed_pub)) } {
                     span class="dir-bar vis-federated" {}
                     span class="dir-body" {
+                        @if !r.profile.avatar.is_empty() { img class="dir-avatar" src=(r.profile.avatar) alt=""; }
                         span class="dir-name" { (if r.profile.name.is_empty() { r.handle.clone() } else { r.profile.name.clone() }) }
                         span class="dir-handle" { "@" (r.handle) }
                         @if !r.profile.role.is_empty() { span class="dir-role" { (r.profile.role) } }
@@ -670,6 +687,7 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
                     span class={ "dir-bar " (match v.visibility.as_str() { "public" => "vis-public", "commons" => "vis-commons", _ => "vis-members" }) } {}
                     span class="dir-body" {
                         @let locked = v.visibility == "members";
+                        @if let Some(p) = &v.payload { @if !p.avatar.is_empty() { img class="dir-avatar" src=(p.avatar) alt=""; } }
                         span class="dir-name" {
                             @if let Some(p) = &v.payload { (p.name) } @else { "@" (h.handle) }
                         }
@@ -719,6 +737,7 @@ async fn profile_page(State(st): State<Shared>, Path(handle): Path<String>, head
                     (visibility_badge(&v.visibility))
                     @match &visible_profile {
                         Some(p) => {
+                            @if !p.avatar.is_empty() { img class="profile-avatar" src=(p.avatar) alt=""; }
                             h1 { (if p.name.is_empty() { h.handle.clone() } else { p.name.clone() }) }
                             @if !p.pronouns.is_empty() { p class="pronouns" { (p.pronouns) } }
                             @if !p.role.is_empty() { p class="lede" { (p.role) } }
@@ -841,15 +860,15 @@ async fn new_profile(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let csrf = session_csrf(&st, &headers).unwrap_or_default();
     let rec = load_handle(&st, &me);
     let current = rec.as_ref().and_then(|r| r.current_cid.as_ref()).and_then(|c| load_version(&st, c));
-    let (profile, sel_vis, sel_sig) = match &current {
+    let (profile, sel_vis, sel_license, sel_sig) = match &current {
         Some(v) => {
             let p = match v.visibility.as_str() {
                 "members" => decrypt_for(&st, v, &me).unwrap_or_default(),
                 _ => v.payload.clone().unwrap_or_default(),
             };
-            (p, v.visibility.clone(), v.signals.clone())
+            (p, v.visibility.clone(), v.license.clone(), v.signals.clone())
         }
-        None => (Profile::default(), "public".to_string(), Vec::new()),
+        None => (Profile::default(), "public".to_string(), "cc-by".to_string(), Vec::new()),
     };
     let first_time = current.is_none();
     let body = html! {
@@ -864,15 +883,32 @@ async fn new_profile(State(st): State<Shared>, headers: HeaderMap) -> Response {
             input type="hidden" name="handle" value=(me);
             input type="hidden" name="csrf" value=(csrf);
             (profile_fields(&profile))
-            (visibility_and_governance(&sel_vis, &sel_sig))
+            (visibility_and_governance(&sel_vis, &sel_license, &sel_sig))
             div class="actions" { button class="primary" type="submit" { "Publish to the commons" } }
         }
+        script src="/avatar.js" {}
     };
     shell("Publish", Some(&me), body)
 }
 
 fn profile_fields(p: &Profile) -> Markup {
     html! {
+        div class="field" {
+            label class="field-label" { "Profile picture" }
+            div class="photo-field" {
+                @if p.avatar.is_empty() {
+                    img id="avatar-preview" class="avatar-preview empty" alt="";
+                } @else {
+                    img id="avatar-preview" class="avatar-preview" src=(p.avatar) alt="Current profile picture";
+                }
+                div class="photo-pick" {
+                    input id="photo" type="file" accept="image/png,image/jpeg,image/webp";
+                    p class="hint" { "A square photo works best — it's resized to about 320px on your device and saved with your profile." }
+                    button id="avatar-clear" type="button" class="link-btn" style=(if p.avatar.is_empty() { "display:none" } else { "" }) { "Remove photo" }
+                }
+            }
+            input id="avatar" type="hidden" name="avatar" value=(p.avatar);
+        }
         div class="field-row name-row" {
             div class="field" {
                 label class="field-label" for="name" { "Name" }
@@ -900,7 +936,7 @@ fn profile_fields(p: &Profile) -> Markup {
     }
 }
 
-fn visibility_and_governance(sel_vis: &str, sel_sig: &[String]) -> Markup {
+fn visibility_and_governance(sel_vis: &str, sel_license: &str, sel_sig: &[String]) -> Markup {
     html! {
         fieldset class="reach-options" {
             legend class="field-label" { "Who can see this" }
@@ -922,7 +958,7 @@ fn visibility_and_governance(sel_vis: &str, sel_sig: &[String]) -> Markup {
             legend class="field-label" { "License" }
             select name="license" class="license-select" {
                 @for (key, name, _) in LICENSES {
-                    option value=(key) { (name) }
+                    option value=(key) selected[*key == sel_license] { (name) }
                 }
             }
         }
@@ -961,12 +997,22 @@ async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String) -> 
     if !pname.is_empty() {
         places.push(Place { name: pname, city: clamp(one(&f, "place_city"), 80) });
     }
+    // Avatar arrives as a small JPEG/PNG/WebP data URI, already resized on the
+    // client. Validate the prefix and cap the size so it stays a profile photo.
+    let avatar = {
+        let a = one(&f, "avatar");
+        let ok = a.starts_with("data:image/jpeg;base64,")
+            || a.starts_with("data:image/png;base64,")
+            || a.starts_with("data:image/webp;base64,");
+        if ok && a.len() <= 600_000 { a } else { String::new() }
+    };
     let profile = Profile {
         name: clamp(one(&f, "name"), 120),
         pronouns: clamp(one(&f, "pronouns"), 40),
         role: clamp(one(&f, "role"), 160),
         bio: clamp(one(&f, "bio"), 600),
         places,
+        avatar,
     };
 
     let visibility = match one(&f, "visibility").as_str() {
@@ -991,7 +1037,7 @@ async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String) -> 
         let bj = serde_json::to_value(&boxes).unwrap();
         (None, Some(boxes), bj)
     } else {
-        let bj = serde_json::to_value(&profile).unwrap();
+        let bj = hash_body(&profile);
         (Some(profile.clone()), None, bj)
     };
 
@@ -1154,6 +1200,7 @@ async fn federated_view(State(st): State<Shared>, Path(kid): Path<String>, heade
     let body = html! {
         header class="intro profile-head" {
             span class="vis-badge vis-federated" { "Federated" }
+            @if !p.avatar.is_empty() { img class="profile-avatar" src=(p.avatar) alt=""; }
             h1 { (if p.name.is_empty() { r.handle.clone() } else { p.name.clone() }) }
             @if !p.pronouns.is_empty() { p class="pronouns" { (p.pronouns) } }
             @if !p.role.is_empty() { p class="lede" { (p.role) } }
@@ -1360,6 +1407,9 @@ fn short(cid: &str) -> String {
 async fn style_css() -> Response {
     ([(header::CONTENT_TYPE, "text/css; charset=utf-8")], STYLE_CSS).into_response()
 }
+async fn avatar_js() -> Response {
+    ([(header::CONTENT_TYPE, "application/javascript; charset=utf-8")], AVATAR_JS).into_response()
+}
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status":"ok","service":"hic-commons","version":env!("CARGO_PKG_VERSION")}))
@@ -1438,6 +1488,7 @@ async fn main() {
         .route("/logout", post(logout))
         .route("/@{handle}", get(profile_page))
         .route("/style.css", get(style_css))
+        .route("/avatar.js", get(avatar_js))
         .route("/health", get(health))
         .route("/api/directory", get(api_directory))
         .route("/api/@{handle}", get(api_profile))

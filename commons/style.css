@@ -328,3 +328,19 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .share-row { display: flex; gap: 12px; margin-top: 10px; align-items: stretch; }
 .share-row input { flex: 1; }
 .shared-note { margin: 12px 0 0; font: 400 14px var(--mono); color: var(--jade-ink); }
+
+/* --- profile picture --- */
+.avatar-preview { width: 104px; height: 104px; flex: none; object-fit: cover;
+  border: 1.5px solid var(--ink); background: var(--white); display: block; }
+.avatar-preview.empty { background:
+  repeating-linear-gradient(45deg, var(--cream), var(--cream) 7px, #e3e0d8 7px, #e3e0d8 14px);
+  border-style: dashed; }
+.photo-field .photo-pick { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.photo-field input[type="file"] { font: 400 14px var(--mono); color: var(--ink); }
+.link-btn { background: none; border: 0; padding: 0; cursor: pointer;
+  font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--blue); border-bottom: 1px solid var(--blue); }
+.profile-avatar { width: 128px; height: 128px; object-fit: cover; display: block;
+  border: 1.5px solid var(--ink); margin: 0 0 22px; }
+.dir-avatar { width: 46px; height: 46px; object-fit: cover; display: block;
+  border: 1px solid var(--ink); margin-bottom: 12px; }
