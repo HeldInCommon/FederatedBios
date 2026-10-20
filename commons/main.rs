@@ -159,6 +159,7 @@ struct AppState {
     domain: String,
     instance: String,       // human label for this instance ("Phoenix's node")
     share_default: String,  // prefilled commons URL in the share form
+    secure_cookie: bool,    // set the Secure flag on session cookies (https only)
 }
 type Shared = Arc<AppState>;
 
@@ -514,15 +515,23 @@ fn new_session(st: &AppState, handle: &str) -> String {
     token
 }
 
-fn set_session_cookie(token: &str) -> HeaderValue {
-    // HttpOnly + SameSite=Lax + Secure (RunPod serves over https).
+fn set_session_cookie(token: &str, secure: bool) -> HeaderValue {
+    // HttpOnly + SameSite=Lax. `Secure` only when served over https (e.g. the
+    // RunPod commons). On the local desktop node (http://localhost) Secure must
+    // be omitted — WKWebView drops Secure cookies on http, which locks the user
+    // in a sign-in loop.
+    let sec = if secure { "; Secure" } else { "" };
     HeaderValue::from_str(&format!(
-        "hic_session={token}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=86400"
+        "hic_session={token}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=86400"
     ))
     .unwrap()
 }
-fn clear_session_cookie() -> HeaderValue {
-    HeaderValue::from_static("hic_session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0")
+fn clear_session_cookie(secure: bool) -> HeaderValue {
+    let sec = if secure { "; Secure" } else { "" };
+    HeaderValue::from_str(&format!(
+        "hic_session=; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=0"
+    ))
+    .unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -818,7 +827,7 @@ async fn join_submit(State(st): State<Shared>, body: String) -> Response {
     // Sign them straight in and send them to the publish form.
     let token = new_session(&st, &handle);
     let mut h = HeaderMap::new();
-    h.insert(header::SET_COOKIE, set_session_cookie(&token));
+    h.insert(header::SET_COOKIE, set_session_cookie(&token, st.secure_cookie));
     h.insert(header::LOCATION, HeaderValue::from_static("/new"));
     (StatusCode::SEE_OTHER, h).into_response()
 }
@@ -1041,7 +1050,7 @@ async fn login_submit(State(st): State<Shared>, body: String) -> Response {
     }
     let token = new_session(&st, &handle);
     let mut h = HeaderMap::new();
-    h.insert(header::SET_COOKIE, set_session_cookie(&token));
+    h.insert(header::SET_COOKIE, set_session_cookie(&token, st.secure_cookie));
     h.insert(header::LOCATION, HeaderValue::from_str(&format!("/@{handle}")).unwrap());
     (StatusCode::SEE_OTHER, h).into_response()
 }
@@ -1051,7 +1060,7 @@ async fn logout(State(st): State<Shared>, headers: HeaderMap) -> Response {
         st.sessions.lock().unwrap().remove(&tok);
     }
     let mut h = HeaderMap::new();
-    h.insert(header::SET_COOKIE, clear_session_cookie());
+    h.insert(header::SET_COOKIE, clear_session_cookie(st.secure_cookie));
     h.insert(header::LOCATION, HeaderValue::from_static("/"));
     (StatusCode::SEE_OTHER, h).into_response()
 }
@@ -1391,6 +1400,7 @@ async fn main() {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
     let base_url = std::env::var("HIC_BASE_URL").unwrap_or_else(|_| format!("http://localhost:{port}"));
     let domain = base_url.split("://").nth(1).unwrap_or("localhost").trim_end_matches('/').to_string();
+    let secure_cookie = base_url.starts_with("https://");
     let instance = std::env::var("HIC_INSTANCE").unwrap_or_else(|_| "Held in Common".into());
     let share_default = std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default();
 
@@ -1402,6 +1412,7 @@ async fn main() {
         domain,
         instance,
         share_default,
+        secure_cookie,
     });
 
     let security = tower::ServiceBuilder::new()
