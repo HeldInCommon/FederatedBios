@@ -169,6 +169,11 @@ fn version_path(st: &AppState, cid: &str) -> PathBuf {
 }
 
 fn load_handle(st: &AppState, handle: &str) -> Option<HandleRec> {
+    // Security: handles become filesystem paths. Reject anything that isn't a
+    // strict handle so a crafted path segment can never traverse the store.
+    if !valid_handle(handle) {
+        return None;
+    }
     let s = std::fs::read_to_string(handle_path(st, handle)).ok()?;
     serde_json::from_str(&s).ok()
 }
