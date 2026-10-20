@@ -1,3 +1,11 @@
+# Builds the native node app for macOS / Windows / Linux and attaches
+# installers to the 'node-app-preview' prerelease.
+#
+# Unsigned by default (users use the OS 'open anyway' step). To ship SIGNED
+# macOS builds, add these repo secrets (Settings -> Secrets -> Actions):
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+# Windows signing is a follow-up (needs a code-signing cert + a sign step).
 name: desktop-app
 on:
   workflow_dispatch:
@@ -38,6 +46,14 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization — no-op until these repo secrets exist.
+          # Needs an Apple Developer Program membership ($99/yr).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}                 # base64 of your Developer ID Application .p12
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}       # e.g. "Developer ID Application: Name (TEAMID)"
+          APPLE_ID: ${{ secrets.APPLE_ID }}                                   # your Apple ID email
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}                       # an app-specific password
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: node-app-preview
           releaseName: "Held in Common Node — preview (all platforms)"
