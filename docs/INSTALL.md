@@ -42,13 +42,6 @@ From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases
   ```bash
   D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
   ```
-  Prefer to drag it in yourself? Run this to clear the quarantine and open the `.dmg`, drag **Held In Common** into **Applications**, then run the second line to launch it:
-  ```bash
-  xattr -c ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg && open ~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg
-  ```
-  ```bash
-  xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
-  ```
 - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (If it won't start, install `libfuse2`.)
 - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
 
