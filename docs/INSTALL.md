@@ -4,11 +4,8 @@ You're going to run a **node** — your own personal commons — and (if you wan
 **share** a copy of your profile to a shared commons so others can find it. Your
 work stays on your machine unless you choose to send a copy.
 
-**How it works:** you run a **node** (the app or Docker), create your identity
-there, then **Share** a signed copy up to a shared commons. There is **no
-sign-up on the commons itself** — your keys live on your node and never leave
-your machine, so the only way to appear in a shared directory is to share from a
-node. Path 1 (the app) is recommended.
+**How it works:** you run a **node**, create your identity
+there, then **Share** a signed copy up to a shared commons.
 
 > **Why can't I just sign up on the commons?** A shared commons is a *federation
 > target*, not an identity store. If you open one directly you'll see the
@@ -17,7 +14,7 @@ node. Path 1 (the app) is recommended.
 
 ---
 
-## Path 1 — Run your own node: the app (no Docker) — recommended
+## Path 1 — Run your own node: the app — recommended
 
 A node is just an app on your computer. These preview builds are **unsigned** (no
 Apple/Windows certificate yet), so your OS warns once — that's expected, and the
@@ -57,9 +54,9 @@ license + CC signals, and **Publish**. It's saved on your computer.
 
 ### 5. (Optional) Share to the commons
 
-On your profile, click **"Share to a commons"** (the shared address is pre-filled)
+On your profile, click **"Share to a commons"** (the server address for the held in common server is pre-filled, but you could use any server you wanted running the Held in Common software.)
 → **Share**. A **signed copy** now appears in the shared directory. Your original
-never leaves your node.
+never leaves your node. If you shut your computer down, it goes away. 
 
 > **Members-only** profiles stay **encrypted on your machine** and are never shared — not even to the commons.
 
@@ -79,15 +76,9 @@ survives restarts).
 
 ---
 
-## What the choices mean
-
-- **Visibility** — *Public* (listed + searchable) · *Commons* (listed, kept out of search) · *Members-only* (encrypted; only signed-in members can read it).
-- **License** — Creative Commons (CC0, CC BY, …): how people may reuse your work.
-- **CC signals** — how AI models may learn from it: *Credit*, *Direct Contribution*, *Ecosystem*, *Open*.
-
 ## Troubleshooting
 
-- **Port 8080 is busy** — quit whatever is using it, then reopen the app. (Docker: use `-p 8081:8080` and open `http://localhost:8081`.)
+- **Port 8080 is busy** — quit Held in Common and re-open the app again. 
 - **macOS "cannot be opened / Apple cannot check it"** — right-click → **Open**, or **System Settings → Privacy & Security → Open Anyway** (only needed once).
 - **macOS "disk is damaged — move to Trash" (the `.dmg` won't open at all)** — the download is fine; macOS is quarantining an app that isn't notarized. One-paste install + launch (clears quarantine, copies to Applications, opens it): `D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"`
 - **Linux AppImage won't run** — make sure it's executable (`chmod +x`), and install `libfuse2` on distros that need it.
