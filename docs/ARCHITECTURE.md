@@ -89,7 +89,7 @@ that the receiving commons independently verifies.
 2. **Content-address + sign** — `cid = sha256(handle, visibility, license, signals, created_at, body)`; `sig = Ed25519.sign(cid)`. The `cid` is the version's permanent identity; the signature binds it to the handle's key.
 3. **Store** locally as a `Version`.
 4. **Share** — build an ActivityPub-shaped `Create` and `POST` it to `<commons>/inbox`.
-5. **Verify (`verify_inbound`)** — the commons **recomputes the `cid`** from the sent content (tamper check), **verifies the Ed25519 signature**, and **TOFU-pins** the `(handle, origin)` pair to the first key it saw. Mismatch or malformed → **400**; a handle re-appearing under a different key for the same origin → **409**. On success it stores a `RemoteEntry` and returns **202**, and the directory lists it as *federated* (not re-hosted as local).
+5. **Verify (`verify_inbound`)** — the commons **recomputes the `cid`** from the sent content (tamper check), **verifies the Ed25519 signature**, and **TOFU-pins** the handle to the first key it saw (on a commons a handle belongs to one key; the sender's `origin` and origin label are self-asserted, so they are not part of the pin). Mismatch or malformed → **400**; a handle re-appearing under a different key, or colliding with a local member's handle → **409**. On success it stores a `RemoteEntry` and returns **202**, and the directory lists it as *federated* (not re-hosted as local).
 
 Identity is the handle's **public key**, so this works for laptops with no public
 URL (NAT-friendly). Narrowing a version's visibility stops the commons serving it,
@@ -116,7 +116,7 @@ ciphertext lives on the node and **never federates**.
 
 - **Keys** — each handle gets an Ed25519 signing keypair and an X25519 encryption keypair, minted and held by the node; users never touch a private key.
 - **Integrity / authenticity** — content-addressing (sha256) + Ed25519 signatures. A single changed character breaks the `cid` and the signature → rejected at `/inbox`.
-- **Federation trust** — TOFU key pinning per `(handle, origin)`; conflicting keys are refused (409). *P2: reachable-origin verification by fetching `<origin>/ap/@handle`.*
+- **Federation trust** — TOFU key pinning per handle: the first key to federate a handle owns it on that instance, and a different key is refused (409). Origin is not part of the pin because the sender asserts it. *P2: reachable-origin verification by fetching `<origin>/ap/@handle`, after which the pin can widen to a verified `handle@origin` so two people on different nodes can share a handle.*
 - **Auth** — passphrase (stored only as a salted hash; no recovery) → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure`) + a per-session **CSRF** token guarding `publish`/`share`.
 - **Confidentiality** — members-only ciphertext at rest; the content key is never stored unwrapped.
 - **Input hardening** — handles validated (`[a-z0-9_]{2,30}`) and path-traversal-guarded before becoming filenames.

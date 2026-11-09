@@ -13,7 +13,7 @@ no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >"$T/node.log" 2>&1 & NPID=$!
-cleanup(){ kill $CPID $NPID ${CAPPID:-} 2>/dev/null; rm -rf "$T"; }
+cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
@@ -40,6 +40,19 @@ GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=snea
 [ -z "$GSID" ] && ok "commons /join mints no identity" || no "commons /join created a session"
 # ...while the node still allows normal sign-up (proven by @tega above).
 curl -s http://localhost:8090/join | grep -qi "join the commons" && ok "node /join still allows sign-up" || no "node /join wrongly gated"
+
+# Handle pinning: a second node that also calls itself @tega (new key, different
+# instance label) must not be able to take over @tega on the commons. The pin is
+# on the handle alone, because origin and origin label are chosen by the sender.
+mkdir -p "$T/impostor"
+HIC_DATA="$T/impostor" PORT=8092 HIC_INSTANCE="Impostor node" HIC_BASE_URL=http://localhost:8092 "$BIN" >"$T/impostor.log" 2>&1 & IPID=$!
+curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8092/health >/dev/null || no "impostor node failed to start"
+ISID=$(curl -is -X POST http://localhost:8092/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret3" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+ICSRF=$(curl -s http://localhost:8092/new -H "Cookie: hic_session=$ISID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
+curl -s -o /dev/null -X POST http://localhost:8092/publish -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Definitely the real one." --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
+curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "HTTP 409" && ok "same handle from another node + key refused (409)" || no "impostor @tega was not refused"
+grep -rq "Definitely the real one" "$T/commons/remote/" 2>/dev/null && no "impostor profile stored on the commons" || ok "impostor profile not stored"
+curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "federated to" && ok "original @tega can still re-share (same key)" || no "original @tega re-share refused"
 
 python3 - "$T/cap.json" <<'PY' & 
 import http.server,sys
