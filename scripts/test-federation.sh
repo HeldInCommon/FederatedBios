@@ -97,7 +97,8 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(('127.0.0.1',8099),H).serve_forever()
 PY
 CAPPID=$!
-n=0; until (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null; do n=$((n+1)); [ $n -gt 400 ] && break; done; exec 3>&- 2>/dev/null
+# Wait up to 5s for the capture server (Python can take a moment to start on CI).
+for _ in $(seq 50); do (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null && break; sleep 0.1; done
 curl -s -o /dev/null -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8099"
 [ -s "$T/cap.json" ] && ok "captured on-the-wire signed activity" || no "capture failed"
 
