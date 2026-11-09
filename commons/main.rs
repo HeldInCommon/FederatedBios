@@ -1312,10 +1312,19 @@ async fn inbox(State(st): State<Shared>, body: String) -> Response {
     match verify_inbound(&activity) {
         Ok(entry) => {
             let _g = st.write.lock().unwrap();
-            // TOFU: pin a (handle, origin) pair to the first key we saw for it.
+            // TOFU: on this instance a handle belongs to the first key that
+            // federated it. `origin` and `origin_label` are both written by the
+            // sender, so neither can be part of the pin: a node could change
+            // either one and claim someone else's handle. (Once reachable-origin
+            // verification lands, the pin can widen to a verified handle@origin.)
+            if let Some(local) = load_handle(&st, &entry.handle) {
+                if local.ed_pub != entry.ed_pub {
+                    return (StatusCode::CONFLICT, "that handle belongs to a member of this node").into_response();
+                }
+            }
             for ex in all_remotes(&st) {
-                if ex.handle == entry.handle && ex.origin_label == entry.origin_label && ex.ed_pub != entry.ed_pub {
-                    return (StatusCode::CONFLICT, "handle already federated from that origin under a different key").into_response();
+                if ex.handle == entry.handle && ex.ed_pub != entry.ed_pub {
+                    return (StatusCode::CONFLICT, "handle already federated here under a different key").into_response();
                 }
             }
             if save_remote(&st, &entry).is_err() {
