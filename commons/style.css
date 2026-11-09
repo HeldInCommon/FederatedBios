@@ -373,5 +373,7 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .role-bar.role-commons { background: #8b3fd9; }   /* shared commons — violet */
 .role-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: none; }
 .role-instance { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .85; }
+.role-address { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.role-address code { font: 700 12px var(--mono); background: rgba(255,255,255,.18); padding: 3px 6px; user-select: all; }
 .role-link { margin-left: auto; color: #fff; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.7); }
 .role-link:hover { border-bottom-color: #fff; }

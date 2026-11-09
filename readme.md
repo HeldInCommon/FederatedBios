@@ -56,7 +56,7 @@ Open **http://localhost:8080**. Configure with env vars:
 | `PORT` | `8080` | Port to listen on |
 | `HIC_DATA` | `./data` | Directory for this node's data |
 | `HIC_INSTANCE` | `My node` | Human label for this instance |
-| `HIC_ROLE` | inferred | `node` or `commons`. Inferred from `HIC_INSTANCE` (contains "commons"/"federated" → `commons`). A `commons` gates `/join` + `/login` (federation-only); a `node` allows full sign-up |
+| `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `$HIC_DATA/instance.json` on first start and fixed for that folder (a mismatch refuses to start). A `commons` gates `/join` + `/login` (federation-only); a `node` allows full sign-up. The old guess from `HIC_INSTANCE` still works but is deprecated |
 | `HIC_SHARE_DEFAULT` | *(blank)* | Commons address pre-filled in "Share to a commons" |
 | `HIC_BASE_URL` | `http://localhost:$PORT` | Public base URL (for federation/ActivityPub) |
 

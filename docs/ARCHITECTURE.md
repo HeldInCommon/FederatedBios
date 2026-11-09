@@ -48,10 +48,14 @@ pages (server-rendered with [maud](https://docs.rs/maud)), a small JSON API, and
 the federation endpoints (ActivityPub-shaped actor/outbox/WebFinger + `/inbox`).
 
 ### 2.2 Desktop app (`src-tauri`)
-A thin [Tauri v2](https://v2.tauri.app) shell. On launch it starts the bundled
-`hic-commons` binary as a **sidecar** (`tauri-plugin-shell`), shows an on-brand
-loading screen, polls `http://localhost:8080/health`, then hands off to the
-node's own web UI. No Docker, no terminal — double-click and you are a node. The
+A thin [Tauri v2](https://v2.tauri.app) shell. On first launch it asks what this
+computer runs: **a node** or **a commons** (for a commons, where people will reach
+it; "this room" over the local network is available today). The choice is saved in
+`<app data>/app.json`, and each role gets its own data folder (`node-data/`,
+`commons-data/`). Installs that already have a node skip the question. The app then
+starts the bundled `hic-commons` binary as a **sidecar** (`tauri-plugin-shell`) in
+that role, shows an on-brand loading screen, polls `http://localhost:8080/health`,
+then hands off to the server's own web UI. No Docker, no terminal. The
 sidecar binary (`binaries/hic-commons-<target-triple>`) is gitignored and built
 + copied by CI (and by the from-source steps in the README).
 
@@ -70,6 +74,7 @@ same way; profiles are the first object type implemented.)
 
 ```
 data/
+  instance.json             this instance's role ("node" | "commons"), fixed for the folder
   handles/<handle>.json     identity: display name, Ed25519 + X25519 keys, current_cid, shared_to[]
   versions/<cid>.json       a signed version (plaintext profile, or encrypted member boxes)
   remote/<keyid>.json       a RemoteEntry federated in from another node (verified + key-pinned)
@@ -148,6 +153,7 @@ ciphertext lives on the node and **never federates**.
 | `PORT` | `8080` | Listen port (binds `0.0.0.0`) |
 | `HIC_DATA` | `./data` | Data directory |
 | `HIC_INSTANCE` | `My node` | Human label |
+| `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `instance.json` on first start; must match it afterwards or the server refuses to start |
 | `HIC_SHARE_DEFAULT` | *(blank)* | Commons pre-filled in the share form |
 | `HIC_BASE_URL` | `http://localhost:$PORT` | Public base URL for federation/ActivityPub |
 
