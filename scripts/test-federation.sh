@@ -11,7 +11,7 @@ PASS=0; FAIL=0
 ok(){ echo "  PASS  $1"; PASS=$((PASS+1)); }
 no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
-HIC_DATA="$T/commons" PORT=8091 HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
+HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >"$T/node.log" 2>&1 & NPID=$!
 cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
@@ -33,7 +33,7 @@ curl -s http://localhost:8091/ | grep -qi "tega" && ok "@tega in commons directo
 curl -s http://localhost:8091/api/directory | grep -q "tega" && no "tega wrongly local on commons" || ok "tega federated, not local"
 
 # The commons is a federation target, not an identity store: /join and /login are
-# gated (HIC_ROLE inferred "commons" from HIC_INSTANCE="Shared Commons").
+# gated (HIC_ROLE=commons).
 curl -s http://localhost:8091/join | grep -qi "shared commons" && ok "commons /join shows the gate page" || no "commons /join not gated"
 curl -s http://localhost:8091/login | grep -qi "shared commons" && ok "commons /login shows the gate page" || no "commons /login not gated"
 GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=sneak" --data-urlencode "display_name=Sneak" --data-urlencode "passphrase=supersecret9" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
@@ -41,6 +41,20 @@ GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=snea
 # ...while the node still allows normal sign-up (proven by @tega above).
 curl -s http://localhost:8090/join | grep -qi "join the commons" && ok "node /join still allows sign-up" || no "node /join wrongly gated"
 
+# The role is saved with the data (instance.json) and is fixed for that folder.
+grep -q '"role": "commons"' "$T/commons/instance.json" 2>/dev/null && ok "commons saved its role in instance.json" || no "no commons role in instance.json"
+grep -q '"role": "node"' "$T/node/instance.json" 2>/dev/null && ok "node saved its role in instance.json" || no "no node role in instance.json"
+# refuses VAR=… : start the binary; succeed if it exits on its own within ~5s.
+refuses(){ env "$@" PORT=8095 "$BIN" >"$T/refuse.log" 2>&1 & local p=$! i=0
+  while kill -0 $p 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+  if kill -0 $p 2>/dev/null; then kill $p; wait $p 2>/dev/null; return 1; fi; return 0; }
+refuses HIC_DATA="$T/commons" HIC_ROLE=node && grep -q "belongs to a commons" "$T/refuse.log" && ok "commons folder refuses to start as a node" || no "commons folder started as a node"
+cp -R "$T/node" "$T/node-copy" && rm -f "$T/node-copy/instance.json"
+refuses HIC_DATA="$T/node-copy" HIC_ROLE=commons && grep -q "member identities" "$T/refuse.log" && ok "older node folder refuses to become a commons" || no "node folder became a commons"
+mkdir -p "$T/legacy"
+refuses HIC_DATA="$T/legacy" HIC_INSTANCE="Held in Common (federated)"
+grep -q '"role": "commons"' "$T/legacy/instance.json" 2>/dev/null && ok "legacy commons label still starts a commons" || no "legacy commons guess lost"
+curl -s http://localhost:8091/ | grep -q "Nodes share to" && ok "commons banner shows the address to share to" || no "commons banner missing share address"
 # Handle pinning: a second node that also calls itself @tega (new key, different
 # instance label) must not be able to take over @tega on the commons. The pin is
 # on the handle alone, because origin and origin label are chosen by the sender.
@@ -83,7 +97,8 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(('127.0.0.1',8099),H).serve_forever()
 PY
 CAPPID=$!
-n=0; until (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null; do n=$((n+1)); [ $n -gt 400 ] && break; done; exec 3>&- 2>/dev/null
+# Wait up to 5s for the capture server (Python can take a moment to start on CI).
+for _ in $(seq 50); do (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null && break; sleep 0.1; done
 curl -s -o /dev/null -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8099"
 [ -s "$T/cap.json" ] && ok "captured on-the-wire signed activity" || no "capture failed"
 

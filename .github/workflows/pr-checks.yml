@@ -1,0 +1,61 @@
+# Checks for pull requests. Build-only: nothing here publishes a release.
+#   federation-tests  builds hic-commons and runs scripts/test-federation.sh
+#   mac-preview       builds the desktop app for Apple Silicon and attaches the
+#                     unsigned .dmg to this workflow run (Actions -> the run ->
+#                     Artifacts), so reviewers can try a PR without a Rust setup.
+# The public 'node-app-preview' prerelease is only updated by desktop-app.yml.
+name: pr-checks
+on:
+  pull_request:
+    paths:
+      - 'commons/**'
+      - 'src-tauri/**'
+      - 'scripts/test-federation.sh'
+      - '.github/workflows/pr-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  federation-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: commons
+      - name: Build hic-commons
+        run: cargo build --release --manifest-path commons/Cargo.toml
+      - name: Federation tests
+        run: ./scripts/test-federation.sh
+
+  mac-preview:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            commons
+            src-tauri
+          key: macos-pr
+      - name: Build hic-commons sidecar
+        run: |
+          TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          cargo build --release --manifest-path commons/Cargo.toml
+          mkdir -p src-tauri/binaries
+          cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
+      - name: Build the desktop app (no release)
+        # With no tagName/releaseId, tauri-action only builds.
+        uses: tauri-apps/tauri-action@v0
+      - name: Attach the .dmg to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: held-in-common-macos-pr-${{ github.event.pull_request.number || github.run_number }}
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14

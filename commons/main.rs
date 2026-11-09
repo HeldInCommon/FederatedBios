@@ -46,6 +46,10 @@ const AVATAR_JS: &str = include_str!("avatar.js");
 // obvious in ANY browser, not just the desktop app.
 static BANNER: OnceLock<(String, String, String)> = OnceLock::new();
 
+// This instance's public base URL (HIC_BASE_URL). A commons shows it in the role
+// banner so its steward can tell people which address to share to.
+static PUBLIC_URL: OnceLock<String> = OnceLock::new();
+
 /// Content-Security-Policy: no scripts at all (every page is server-rendered),
 /// styles and fonts only from self + Google Fonts, images from self + data URIs.
 const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; \
@@ -595,6 +599,11 @@ fn role_banner() -> Markup {
             @if !is_commons && !commons.is_empty() {
                 a class="role-link" href=(commons) { "Visit the commons \u{2197}" }
             }
+            @if is_commons {
+                @if let Some(url) = PUBLIC_URL.get() {
+                    span class="role-address" { "Nodes share to " code { (url) } }
+                }
+            }
         }
     }
 }
@@ -606,6 +615,88 @@ fn role_banner() -> Markup {
 /// people to run a node instead.
 fn is_commons() -> bool {
     BANNER.get().map(|(r, _, _)| r == "commons").unwrap_or(false)
+}
+
+/// `$HIC_DATA/instance.json`, written the first time an instance starts on a
+/// data folder. The role is fixed for that folder: a node's folder holds its
+/// members' private keys, a commons' folder holds other people's shared copies,
+/// so one can't turn into the other by changing a setting. Running the other
+/// role means starting on a new folder.
+#[derive(Serialize, Deserialize)]
+struct InstanceFile {
+    role: String,
+    created_at: u64,
+}
+
+/// Decide this instance's role, in order:
+/// 1. the role saved in `instance.json` (HIC_ROLE must agree with it, or we refuse to start);
+/// 2. HIC_ROLE, for a new folder;
+/// 3. deprecated: a guess from the instance label, kept so hosted commons that
+///    predate HIC_ROLE don't reopen sign-up on upgrade. Logs a warning.
+/// Otherwise "node". A new folder's decision is saved to `instance.json`.
+fn resolve_role(data_dir: &std::path::Path, instance: &str) -> Result<String, String> {
+    let path = data_dir.join("instance.json");
+    let env = std::env::var("HIC_ROLE")
+        .ok()
+        .map(|r| r.trim().to_lowercase())
+        .filter(|r| !r.is_empty());
+    if let Some(r) = &env {
+        if r != "node" && r != "commons" {
+            return Err(format!("HIC_ROLE must be \"node\" or \"commons\", not \"{r}\"."));
+        }
+    }
+
+    if path.exists() {
+        let saved: InstanceFile = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<InstanceFile>(&s).ok())
+            .filter(|f| f.role == "node" || f.role == "commons")
+            .ok_or_else(|| format!("{} is unreadable. Fix or remove it to continue.", path.display()))?;
+        if let Some(e) = env {
+            if e != saved.role {
+                return Err(format!(
+                    "This data folder ({}) belongs to a {}, but HIC_ROLE={e}. A folder's role can't change; \
+                     point HIC_DATA at a new folder to run a {e}.",
+                    data_dir.display(),
+                    saved.role
+                ));
+            }
+        }
+        return Ok(saved.role);
+    }
+
+    let role = match env {
+        Some(e) => e,
+        None => {
+            let i = instance.to_lowercase();
+            if i.contains("commons") || i.contains("federated") {
+                eprintln!(
+                    "warning: guessing role \"commons\" from HIC_INSTANCE. This guess is deprecated; set HIC_ROLE=commons."
+                );
+                "commons".into()
+            } else {
+                "node".into()
+            }
+        }
+    };
+
+    // A folder that already holds member identities is a node's, even without
+    // instance.json (it predates this file). Never turn it into a commons.
+    let has_members = std::fs::read_dir(data_dir.join("handles"))
+        .map(|mut d| d.any(|e| e.map(|e| e.path().extension().map_or(false, |x| x == "json")).unwrap_or(false)))
+        .unwrap_or(false);
+    if role == "commons" && has_members {
+        return Err(format!(
+            "This data folder ({}) holds a node's member identities, so it can't become a commons. \
+             Point HIC_DATA at a new folder to run a commons.",
+            data_dir.display()
+        ));
+    }
+
+    let file = InstanceFile { role: role.clone(), created_at: now() };
+    let json = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(role)
 }
 
 /// Shown in place of /join and /login on a shared commons. Your keys live on
@@ -1656,13 +1747,17 @@ async fn main() {
     let secure_cookie = base_url.starts_with("https://");
     let instance = std::env::var("HIC_INSTANCE").unwrap_or_else(|_| "Held in Common".into());
     let share_default = std::env::var("HIC_SHARE_DEFAULT").unwrap_or_default();
-    // "node" vs "commons": explicit via HIC_ROLE, else inferred from the instance
-    // label (RunPod sets HIC_INSTANCE="Held in Common (federated)").
-    let role = std::env::var("HIC_ROLE").unwrap_or_else(|_| {
-        let i = instance.to_lowercase();
-        if i.contains("commons") || i.contains("federated") { "commons".into() } else { "node".into() }
-    });
+    // "node" vs "commons", saved with the data. See resolve_role.
+    let role = match resolve_role(&data_dir, &instance) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("hic-commons: {e}");
+            std::process::exit(2);
+        }
+    };
+    println!("hic-commons role: {role}");
     let _ = BANNER.set((role, instance.clone(), share_default.clone()));
+    let _ = PUBLIC_URL.set(base_url.clone());
 
     let state = Arc::new(AppState {
         data_dir,

@@ -2,10 +2,12 @@
 <html lang="en"><head><meta charset="utf-8" />
 <title>Held in Common</title>
 <style>
-  :root{--pink:#ff2d9b;--blue:#1f5cff;--ink:#111;--bg:#f2f1ed;--e:cubic-bezier(.22,1,.36,1)}
+  :root{--pink:#ff2d9b;--blue:#1f5cff;--jade:#0a7a54;--violet:#8b3fd9;--ink:#111;--gray:#6f6f6f;--bg:#f2f1ed;--card:#fff;
+        --line:rgba(17,17,17,.18);--mono:ui-monospace,"SF Mono",Menlo,monospace;--e:cubic-bezier(.22,1,.36,1)}
   *{box-sizing:border-box}
-  body{margin:0;height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
-       font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
+       font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  [hidden]{display:none!important}
   /* brand bar */
   .bars{position:fixed;top:0;left:0;right:0;height:8px;display:flex}
   .bars i{height:100%} .bars .p{flex:0 0 62%;background:var(--pink)} .bars .b{flex:1;background:var(--blue)}
@@ -20,30 +22,101 @@
        border-radius:50%;animation:breathe 2.1s var(--e) infinite}
   @keyframes ripple{0%{transform:scale(1);opacity:.85}70%{opacity:.1}100%{transform:scale(4.4);opacity:0}}
   @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
-  h1{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0}
+  h1{font-family:var(--mono);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0;text-wrap:balance}
   .dot{color:var(--pink)}
-  .sub{color:#6f6f6f;margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
+  .sub{color:var(--gray);margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
   /* manual start — hidden until auto-start stalls */
   .actions{margin-top:26px;opacity:0;transform:translateY(6px);transition:opacity .4s,transform .4s;pointer-events:none}
   .actions.show{opacity:1;transform:none;pointer-events:auto}
-  .btn{cursor:pointer;border:0;padding:13px 22px;font:700 13px/1 ui-monospace,"SF Mono",Menlo,monospace;
+  .btn{cursor:pointer;border:0;padding:13px 22px;font:700 13px/1 var(--mono);
        letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--blue);
        box-shadow:0 2px 12px rgba(31,92,255,.35);transition:background .2s,transform .06s}
   .btn:hover{background:#1748d6} .btn:active{transform:translateY(1px)}
   .btn[disabled]{opacity:.55;cursor:default;box-shadow:none}
+  .btn:focus-visible,.choice:focus-visible,.link:focus-visible,.reach input:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
   .fallback{margin-top:16px;font-size:14px;color:#8a8a8a}
-  .fallback a{color:var(--blue);text-decoration:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;border-bottom:1px solid var(--blue)}
-  .err{margin-top:14px;font-size:13.5px;color:#b00052;min-height:1.1em;max-width:30em}
-  @media(prefers-reduced-motion:reduce){ .loader .ring,.loader .core{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} }
+  .fallback a{color:var(--blue);text-decoration:none;font-family:var(--mono);border-bottom:1px solid var(--blue)}
+  .err{margin:14px auto 0;font-size:13.5px;color:#b00052;min-height:1.1em;max-width:30em}
+
+  /* first launch: choose a role */
+  .choose{width:min(760px,100%);padding:48px 24px;text-align:left}
+  .eyebrow{font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gray);margin:0 0 10px}
+  .choose .sub{margin:12px 0 28px;max-width:34em}
+  .choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .choice{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:8px;align-content:start;padding:22px 22px 24px;
+          background:var(--card);border:1px solid var(--ink);transition:transform .12s,box-shadow .12s}
+  .choice:hover{transform:translateY(-2px);box-shadow:4px 4px 0 var(--ink)}
+  .choice[aria-pressed="true"]{box-shadow:4px 4px 0 var(--violet);border-color:var(--violet)}
+  .choice .tag{font:700 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+  .choice.node .tag{color:var(--jade)} .choice.commons .tag{color:var(--violet)}
+  .choice strong{font:700 22px/1.2 var(--mono);letter-spacing:-.01em}
+  .choice span.d{color:var(--gray);font-size:15px}
+  .reach{margin-top:30px;border-top:1px solid var(--ink);padding-top:22px;display:grid;gap:12px}
+  .reach h2{font:700 15px var(--mono);margin:0 0 4px}
+  .reach label{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:14px 16px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+  .reach label.off{cursor:default;opacity:.55}
+  .reach input{margin:4px 0 0;accent-color:var(--violet)}
+  .reach b{font-weight:700} .reach small{grid-column:2;color:var(--gray);font-size:14px}
+  .reach code{font:700 13px var(--mono);background:var(--bg);padding:2px 6px;user-select:all}
+  .row{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;margin-top:8px}
+  .btn.violet{background:var(--violet);box-shadow:0 2px 12px rgba(139,63,217,.35)} .btn.violet:hover{background:#7432b8}
+  .link{all:unset;cursor:pointer;font:700 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gray);border-bottom:1px solid currentColor}
+  .note{font-size:13.5px;color:var(--gray);margin:18px 0 0}
+  @media(prefers-reduced-motion:reduce){ .loader .ring,.loader .core{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} .choice{transition:none} }
 </style></head>
 <body>
   <div class="bars"><i class="p"></i><i class="b"></i></div>
-  <div class="box">
+
+  <!-- First launch: what does this computer run? -->
+  <main class="choose" id="chooser" hidden>
+    <p class="eyebrow">Held in Common · first launch</p>
+    <h1>What do you want to run<span class="dot">?</span></h1>
+    <p class="sub">Your choice is saved on this computer. Most people run a node.</p>
+    <div class="choices">
+      <button class="choice node" id="pick-node" type="button" data-role="node">
+        <span class="tag">For most people</span>
+        <strong>A node</strong>
+        <span class="d">Your profile and work live on this computer. You decide what to share, and which commons to share it with.</span>
+      </button>
+      <button class="choice commons" id="pick-commons" type="button" data-role="commons" aria-pressed="false">
+        <span class="tag">For hosts</span>
+        <strong>A commons</strong>
+        <span class="d">A shared directory that people's nodes share to. Run one for a workshop, a class or a collective.</span>
+      </button>
+    </div>
+
+    <section class="reach" id="reach" hidden>
+      <h2>Where will people reach your commons?</h2>
+      <label>
+        <input type="radio" name="reach" id="reach-room" value="room" checked />
+        <b>This room</b>
+        <small id="room-detail">People on the same Wi-Fi or network share to this computer.</small>
+      </label>
+      <label class="off">
+        <input type="radio" name="reach" id="reach-tunnel" value="tunnel" disabled />
+        <b>Online, through a tunnel</b>
+        <small>Coming soon.</small>
+      </label>
+      <label class="off">
+        <input type="radio" name="reach" id="reach-server" value="server" disabled />
+        <b>A server I host</b>
+        <small>Use the Docker image on your server instead of this app. See the install guide.</small>
+      </label>
+      <div class="row">
+        <button class="btn violet" id="start-commons" type="button">Start the commons</button>
+        <button class="link" id="back" type="button">Back</button>
+      </div>
+    </section>
+    <p class="err" id="choose-err" role="alert"></p>
+  </main>
+
+  <!-- Loading: the server is starting -->
+  <div class="box" id="loading" hidden>
     <div class="loader" aria-hidden="true">
       <span class="ring"></span><span class="ring"></span><span class="ring"></span>
       <span class="core"></span>
     </div>
-    <h1>Starting your node<span class="dot">.</span></h1>
+    <h1 id="loading-title">Starting your node<span class="dot">.</span></h1>
     <p class="sub" id="s">Warming up the commons…</p>
     <div class="actions" id="actions">
       <button class="btn" id="start">Start the node</button>
@@ -51,17 +124,20 @@
       <p class="fallback">Still nothing? Open <a href="http://localhost:8080">http://localhost:8080</a> in your browser.</p>
     </div>
   </div>
+
   <script>
     const url = 'http://localhost:8080';
     const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
-    const msgs = ['Warming up the commons…','Minting your keys…','Opening your node…'];
-    const s = document.getElementById('s');
-    const actions = document.getElementById('actions');
-    const startBtn = document.getElementById('start');
-    const err = document.getElementById('err');
-    let n = 0, done = false;
+    const $ = id => document.getElementById(id);
 
-    // Is the node listening? Prefer the host-side command (a fetch to
+    // ---- loading screen -------------------------------------------------
+    const MSGS = {
+      node: ['Warming up the commons…', 'Minting your keys…', 'Opening your node…'],
+      commons: ['Warming up the commons…', 'Opening the directory…', 'Getting ready for visitors…']
+    };
+    let msgs = MSGS.node, n = 0, done = false;
+
+    // Is the server listening? Prefer the host-side command (a fetch to
     // http://localhost from this secure origin is blocked as mixed content). Fall
     // back to fetch when running outside the app (e.g. opened in a browser).
     async function isUp(){
@@ -69,31 +145,80 @@
       try { const r = await fetch(url + '/health', {cache:'no-store'}); return r.ok; } catch(e){ return false; }
     }
 
-    async function startNode(){
-      err.textContent = '';
+    async function restart(){
+      $('err').textContent = '';
       if (!invoke){ location.href = url; return; }
-      startBtn.disabled = true;
-      const was = startBtn.textContent;
-      startBtn.textContent = 'Starting…';
-      s.textContent = 'Starting your node…';
+      const b = $('start'); b.disabled = true;
+      const was = b.textContent; b.textContent = 'Starting…';
+      $('s').textContent = 'Starting…';
       try { await invoke('restart_node'); }
-      catch(e){ err.textContent = (''+e) || 'Could not start the node.'; }
-      setTimeout(() => { startBtn.disabled = false; startBtn.textContent = was; }, 1200);
+      catch(e){ $('err').textContent = ('' + e) || 'Could not start.'; }
+      setTimeout(() => { b.disabled = false; b.textContent = was; }, 1200);
     }
-    startBtn.addEventListener('click', startNode);
+    $('start').addEventListener('click', restart);
 
-    async function go(){
+    async function poll(){
       if (done) return;
       n++;
-      if (n <= msgs.length * 3) s.textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
+      if (n <= msgs.length * 3) $('s').textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
       if (await isUp()){ done = true; location.href = url; return; }
       // ~12s of patience, then reveal the manual Start button + fallback link.
       if (n > 20){
-        s.textContent = 'Taking longer than usual.';
-        actions.classList.add('show');
+        $('s').textContent = 'Taking longer than usual.';
+        $('actions').classList.add('show');
       }
-      setTimeout(go, 600);
+      setTimeout(poll, 600);
     }
-    go();
+
+    function showLoading(role){
+      const what = role === 'commons' ? 'commons' : 'node';
+      msgs = MSGS[what];
+      $('loading-title').firstChild.textContent = 'Starting your ' + what;
+      $('start').textContent = 'Start the ' + what;
+      $('chooser').hidden = true;
+      $('loading').hidden = false;
+      poll();
+    }
+
+    // ---- first launch: choose node or commons ---------------------------
+    async function choose(role, btn){
+      $('choose-err').textContent = '';
+      btn.disabled = true;
+      try { await invoke('choose_role', { role }); showLoading(role); }
+      catch(e){ $('choose-err').textContent = ('' + e) || 'Could not start.'; btn.disabled = false; }
+    }
+
+    function showChooser(lanUrl){
+      if (lanUrl){
+        const d = $('room-detail');
+        d.textContent = 'People on the same Wi-Fi or network share to ';
+        const c = document.createElement('code'); c.textContent = lanUrl; d.appendChild(c);
+      } else {
+        $('room-detail').textContent = "We couldn't find this computer's network address. Connect to Wi-Fi, then reopen the app.";
+        $('start-commons').disabled = true;
+      }
+      $('pick-node').addEventListener('click', e => choose('node', e.currentTarget));
+      $('pick-commons').addEventListener('click', () => {
+        $('pick-commons').setAttribute('aria-pressed', 'true');
+        $('reach').hidden = false;
+        $('reach-room').focus();
+      });
+      $('back').addEventListener('click', () => {
+        $('pick-commons').setAttribute('aria-pressed', 'false');
+        $('reach').hidden = true;
+        $('pick-commons').focus();
+      });
+      $('start-commons').addEventListener('click', e => choose('commons', e.currentTarget));
+      $('chooser').hidden = false;
+    }
+
+    async function init(){
+      // Outside the app (opened in a browser) there is nothing to choose: just wait for the server.
+      if (!invoke){ showLoading('node'); return; }
+      let st = null;
+      try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node' }; }
+      if (st.role) showLoading(st.role); else showChooser(st.lan_url);
+    }
+    init();
   </script>
 </body></html>

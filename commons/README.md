@@ -23,8 +23,11 @@ docker run -d -p 8080:8080 -v hic-node:/data hic-node
 ## Run a shared commons (federation target)
 
 The same binary becomes a **commons** — a shared directory others federate into —
-when `HIC_ROLE=commons` (also auto-inferred when `HIC_INSTANCE` contains
-"commons" or "federated"):
+when `HIC_ROLE=commons`. The role is saved in `instance.json` in the data folder
+the first time it starts, and is fixed for that folder: starting the same folder
+with a different `HIC_ROLE` refuses to run. (Older setups that relied on
+`HIC_INSTANCE` containing "commons" or "federated" still work, with a
+deprecation warning. Set `HIC_ROLE` explicitly.)
 
 ```
 docker run -d --name hic-commons -p 8080:8080 -v hic-commons:/data \
