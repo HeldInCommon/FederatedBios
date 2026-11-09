@@ -327,7 +327,17 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 /* ===================== Federation ===================== */
 .dir-bar.vis-federated { background: var(--violet); }
 .vis-badge.vis-federated { background: var(--violet); }
-.dir-origin { font: 700 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #6a2caf; margin-top: 4px; }
+/* The origin is as prominent as the name: two cards with the same display name
+   still differ by where they came from and which key signed them. */
+.dir-origin { font: 700 13px var(--mono); color: #6a2caf; margin-top: 10px; overflow-wrap: anywhere; }
+.dir-key { font: 400 11px var(--mono); color: var(--gray); margin-top: 2px; }
+.origin-box { border-left: 4px solid var(--violet); padding: 10px 0 10px 16px; margin: 0 0 14px; }
+.origin-line { margin: 0; font-size: 17px; color: var(--ink); overflow-wrap: anywhere; }
+.origin-line a { color: var(--blue); font-weight: 700; }
+.origin-label { color: var(--gray); }
+.origin-key { margin: 6px 0 0; font-size: 14px; }
+.origin-key .mono { font-family: var(--mono); color: var(--ink); }
+.origin-note { margin: 8px 0 0; font-size: 13px; color: var(--gray); max-width: 60ch; }
 .federated-origin { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
 .federated-origin a { color: var(--blue); }
 .owner-panel { margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--line); }

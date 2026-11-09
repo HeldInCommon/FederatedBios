@@ -754,7 +754,12 @@ async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
                         span class="dir-name" { (if r.profile.name.is_empty() { r.handle.clone() } else { r.profile.name.clone() }) }
                         span class="dir-handle" { "@" (r.handle) }
                         @if !r.profile.role.is_empty() { span class="dir-role" { (r.profile.role) } }
-                        span class="dir-origin" { "federated from " (r.origin_label) }
+                        // Where it came from, as prominent as the name: the node's
+                        // address, plus a short key fingerprint — the one part the
+                        // commons checked (the signature). Two cards with the same
+                        // display name still differ here.
+                        span class="dir-origin" { "from " (origin_host(r)) }
+                        span class="dir-key" { "key " (short(&r.ed_pub)) }
                     }
                 }
             }
@@ -966,9 +971,32 @@ async fn join_submit(State(st): State<Shared>, body: String) -> Response {
     if passphrase.chars().count() < 8 {
         return error_page("Please choose a passphrase of at least 8 characters.");
     }
+    // Handles are unique per commons. Ask this node's default commons (if it has
+    // one) before minting keys, so a clash surfaces now rather than at the first
+    // share. If the commons can't be reached we carry on — the node works
+    // offline, and the commons still refuses a clash when the profile is shared.
+    let default = st.share_default.trim().trim_end_matches('/').to_string();
+    if !default.is_empty() {
+        let url = format!("{default}/api/handle/{handle}");
+        let reply = reqwest::Client::new()
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(4))
+            .send()
+            .await;
+        if let Ok(r) = reply {
+            if let Ok(j) = r.json::<serde_json::Value>().await {
+                if j.get("available").and_then(|v| v.as_bool()) == Some(false) {
+                    return error_page(&format!(
+                        "@{handle} is already used on {}. Each commons keeps its handles unique — try another.",
+                        commons_label(&default)
+                    ));
+                }
+            }
+        }
+    }
     let _g = st.write.lock().unwrap();
     if load_handle(&st, &handle).is_some() {
-        return error_page("That handle is taken. Try another.");
+        return error_page("That handle is taken on this node. Try another.");
     }
     let rec = mint_identity(&handle, &display, &passphrase);
     if save_handle(&st, &rec).is_err() {
@@ -1299,6 +1327,10 @@ async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -> Re
             };
             shell("Shared", Some(&handle), body)
         }
+        Ok(r) if r.status() == StatusCode::CONFLICT => error_page(&format!(
+            "@{handle} is already used on {} by someone else. Each commons keeps its handles unique, so this one can't join there — but you can still share it to other commons, or make a new handle for this one.",
+            commons_label(&commons)
+        )),
         Ok(r) => error_page(&format!("That commons rejected the share (HTTP {}). It may not accept federation.", r.status().as_u16())),
         Err(e) => error_page(&format!("Could not reach that commons: {e}")),
     }
@@ -1317,15 +1349,9 @@ async fn inbox(State(st): State<Shared>, body: String) -> Response {
             // sender, so neither can be part of the pin: a node could change
             // either one and claim someone else's handle. (Once reachable-origin
             // verification lands, the pin can widen to a verified handle@origin.)
-            if let Some(local) = load_handle(&st, &entry.handle) {
-                if local.ed_pub != entry.ed_pub {
-                    return (StatusCode::CONFLICT, "that handle belongs to a member of this node").into_response();
-                }
-            }
-            for ex in all_remotes(&st) {
-                if ex.handle == entry.handle && ex.ed_pub != entry.ed_pub {
-                    return (StatusCode::CONFLICT, "handle already federated here under a different key").into_response();
-                }
+            // Handles are unique per commons: same handle, different key -> 409.
+            if handle_taken(&st, &entry.handle, Some(&entry.ed_pub)) {
+                return (StatusCode::CONFLICT, "that handle is already used on this commons by a different key").into_response();
             }
             if save_remote(&st, &entry).is_err() {
                 return (StatusCode::INTERNAL_SERVER_ERROR, "could not store").into_response();
@@ -1360,11 +1386,16 @@ async fn federated_view(State(st): State<Shared>, Path(kid): Path<String>, heade
         }
         section class="profile-meta" {
             (gov_row(&r.license, &r.signals))
-            p class="federated-origin" {
-                "Lives on " strong { (r.origin_label) }
-                @if r.origin.starts_with("http") { " · " a href=(r.origin) { (r.origin) } }
+            div class="origin-box" {
+                p class="origin-line" {
+                    "Shared from "
+                    @if r.origin.starts_with("http") { a href=(r.origin) { (origin_host(&r)) } } @else { strong { (origin_host(&r)) } }
+                    @if !r.origin_label.is_empty() { span class="origin-label" { " — the node calls itself “" (r.origin_label) "”" } }
+                }
+                p class="origin-key" { "Signed by key " span class="mono" { (short(&r.ed_pub)) } }
+                p class="origin-note" { "On this commons, @" (r.handle) " belongs to that key alone. The address and node name are what the node says about itself; the key signature is what this commons checked." }
             }
-            p class="cid" { "Version " span class="mono" { (short(&r.cid)) } " · signed by key " span class="mono" { (short(&r.ed_pub)) } }
+            p class="cid" { "Version " span class="mono" { (short(&r.cid)) } }
         }
     };
     shell(&format!("@{} (federated)", r.handle), me.as_deref(), body)
@@ -1404,6 +1435,26 @@ struct DirEntry {
     cid: String,
     license: String,
     signals: Vec<String>,
+}
+
+/// Is this handle free on this instance? A handle is unique per instance (per
+/// commons), not globally: the same @handle may live on several commons, but on
+/// any one commons it belongs to one key. Nodes call this at sign-up against
+/// their default commons so a clash is caught before anyone builds a profile.
+/// It answers only "taken or not" — the directory already lists public handles.
+async fn api_handle(State(st): State<Shared>, Path(handle): Path<String>) -> Json<serde_json::Value> {
+    let handle = handle.to_lowercase();
+    let taken = handle_taken(&st, &handle, None);
+    Json(serde_json::json!({ "handle": handle, "valid": valid_handle(&handle), "available": valid_handle(&handle) && !taken }))
+}
+
+/// True when `handle` is held here by a local member or a federated profile —
+/// ignoring the holder whose ed25519 key is `except_key` (so a key may re-share
+/// its own handle).
+fn handle_taken(st: &AppState, handle: &str, except_key: Option<&str>) -> bool {
+    let other = |k: &str| except_key.map_or(true, |e| e != k);
+    load_handle(st, handle).map_or(false, |l| other(&l.ed_pub))
+        || all_remotes(st).iter().any(|r| r.handle == handle && other(&r.ed_pub))
 }
 
 async fn api_directory(State(st): State<Shared>) -> Json<Vec<DirEntry>> {
@@ -1546,6 +1597,12 @@ async fn ap_outbox(State(st): State<Shared>, Path(handle): Path<String>) -> Resp
 // Misc
 // ---------------------------------------------------------------------------
 
+/// The host a federated profile says it came from (falls back to the node's
+/// own label when it sent no usable address).
+fn origin_host(r: &RemoteEntry) -> String {
+    if r.origin.starts_with("http") { commons_label(&r.origin) } else { r.origin_label.clone() }
+}
+
 fn short(cid: &str) -> String {
     cid.chars().take(12).collect()
 }
@@ -1645,6 +1702,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/api/directory", get(api_directory))
         .route("/api/@{handle}", get(api_profile))
+        .route("/api/handle/{handle}", get(api_handle))
         .route("/.well-known/webfinger", get(webfinger))
         .route("/ap/@{handle}", get(ap_actor))
         .route("/ap/@{handle}/outbox", get(ap_outbox))
