@@ -87,11 +87,42 @@ at `https://heldincommon.github.io/FederatedBios/architecture.html`.
 
 ---
 
-## 6. Later — signed builds
+## 6. macOS signing
 
-When ready to sign (removes the "unsigned app" warnings):
-- **macOS:** add repo secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
-  `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, then
-  re-enable the signing env in `desktop-app.yml` (it was removed because empty
-  secrets broke `codesign`).
-- **Windows:** add a code-signing cert + a sign step.
+macOS builds from `desktop-app.yml` are signed with a **Developer ID
+Application** certificate and notarized by Apple. The six secrets live in the
+GitHub environment **`macos-signing`** (Settings → Environments), which only
+`main` and `node-app-v*` tags can use, so a workflow pushed to another branch
+cannot read them. If any secret is missing, the macOS job fails instead of
+publishing an unsigned build.
+
+Set them from **your own Terminal** (not a shared screen or chat), with the
+`gh` CLI signed in as a repo admin:
+
+1. **Export the certificate.** Keychain Access → *login* → *My Certificates* →
+   expand **Developer ID Application: … (TEAMID)** to check a private key sits
+   under it → right-click the certificate → **Export…** → save as `.p12` with a
+   strong password.
+2. **Make an app-specific password** at account.apple.com → Sign-In and
+   Security → App-Specific Passwords (label it e.g. `hic-github`).
+3. **Add the secrets** (each `gh secret set` without `--body` asks for the
+   value with hidden input):
+   ```bash
+   R=HeldInCommon/FederatedBios
+   base64 -i ~/Desktop/hic-developer-id.p12 | gh secret set APPLE_CERTIFICATE --repo $R --env macos-signing
+   gh secret set APPLE_CERTIFICATE_PASSWORD --repo $R --env macos-signing
+   gh secret set APPLE_PASSWORD             --repo $R --env macos-signing
+   gh secret set APPLE_ID                   --repo $R --env macos-signing
+   gh secret set APPLE_TEAM_ID              --repo $R --env macos-signing
+   gh secret set APPLE_SIGNING_IDENTITY     --repo $R --env macos-signing
+   ```
+   `APPLE_SIGNING_IDENTITY` is the full name shown by
+   `security find-identity -v -p codesigning` (e.g. `Developer ID Application: NAME (TEAMID)`).
+4. **Delete the `.p12`** from your disk once the secrets are set.
+5. **Run a build:** Actions → desktop-app → Run workflow (on `main`), or push a
+   `node-app-v*` tag. The last macOS step checks the signature and notarization
+   and replaces `Held-In-Common-macOS-AppleSilicon.dmg` on the release.
+
+When the certificate expires or is revoked, repeat steps 1, 3 and 4.
+
+**Windows:** not signed yet; needs a code-signing certificate and a sign step.

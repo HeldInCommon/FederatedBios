@@ -1,16 +1,20 @@
-# Builds the native node app for macOS / Windows / Linux and attaches
-# installers to the 'node-app-preview' prerelease.
+# Builds the native node app for macOS and Linux and attaches installers to the
+# 'node-app-preview' prerelease.
 #
-# macOS builds are SIGNED + NOTARIZED when these repo secrets are present
-# (Settings -> Secrets and variables -> Actions):
+# macOS builds are SIGNED with a Developer ID Application certificate and
+# NOTARIZED by Apple, so the .dmg opens normally (no "disk is damaged" step).
+# The signing secrets live in the protected GitHub environment `macos-signing`
+# (Settings -> Environments), which only `main` and `node-app-v*` tags may use,
+# so a workflow on any other branch cannot read them. Six secrets, all required:
 #   APPLE_CERTIFICATE          base64 of the Developer ID Application .p12
-#   APPLE_CERTIFICATE_PASSWORD password used when exporting that .p12
+#   APPLE_CERTIFICATE_PASSWORD the password chosen when exporting that .p12
 #   APPLE_SIGNING_IDENTITY     "Developer ID Application: NAME (TEAMID)"
-#   APPLE_ID                   an Apple ID that is a member of the signing team
+#   APPLE_ID                   the Apple ID of the account that owns the cert
 #   APPLE_PASSWORD             an app-specific password for that Apple ID
-#   APPLE_TEAM_ID              the 10-char Team ID (e.g. University of the Arts London's)
-# If the secrets are absent the build still runs but stays unsigned (tauri-action
-# skips signing when APPLE_CERTIFICATE is empty) — so add ALL SIX together.
+#   APPLE_TEAM_ID              the 10-character Team ID
+# How to create and add them: docs/MAINTAINER.md, "macOS signing".
+# If any are missing the macOS job stops with an error rather than publishing
+# an unsigned build under a release that says it is notarized.
 # Windows signing is a follow-up (needs a code-signing cert + a sign step).
 name: desktop-app
 on:
@@ -21,6 +25,7 @@ permissions:
   contents: write
 jobs:
   build:
+    environment: macos-signing
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +61,37 @@ jobs:
           else
             cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
           fi
+      # The tauri bundler signs whenever APPLE_CERTIFICATE is *defined*, even
+      # empty, so the APPLE_* variables are only exported once all six are known
+      # to be present. (An empty/bad cert once broke every macOS build.)
+      - name: Turn on macOS signing + notarization
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          C: ${{ secrets.APPLE_CERTIFICATE }}
+          CP: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SI: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          AI: ${{ secrets.APPLE_ID }}
+          AP: ${{ secrets.APPLE_PASSWORD }}
+          TI: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for v in C:APPLE_CERTIFICATE CP:APPLE_CERTIFICATE_PASSWORD SI:APPLE_SIGNING_IDENTITY AI:APPLE_ID AP:APPLE_PASSWORD TI:APPLE_TEAM_ID; do
+            short="${v%%:*}"
+            [ -n "${!short}" ] || missing="$missing ${v#*:}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::macOS signing secrets missing from the macos-signing environment:$missing"
+            exit 1
+          fi
+          {
+            echo "APPLE_CERTIFICATE<<EOF_CERT"; echo "$C"; echo "EOF_CERT"
+            echo "APPLE_CERTIFICATE_PASSWORD=$CP"
+            echo "APPLE_SIGNING_IDENTITY=$SI"
+            echo "APPLE_ID=$AI"
+            echo "APPLE_PASSWORD=$AP"
+            echo "APPLE_TEAM_ID=$TI"
+          } >> "$GITHUB_ENV"
       - name: Build + release the desktop app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -64,19 +100,11 @@ jobs:
           # src-tauri/src/lib.rs), so downloaded apps pre-fill "Share to a commons".
           # Set as a repo/org Actions variable, NOT in source.
           HIC_SHARE_DEFAULT: ${{ vars.HIC_SHARE_DEFAULT }}
-          # NOTE: builds are intentionally UNSIGNED so the .dmg + Linux installers
-          # always build and are usable straight from the release (macOS users run
-          # `xattr -c` once — see docs/INSTALL.md). Do NOT add APPLE_* env vars here
-          # until a real Developer ID Application cert exists: the tauri bundler
-          # signs whenever APPLE_CERTIFICATE is *defined* (even empty), and the bad
-          # org-inherited cert makes `security import` fail the whole macOS build.
-          # To enable signing later, re-add the APPLE_* vars AND provide a valid
-          # Developer ID .p12 — see .github/workflows/README or git history.
+          # APPLE_* come from the signing step above via $GITHUB_ENV (macOS only).
         with:
           tagName: node-app-preview
           releaseName: "Held In Common"
-          # Kept here (not just hand-edited on the release) so each CI run re-applies
-          # it instead of clobbering the macOS one-paste install instructions.
+          # Kept here (not just hand-edited on the release) so each CI run re-applies it.
           releaseBody: |
             **Held in Common — the desktop node app.** Download the file for your computer, open it, and you're running your own node.
 
@@ -87,19 +115,25 @@ jobs:
             | Linux — any distro | `Held-In-Common-Linux.AppImage` |
             | Linux — Fedora / RHEL | `Held-In-Common-Linux.rpm` |
 
-            These builds are **unsigned** (notarization is on the roadmap).
-
-            ### macOS — if you see "disk is damaged — move to Trash"
-
-            The download is fine; macOS just quarantines apps that aren't notarized yet. **Paste this one line into Terminal** — it clears the quarantine, installs the app to **Applications**, and launches it (no dragging):
-
-            ```bash
-            D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"
-            ```
-
+            - **macOS:** the app is signed and notarized by Apple. Open the `.dmg`, drag **Held In Common** into **Applications**, and open it.
             - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (Install `libfuse2` if it won't start.)
             - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
             - Full guide: `docs/INSTALL.md`.
 
             _This is a rolling preview — assets are replaced in place with each new build._
           prerelease: true
+      # Check Apple accepted it, then publish the .dmg under the stable name the
+      # install guide links to (replacing the old unsigned one).
+      - name: Verify notarization and publish the stable .dmg name
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APP=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
+          DMG=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
+          cp "$DMG" Held-In-Common-macOS-AppleSilicon.dmg
+          gh release upload node-app-preview Held-In-Common-macOS-AppleSilicon.dmg --clobber
