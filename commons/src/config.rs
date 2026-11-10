@@ -29,6 +29,9 @@ pub struct Config {
     /// and echoed by `/health`, so the app can tell its own server from any
     /// other program on the same port. Not a secret: it only identifies.
     pub launch_token: Option<String>,
+    /// `HIC_ALLOW_PRIVATE_SHARE=1`: a node reachable from the network may
+    /// still share to local-network addresses (see [`crate::outbound`]).
+    pub allow_private_share: bool,
 }
 
 impl Config {
@@ -47,6 +50,7 @@ impl Config {
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
+            allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
         }
     }
 

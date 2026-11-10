@@ -19,7 +19,7 @@ use crate::passphrase::{self, Check};
 use crate::sessions::{self, Session};
 use crate::web::layout::{error_page, not_found, redirect, redirect_with, render, server_error, Page};
 use crate::web::pages::{self, Card, OwnerPanel};
-use crate::{backup, handle, keys, now};
+use crate::{backup, handle, keys, now, outbound};
 
 /// Largest accepted profile picture, as a data URI, in bytes.
 const AVATAR_MAX: usize = 600_000;
@@ -394,13 +394,7 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     }
     let activity =
         federation::build_share(&Sender { base_url: &st.config.base_url, instance: &st.site.instance }, &rec, &v);
-    let sent = st
-        .http
-        .post(format!("{commons}/inbox"))
-        .json(&activity)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await;
+    let sent = post_to_commons(&st, &commons, &activity).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
@@ -424,8 +418,26 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
             &st.site,
             &format!("That commons rejected the share (HTTP {}). It may not accept federation.", r.status().as_u16()),
         ),
-        Err(e) => error_page(&st.site, &format!("Could not reach that commons: {e}")),
+        Err(e) => error_page(&st.site, &e),
     }
+}
+
+/// POST `body` to a commons' `/inbox`, checking first that this server may
+/// contact that address (see [`crate::outbound`]). Errors are messages for
+/// the member.
+async fn post_to_commons(st: &AppState, commons: &str, body: &serde_json::Value) -> Result<reqwest::Response, String> {
+    let policy = outbound::Policy {
+        personal: st.config.bind_addr(st.site.role).is_loopback(),
+        allow_private: st.config.allow_private_share,
+    };
+    let client = outbound::client_for(commons, policy).await?;
+    client
+        .post(format!("{commons}/inbox"))
+        .json(body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach that commons: {e}"))
 }
 
 /// Add `commons` to the member's list of commons shared to.
@@ -524,13 +536,7 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
         Ok(m) => m,
         Err(e) => return server_error(&st.site, &format!("@{h}: {e}")),
     };
-    let sent = st
-        .http
-        .post(format!("{commons}/inbox"))
-        .json(&message)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await;
+    let sent = post_to_commons(&st, &commons, &message).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
@@ -541,7 +547,7 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
             let why = r.text().await.unwrap_or_default();
             error_page(&st.site, &format!("{label} didn't accept the withdrawal: {why}"))
         }
-        Err(e) => error_page(&st.site, &format!("Could not reach that commons: {e}")),
+        Err(e) => error_page(&st.site, &e),
     }
 }
 
