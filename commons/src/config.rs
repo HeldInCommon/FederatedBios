@@ -32,6 +32,11 @@ pub struct Config {
     /// `HIC_ALLOW_PRIVATE_SHARE=1`: a node reachable from the network may
     /// still share to local-network addresses (see [`crate::outbound`]).
     pub allow_private_share: bool,
+    /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
+    pub open_commons: bool,
+    /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
+    /// steward (today, whoever hosts the commons) sets it. Default 5.
+    pub vouch_limit: u32,
 }
 
 impl Config {
@@ -51,6 +56,10 @@ impl Config {
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
+            open_commons: get("HIC_OPEN_COMMONS").is_some_and(|v| v.trim() == "1"),
+            vouch_limit: get("HIC_VOUCH_LIMIT")
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(crate::vouching::DEFAULT_LIMIT),
         }
     }
 

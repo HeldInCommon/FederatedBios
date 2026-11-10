@@ -18,10 +18,11 @@ use crate::federation::{self, Admission, Holders, Sender};
 use crate::form::Form;
 use crate::governance::{license_from_form, signals_from_form, DEFAULT_LICENSE};
 use crate::identity::Identity;
-use crate::model::{HandleRec, Place, Profile, Reach, Version};
+use crate::model::{HandleRec, PendingShare, Place, Profile, Reach, RemoteEntry, Version};
 use crate::passphrase::{self, Check};
 use crate::publishing::{self, Draft};
 use crate::sessions::{self, Session};
+use crate::vouching::{self, Intro};
 use crate::web::layout::{error_page, not_found, redirect, redirect_with, render, server_error, Page};
 use crate::web::pages::{self, Card, OwnerPanel};
 use crate::{backup, handle, identity, keys, now, outbound};
@@ -85,7 +86,11 @@ pub fn profile_from_form(f: &Form) -> Profile {
 // ---------------------------------------------------------------------------
 
 /// `GET /` — the directory.
-pub async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
+pub async fn directory(
+    State(st): State<Shared>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+) -> Response {
     let me = session(&st, &headers).map(|s| s.handle);
     let mut cards = Vec::new();
     for rec in st.store.handles() {
@@ -104,7 +109,12 @@ pub async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response
         cards.push(Card { rec, version });
     }
     let remotes = st.store.remotes();
-    render(&st.site, Page::new("Directory", me.as_deref(), pages::directory(&st.site, &cards, &remotes)))
+    let pending = if st.site.is_commons() { st.store.pending() } else { Vec::new() };
+    // The founding invite is shown only to someone at this computer.
+    let local_viewer = peer.is_some_and(|Extension(ConnectInfo(a))| a.ip().is_loopback());
+    let founding = if st.site.is_commons() && local_viewer { st.store.founding_code().ok().flatten() } else { None };
+    let body = pages::directory(&st.site, &cards, &remotes, &pending, founding.as_deref());
+    render(&st.site, Page::new("Directory", me.as_deref(), body))
 }
 
 /// `GET /@{handle}` — a member's profile.
@@ -382,12 +392,20 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if v.reach() == Reach::Members {
         return error_page(&st.site, "Members-only profiles stay on your node — they are never shared.");
     }
-    let sent = send_share(&st, &commons, &rec, &v).await;
+    let invite = f.one("invite");
+    let sent = send_share(&st, &commons, &rec, &v, Some(&invite)).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
             remember_shared_to(&st, &h, &commons);
-            render(&st.site, Page::new("Shared", Some(&h), pages::shared(&h, &commons)))
+            let pending = r.text().await.unwrap_or_default().starts_with("pending");
+            let body =
+                if pending { pages::shared_pending(&h, &commons, &rec.ed_pub) } else { pages::shared(&h, &commons) };
+            render(&st.site, Page::new("Shared", Some(&h), body))
+        }
+        Ok(r) if r.status() == StatusCode::FORBIDDEN => {
+            let why = r.text().await.unwrap_or_default();
+            error_page(&st.site, &format!("{label} didn't accept the invite code: {why}"))
         }
         Ok(r) if r.status() == StatusCode::CONFLICT => {
             let reason = r.text().await.unwrap_or_default();
@@ -440,12 +458,20 @@ pub(crate) async fn send_share(
     commons: &str,
     rec: &HandleRec,
     v: &Version,
+    invite: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     let sender = Sender { base_url: &st.config.base_url, instance: &st.site.instance };
-    let v1 = federation::build_share_v1(&sender, rec, v)?;
+    // An invite code, if the member has one, travels alongside (decision record 0011).
+    let with_invite = |mut m: serde_json::Value| {
+        if let Some(code) = invite.filter(|c| !c.trim().is_empty()) {
+            m["invite"] = serde_json::json!(code.trim());
+        }
+        m
+    };
+    let v1 = with_invite(federation::build_share_v1(&sender, rec, v)?);
     let r = post_to_commons(st, commons, &v1).await?;
     if r.status() == StatusCode::BAD_REQUEST {
-        return post_to_commons(st, commons, &federation::build_share(&sender, rec, v)).await;
+        return post_to_commons(st, commons, &with_invite(federation::build_share(&sender, rec, v))).await;
     }
     Ok(r)
 }
@@ -524,23 +550,156 @@ pub async fn inbox(
             "this commons already holds a newer version from this key, or a later withdrawal",
         ),
         Admission::Accept => {
-            // Record who holds the handle, and the recovery key if one came along.
-            let mut id = existing.unwrap_or_else(|| Identity::new(&entry.handle, &entry.ed_pub, &entry.box_pub));
-            if id.recovery_key.is_none() {
-                if let Some(decl) =
-                    activity.get("recovery").and_then(|d| serde_json::from_value::<Signed>(d.clone()).ok())
-                {
-                    if let Ok(next) = identity::apply(&id, &decl, now()) {
-                        id = next;
-                    }
-                }
+            let returning = existing.is_some()
+                || held.iter().any(|r| r.ed_pub == entry.ed_pub)
+                || withdrawn.iter().any(|t| t.ed_pub == entry.ed_pub);
+            if returning || st.config.open_commons {
+                return list_entry(&st, &entry, &activity, existing, None);
             }
-            match st.store.save_remote(&entry).and_then(|_| st.store.save_identity(&id)) {
-                Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
-                Err(e) => store_failed(&e),
+            admit_newcomer(&st, &entry, &activity, &held)
+        }
+    }
+}
+
+/// A new handle on a commons that needs vouching (decision record 0011):
+/// list it with a valid invite or the founding invite, otherwise put it on
+/// the pending list until a member vouches for it.
+fn admit_newcomer(st: &AppState, entry: &RemoteEntry, message: &serde_json::Value, held: &[RemoteEntry]) -> Response {
+    let code = message.get("invite").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    if code.is_empty() {
+        let pending = PendingShare { entry: entry.clone(), message: message.clone() };
+        return match st.store.save_pending(&pending) {
+            Ok(()) => {
+                reply(StatusCode::ACCEPTED, "pending: this commons lists newcomers once a member vouches for them")
+            }
+            Err(e) => store_failed(&e),
+        };
+    }
+    let intro = |route: &str, voucher: Option<String>, proof: Option<Signed>| Intro {
+        handle: entry.handle.clone(),
+        key: entry.ed_pub.clone(),
+        route: route.into(),
+        voucher,
+        at: now(),
+        proof,
+    };
+    if code.starts_with(vouching::FOUNDING_PREFIX) {
+        let stored = match st.store.founding_code() {
+            Ok(c) => c,
+            Err(e) => return store_failed(&e),
+        };
+        if !vouching::founding_matches(&code, stored.as_deref()) {
+            return reply(
+                StatusCode::FORBIDDEN,
+                "that founding invite isn't valid here (it may already have been used)",
+            );
+        }
+        if let Err(e) = st.store.use_founding_code() {
+            return store_failed(&e);
+        }
+        return list_entry(st, entry, message, None, Some(intro("founding", None, None)));
+    }
+    let Some(invite) = vouching::code_to_invite(&code) else {
+        return reply(StatusCode::FORBIDDEN, "that isn't an invite code");
+    };
+    let (members, used, intros) = (member_keys(held), st.store.used_codes(), st.store.intros());
+    let ctx = vouch_ctx(st, &members, &used, &intros);
+    match vouching::check_invite(&invite, &ctx) {
+        Ok((voucher, code_id)) => {
+            if let Err(e) = st.store.mark_code_used(&code_id, now()) {
+                return store_failed(&e);
+            }
+            list_entry(st, entry, message, None, Some(intro("invite", Some(voucher), Some(invite))))
+        }
+        Err(e) => reply(StatusCode::FORBIDDEN, &e),
+    }
+}
+
+/// The keys of everyone listed on this commons: who may vouch.
+fn member_keys(held: &[RemoteEntry]) -> Vec<String> {
+    held.iter().map(|r| r.ed_pub.clone()).collect()
+}
+
+/// What the vouching rules need to know about this commons.
+fn vouch_ctx<'a>(
+    st: &'a AppState,
+    members: &'a [String],
+    used: &'a [String],
+    intros: &'a [Intro],
+) -> vouching::Ctx<'a> {
+    vouching::Ctx {
+        my_url: &st.config.base_url,
+        now: now(),
+        member_keys: members,
+        used_codes: used,
+        intros,
+        limit: st.config.vouch_limit,
+    }
+}
+
+/// List a share: save it, record who holds the handle (and the recovery key
+/// if one came along), record how they joined, and clear any pending copy.
+fn list_entry(
+    st: &AppState,
+    entry: &RemoteEntry,
+    message: &serde_json::Value,
+    existing: Option<Identity>,
+    intro: Option<Intro>,
+) -> Response {
+    let mut id = existing.unwrap_or_else(|| Identity::new(&entry.handle, &entry.ed_pub, &entry.box_pub));
+    if id.recovery_key.is_none() {
+        if let Some(decl) = message.get("recovery").and_then(|d| serde_json::from_value::<Signed>(d.clone()).ok()) {
+            if let Ok(next) = identity::apply(&id, &decl, now()) {
+                id = next;
             }
         }
     }
+    let saved = st
+        .store
+        .save_remote(entry)
+        .and_then(|_| st.store.save_identity(&id))
+        .and_then(|_| intro.as_ref().map_or(Ok(()), |i| st.store.save_intro(i)))
+        .and_then(|_| st.store.delete_pending(&entry.ed_pub));
+    match saved {
+        Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
+        Err(e) => store_failed(&e),
+    }
+}
+
+/// A member vouches for someone on the pending list.
+fn receive_vouch(st: &AppState, vouch: Signed) -> Response {
+    let body = &vouch.envelope.body;
+    let (Some(h), Some(key)) = (body.get("handle").and_then(|v| v.as_str()), body.get("key").and_then(|v| v.as_str()))
+    else {
+        return reply(StatusCode::BAD_REQUEST, "rejected: a vouch names a handle and a key");
+    };
+    let _g = st.write.lock().unwrap();
+    let Some(waiting) = st.store.pending().into_iter().find(|p| p.entry.handle == h && p.entry.ed_pub == key) else {
+        return reply(StatusCode::NOT_FOUND, "nobody by that handle and key is waiting here");
+    };
+    let held = st.store.remotes();
+    let (members, used, intros) = (member_keys(&held), st.store.used_codes(), st.store.intros());
+    let voucher = match vouching::check_vouch(&vouch, h, key, &vouch_ctx(st, &members, &used, &intros)) {
+        Ok(v) => v,
+        Err(e) => return reply(StatusCode::FORBIDDEN, &e),
+    };
+    // Someone else may have taken the handle while this share waited.
+    let withdrawn = st.store.tombstones();
+    let claimed = st.store.identity(h).ok().flatten().map(|i| i.key);
+    let holders = Holders { local: None, held: &held, withdrawn: &withdrawn, claimed: claimed.as_deref() };
+    if federation::admit(&waiting.entry, &holders) != Admission::Accept {
+        let _ = st.store.delete_pending(key);
+        return reply(StatusCode::CONFLICT, "that handle was taken while this share was waiting");
+    }
+    let intro = Intro {
+        handle: h.into(),
+        key: key.into(),
+        route: "vouch".into(),
+        voucher: Some(voucher),
+        at: now(),
+        proof: Some(vouch.clone()),
+    };
+    list_entry(st, &waiting.entry, &waiting.message, None, Some(intro))
 }
 
 /// Apply a signed identity change (a `RecoveryKey`, `KeyRotation` or
@@ -550,6 +709,9 @@ fn receive_identity_change(st: &AppState, activity: &serde_json::Value) -> Respo
     let Ok(change) = serde_json::from_value::<Signed>(activity.clone()) else {
         return reply(StatusCode::BAD_REQUEST, "rejected: not a signed object");
     };
+    if change.envelope.kind == vouching::VOUCH {
+        return receive_vouch(st, change);
+    }
     let Some(h) = change.envelope.body.get("handle").and_then(|v| v.as_str()).map(String::from) else {
         return reply(StatusCode::BAD_REQUEST, "rejected: missing handle");
     };

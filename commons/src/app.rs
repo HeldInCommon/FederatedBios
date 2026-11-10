@@ -18,7 +18,7 @@ use crate::role::Role;
 use crate::sessions::{AttemptLimiter, Sessions};
 use crate::store::Store;
 use crate::web::layout::Site;
-use crate::web::{self, account, handlers};
+use crate::web::{self, account, handlers, membership};
 use crate::{api, web::ROBOTS_TXT};
 
 /// Everything a request handler can reach.
@@ -111,6 +111,8 @@ pub fn router(state: Shared) -> Router {
         .route("/recovery/new", post(account::recovery_new))
         .route("/rotate", post(account::rotate))
         .route("/recover", post(account::recover))
+        .route("/invite", post(membership::invite))
+        .route("/vouch", post(membership::vouch))
         .route("/backup", post(handlers::backup))
         .route("/restore", get(handlers::restore_form).post(handlers::restore_submit))
         .route("/@{handle}", get(handlers::profile))
@@ -121,6 +123,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/directory", get(api::directory))
         .route("/api/@{handle}", get(api::profile))
         .route("/api/handle/{handle}", get(api::handle_available))
+        .route("/api/pending", get(api::pending))
         .route("/.well-known/webfinger", get(api::webfinger))
         .route("/ap/@{handle}", get(api::actor))
         .route("/ap/@{handle}/outbox", get(api::outbox))

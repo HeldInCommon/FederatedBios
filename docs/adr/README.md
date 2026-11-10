@@ -24,7 +24,7 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0008](0008-app-trusts-only-its-server.md) | The desktop app only shows its own server | Accepted | 2026-11-10 |
 | [0009](0009-signed-format-specification.md) | A written specification for everything we sign | Accepted (built for new types) | 2026-11-10 |
 | [0010](0010-recovery-key.md) | A recovery key, made at sign-up and kept offline | Accepted (built) | 2026-11-10 |
-| [0011](0011-joining-needs-a-vouch.md) | Joining a commons needs a vouch | Accepted, to design in detail | 2026-11-10 |
+| [0011](0011-joining-needs-a-vouch.md) | Joining a commons needs a vouch | Accepted (details decided) | 2026-11-10 |
 | [0012](0012-block-internal-addresses-on-share.md) | Sharing can't be aimed at internal addresses | Accepted (built) | 2026-11-10 |
 | [0013](0013-google-fonts.md) | Pages keep loading Google Fonts | Accepted | 2026-11-10 |
 | [0014](0014-automatic-updates.md) | Automatic app updates | Deferred (on the to-do list) | 2026-11-10 |

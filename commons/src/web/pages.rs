@@ -8,7 +8,7 @@ use maud::{html, Markup};
 use crate::canonical::short;
 use crate::governance::{LICENSES, SIGNALS};
 use crate::keys::keyid;
-use crate::model::{display_name_or_handle, HandleRec, Profile, Reach, RemoteEntry, Version};
+use crate::model::{display_name_or_handle, HandleRec, PendingShare, Profile, Reach, RemoteEntry, Version};
 use crate::web::layout::{gov_row, host_label, reach_badge, reach_bar_class, Site};
 
 /// Where the "Get the app" button points.
@@ -49,8 +49,15 @@ pub struct Card {
 }
 
 /// The directory: shared-in profiles first, then this server's members.
-pub fn directory(site: &Site, cards: &[Card], remotes: &[RemoteEntry]) -> Markup {
+pub fn directory(
+    site: &Site,
+    cards: &[Card],
+    remotes: &[RemoteEntry],
+    pending: &[PendingShare],
+    founding: Option<&str>,
+) -> Markup {
     html! {
+        @if let Some(code) = founding { (founding_box(code)) }
         header class="intro" {
             h1 { "The commons" }
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }
@@ -99,11 +106,39 @@ pub fn directory(site: &Site, cards: &[Card], remotes: &[RemoteEntry]) -> Markup
                 }
             }
         }
+        @if !pending.is_empty() { (pending_list(pending)) }
         div class="actions" {
             @if site.is_commons() {
                 a class="primary" href="/join" { "Run a node to join" }
             } @else {
                 a class="primary" href="/join" { "Add your profile" }
+            }
+        }
+    }
+}
+
+/// Shown only to someone at the commons' own computer, until it's used.
+fn founding_box(code: &str) -> Markup {
+    html! {
+        section class="recovery steward" {
+            h2 class="field-label" { "You're the steward of this commons" }
+            p { "Nobody is listed yet, so the first person needs this founding invite. Give it to them (it can be you); they paste it into " strong { "Invite code" } " when they share from their node. It works once." }
+            p class="recovery-code mono" { (code) }
+            p class="hint" { "Only someone at this computer sees this box. After the first person joins, members bring others in with invites or vouches." }
+        }
+    }
+}
+
+/// Shares waiting for a vouch: enough for a member to recognise who's asking.
+fn pending_list(pending: &[PendingShare]) -> Markup {
+    html! {
+        section class="pending" {
+            h2 class="section-h" { "Waiting for a vouch" }
+            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from their own node (under " strong { "Vouch for someone" } "), using the handle and key shown here." }
+            ul class="pending-list" {
+                @for p in pending {
+                    li { strong { "@" (p.entry.handle) } " · key " span class="mono" { (short(&p.entry.ed_pub)) } " · from " (origin_host(&p.entry)) }
+                }
             }
         }
     }
@@ -225,13 +260,17 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
                                 input name="commons_url" type="url" placeholder="https://commons.example";
                                 button class="secondary" type="submit" { "Share" }
                             }
+                            div class="share-row" {
+                                input name="invite" type="text" placeholder="Invite code (if someone there gave you one)" autocomplete="off";
+                            }
+                            p class="hint" { "A commons lists newcomers once someone there vouches for them. With an invite code you're listed straight away; without one, you wait until a member vouches for you." }
                         }
                     }
                 }
             }
             // Shown whatever the current reach: someone who narrows a profile
             // to members-only may also want the shared copies gone.
-            @if !o.shared_to.is_empty() { (withdraw_panel(handle, o)) }
+            @if !o.shared_to.is_empty() { (withdraw_panel(handle, o)) (vouch_panel(handle, o)) }
             (backup_panel(handle, &o.csrf))
             (keys_panel(handle, o))
         }
@@ -254,7 +293,33 @@ fn withdraw_panel(handle: &str, o: &OwnerPanel) -> Markup {
                             span class="commons-meta" { span class="commons-name" { (host_label(c)) } }
                             button class="secondary" type="submit" { "Withdraw" }
                         }
+                        form method="post" action="/invite" class="commons-share" {
+                            input type="hidden" name="handle" value=(handle);
+                            input type="hidden" name="csrf" value=(o.csrf);
+                            input type="hidden" name="commons_url" value=(c);
+                            button class="secondary" type="submit" { "Invite someone" }
+                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Vouch for someone waiting on a commons this member is listed on.
+fn vouch_panel(handle: &str, o: &OwnerPanel) -> Markup {
+    html! {
+        section class="share-panel vouch-panel" {
+            h2 class="field-label" { "Vouch for someone" }
+            p class="hint" { "Someone you know is waiting to be listed on a commons? Its page shows them under " strong { "Waiting for a vouch" } ". Enter their handle and the key shown there. Only vouch for people you actually know." }
+            form method="post" action="/vouch" class="share-form" {
+                input type="hidden" name="handle" value=(handle);
+                input type="hidden" name="csrf" value=(o.csrf);
+                div class="share-row" {
+                    select name="commons_url" { @for c in &o.shared_to { option value=(c) { (host_label(c)) } } }
+                    input name="who" type="text" placeholder="their handle" required;
+                    input name="key" type="text" placeholder="their key (first 12 characters)" required autocomplete="off";
+                    button class="secondary" type="submit" { "Vouch" }
                 }
             }
         }
@@ -379,6 +444,46 @@ pub fn restore_form() -> Markup {
             }
             div class="actions" { button class="primary" type="submit" { "Restore" } }
         }
+    }
+}
+
+/// After sharing to a commons that lists newcomers only once vouched for.
+pub fn shared_pending(handle: &str, commons: &str, key: &str) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Waiting for a vouch" }
+            p class="lede" { (host_label(commons)) " has your signed profile, and will list it once a member vouches for you." }
+        }
+        p { "Ask someone you know there to vouch for you from their node. They'll need your handle and key:" }
+        p class="recovery-code mono" { "@" (handle) " · " (short(key)) }
+        p class="hint" { "Or, if someone gives you an invite code, share again with the code." }
+        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
+    }
+}
+
+/// A new invite code to hand to someone.
+pub fn invite_code(handle: &str, commons_label: &str, code: &str, days: u64) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Invite code" }
+            p class="lede" { "Give this to the person you're inviting to " (commons_label) ". They paste it into " strong { "Invite code" } " when they first share there, and are listed straight away." }
+        }
+        section class="recovery" {
+            textarea class="recovery-code mono" readonly rows="6" { (code) }
+            p class="hint" { "It works once, for " (days) " days, and says that @" (handle) " vouched for them." }
+        }
+        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
+    }
+}
+
+/// After vouching for someone.
+pub fn vouched(handle: &str, who: &str, commons_label: &str) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Vouched" }
+            p class="lede" { "@" (who) " is now listed on " (commons_label) ", with a record that you vouched for them." }
+        }
+        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
 }
 

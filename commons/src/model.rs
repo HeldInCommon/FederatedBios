@@ -232,6 +232,16 @@ pub struct Tombstone {
     pub withdrawn_at: u64,
 }
 
+/// A share waiting on a commons' pending list for a member to vouch for it.
+/// Lives in `pending/<keyid>.json`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PendingShare {
+    /// The verified share, as it would be listed.
+    pub entry: RemoteEntry,
+    /// The message as received (it may carry a recovery-key declaration).
+    pub message: serde_json::Value,
+}
+
 /// The name shown for a profile: the chosen name, or the handle if blank.
 pub fn display_name_or_handle(profile_name: &str, handle: &str) -> String {
     if profile_name.is_empty() {

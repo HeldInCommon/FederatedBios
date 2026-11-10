@@ -154,10 +154,26 @@ newer than the one it holds for that key, and keeps the signed object as
 proof. A node that gets HTTP 400 from a commons SHOULD retry in version 0, so
 sharing keeps working while commons are upgraded.
 
-### 5.3 Planned
+### 5.3 Joining a commons (decision record 0011)
+
+| `type` | `author` | `body` | Use |
+|---|---|---|---|
+| `Invite` | a member's key | `commons` (host), `code_id` (random hex), `expires_at` | Made in advance and handed to a newcomer as an **invite code**: the signed object as JSON, URL-safe base64 without padding. The newcomer's share carries it as the field `invite`. |
+| `Vouch` | a member's key | `commons` (host), `handle`, `key` (the newcomer's) | Sent to the commons' `/inbox` for someone on its pending list. |
+
+A commons lists a **new** handle only with a valid invite, a valid vouch, or
+its one-time **founding invite** (`hic-founding-` followed by hex; not a
+signed object, since there is no member yet to sign it). Otherwise the share
+waits on the pending list (`GET /api/pending`). An invite or vouch MUST be
+for this commons, by a current member, within the member's weekly limit
+(`HIC_VOUCH_LIMIT`); an invite MUST be unexpired and unused, and a vouch MUST
+name the waiting handle and key. Handles already listed, and returning keys,
+need no vouch. Each admission is recorded with its route, voucher and proof.
+
+### 5.4 Planned
 
 Dataset listings, rights records, licences, adapters, model versions,
-vouches and governance decisions will be added as `hic/v1` types as they are
+governance decisions will be added as `hic/v1` types as they are
 built (see `docs/REVIEW-2026-11.md` §4 and decision record 0011).
 
 ## 6. Version 0 (profiles and withdrawals, before `hic/v1`)

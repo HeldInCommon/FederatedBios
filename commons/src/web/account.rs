@@ -209,6 +209,6 @@ async fn reshare(st: &AppState, h: &str) {
         return;
     }
     for c in &rec.shared_to {
-        let _ = send_share(st, c, &rec, &v).await;
+        let _ = send_share(st, c, &rec, &v, None).await;
     }
 }
