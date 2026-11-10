@@ -5,9 +5,12 @@
 //! read a record, change it and save it back happen while holding
 //! [`AppState::write`], so two requests can't interleave.
 
-use axum::extract::{Path, State};
+use std::net::SocketAddr;
+
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
 
 use crate::app::{AppState, Shared};
 use crate::envelope::Signed;
@@ -379,9 +382,7 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if v.reach() == Reach::Members {
         return error_page(&st.site, "Members-only profiles stay on your node — they are never shared.");
     }
-    let activity =
-        federation::build_share(&Sender { base_url: &st.config.base_url, instance: &st.site.instance }, &rec, &v);
-    let sent = post_to_commons(&st, &commons, &activity).await;
+    let sent = send_share(&st, &commons, &rec, &v).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
@@ -431,6 +432,24 @@ pub(crate) async fn post_to_commons(
         .map_err(|e| format!("Could not reach that commons: {e}"))
 }
 
+/// Share a version to a commons in format `hic/v1` (every field signed). A
+/// commons that predates `hic/v1` answers 400; then send the older format so
+/// sharing keeps working while commons are upgraded.
+pub(crate) async fn send_share(
+    st: &AppState,
+    commons: &str,
+    rec: &HandleRec,
+    v: &Version,
+) -> Result<reqwest::Response, String> {
+    let sender = Sender { base_url: &st.config.base_url, instance: &st.site.instance };
+    let v1 = federation::build_share_v1(&sender, rec, v)?;
+    let r = post_to_commons(st, commons, &v1).await?;
+    if r.status() == StatusCode::BAD_REQUEST {
+        return post_to_commons(st, commons, &federation::build_share(&sender, rec, v)).await;
+    }
+    Ok(r)
+}
+
 /// Add `commons` to the member's list of commons shared to.
 fn remember_shared_to(st: &AppState, h: &str, commons: &str) {
     let _g = st.write.lock().unwrap();
@@ -457,7 +476,16 @@ pub(crate) fn store_failed(e: &dyn std::fmt::Display) -> Response {
 
 /// `POST /inbox` — receive a share, a withdrawal, or an identity change
 /// (recovery key, key rotation) from another node.
-pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
+pub async fn inbox(
+    State(st): State<Shared>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    body: String,
+) -> Response {
+    // Checked before any parsing or signature work, so a flood costs little.
+    let sender = peer.map(|Extension(ConnectInfo(a))| a.ip().to_string()).unwrap_or_else(|| "unknown".into());
+    if !st.inbox_limit.allow(&sender, now()) {
+        return reply(StatusCode::TOO_MANY_REQUESTS, "too many requests from this address; try again in a minute");
+    }
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
         return reply(StatusCode::BAD_REQUEST, "invalid json");
     };
@@ -467,7 +495,7 @@ pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
     if activity.get("envelope").is_some() {
         return receive_identity_change(&st, &activity);
     }
-    let entry = match federation::verify_share(&activity, now()) {
+    let entry = match federation::verify_any_share(&activity, now()) {
         Ok(e) => e,
         Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };

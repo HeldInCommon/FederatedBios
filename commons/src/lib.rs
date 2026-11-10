@@ -31,6 +31,7 @@
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
 //! | [`outbound`] | which addresses this server may contact for a member | DNS lookup in one wrapper |
 //! | [`store`] | reading and writing the data folder | filesystem |
+//! | [`ratelimit`] | at most N requests per minute per sender | in-memory state |
 //! | [`sessions`] | signed-in sessions and their cookies | in-memory state |
 //! | [`form`] | parsing form posts | none |
 //! | [`web`] | HTML pages (pure rendering) and the request handlers | handlers only |
@@ -57,6 +58,7 @@ pub mod model;
 pub mod outbound;
 pub mod passphrase;
 pub mod publishing;
+pub mod ratelimit;
 pub mod role;
 pub mod sessions;
 pub mod store;

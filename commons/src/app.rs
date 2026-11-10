@@ -13,6 +13,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::config::Config;
+use crate::ratelimit::RateLimiter;
 use crate::role::Role;
 use crate::sessions::{AttemptLimiter, Sessions};
 use crate::store::Store;
@@ -33,6 +34,8 @@ pub struct AppState {
     pub write: Mutex<()>,
     /// Outgoing requests (sharing to a commons, checking a handle).
     pub http: reqwest::Client,
+    /// Limits `/inbox` requests per sender address (see [`crate::ratelimit`]).
+    pub inbox_limit: RateLimiter,
 }
 
 /// The state as handlers receive it.
@@ -58,6 +61,7 @@ impl AppState {
                 .redirect(reqwest::redirect::Policy::limited(3))
                 .build()
                 .expect("HTTP client builds"),
+            inbox_limit: RateLimiter::new(INBOX_PER_MINUTE, 60),
         }
     }
 }
@@ -68,6 +72,9 @@ impl AppState {
 const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; \
      font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; \
      base-uri 'none'; frame-ancestors 'none'";
+
+/// How many `/inbox` requests one address may send per minute.
+pub const INBOX_PER_MINUTE: u32 = 120;
 
 /// Largest request body accepted. Must comfortably exceed the 600 KB picture
 /// limit, which arrives base64- and form-encoded inside the publish form.

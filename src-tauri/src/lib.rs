@@ -52,6 +52,23 @@ fn is_server_page(url: &str) -> bool {
     (url.starts_with("http://") || url.starts_with("https://")) && !url.contains("tauri.localhost")
 }
 
+/// The log file: `~/Library/Logs/org.heldincommon.node/held-in-common.log` on
+/// macOS (the platform's log folder elsewhere), plus the terminal. Holds the
+/// app's messages and everything the server prints, so someone who hits a
+/// problem can send it. Capped at 5 MB; the previous file is kept as a backup.
+fn log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
+    tauri_plugin_log::Builder::new()
+        .targets([
+            Target::new(TargetKind::LogDir { file_name: Some("held-in-common".into()) }),
+            Target::new(TargetKind::Stdout),
+        ])
+        .max_file_size(5_000_000)
+        .rotation_strategy(RotationStrategy::KeepOne)
+        .level(log::LevelFilter::Info)
+        .build()
+}
+
 /// Everything fixed for this run of the app.
 fn app_config(base: PathBuf) -> AppConfig {
     let who = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_default().trim().to_string();
@@ -70,6 +87,7 @@ fn app_config(base: PathBuf) -> AppConfig {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(log_plugin())
         .invoke_handler(tauri::generate_handler![
             commands::node_up,
             commands::setup_state,

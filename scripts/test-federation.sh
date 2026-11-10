@@ -33,6 +33,7 @@ PUB=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/publi
 
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "federated to" && ok "node federated a signed copy" || no "share failed"
 grep -rq 'tega' "$T/commons/remote/" 2>/dev/null && ok "commons stored verified remote @tega" || no "no remote entry on commons"
+grep -rq '"schema": "hic/v1"' "$T/commons/remote/" 2>/dev/null && ok "share arrived in format hic/v1 (every field signed)" || no "share not in hic/v1"
 curl -s http://localhost:8091/ | grep -qi "tega" && ok "@tega in commons directory" || no "@tega not in directory"
 curl -s http://localhost:8091/api/directory | grep -q "tega" && no "tega wrongly local on commons" || ok "tega federated, not local"
 

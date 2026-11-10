@@ -28,7 +28,8 @@ async fn run(config: Config) -> Result<(), String> {
     let state = Arc::new(app::AppState::new(config, role, store));
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
     println!("hic-commons listening on {addr}");
-    axum::serve(listener, app::router(state))
+    // With connection info, so handlers can see the sender's address (rate limits).
+    axum::serve(listener, app::router(state).into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))

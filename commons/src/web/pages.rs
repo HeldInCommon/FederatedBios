@@ -634,7 +634,11 @@ pub fn federated(r: &RemoteEntry) -> Markup {
                     @if !r.origin_label.is_empty() { span class="origin-label" { " — the node calls itself “" (r.origin_label) "”" } }
                 }
                 p class="origin-key" { "Signed by key " span class="mono" { (short(&r.ed_pub)) } }
-                p class="origin-note" { "On this commons, @" (r.handle) " belongs to that key alone. The address and node name are what the node says about itself; the key signature is what this commons checked." }
+                @if r.signed.is_some() {
+                    p class="origin-note" { "On this commons, @" (r.handle) " belongs to that key alone. Everything on this page is signed by it, so nobody could change it on the way here. The address and node name are still what the node says about itself." }
+                } @else {
+                    p class="origin-note" { "On this commons, @" (r.handle) " belongs to that key alone. Shared in the older format: the profile text is signed, but the picture, name, address and node name are not." }
+                }
             }
             p class="cid" { "Version " span class="mono" { (short(&r.cid)) } }
         }

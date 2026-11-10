@@ -115,7 +115,100 @@ pub fn verify_share(activity: &Value, received_at: u64) -> Result<RemoteEntry, S
         profile,
         signature: sig_hex.to_string(),
         received_at,
+        signed: None,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Profile shares in format hic/v1 (every field signed)
+// ---------------------------------------------------------------------------
+
+/// The `hic/v1` type for a shared profile.
+pub const PROFILE: &str = "Profile";
+
+/// Build a `hic/v1` share: a signed `Profile` envelope covering the profile
+/// (picture included), display name, reach, licence, signals, encryption key,
+/// and the node's address and name. Dated with the version's own time, so the
+/// same version always gives the same object. The recovery-key declaration,
+/// if any, travels alongside.
+pub fn build_share_v1(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<Value, String> {
+    let body = json!({
+        "handle": rec.handle,
+        "display_name": rec.display_name,
+        "visibility": v.visibility,
+        "license": v.license,
+        "signals": v.signals,
+        "profile": v.payload.clone().unwrap_or_default(),
+        "box_key": rec.box_pub,
+        "origin": sender.base_url,
+        "origin_label": sender.instance,
+        "version_cid": v.cid,
+    });
+    let signed = crate::envelope::sign(
+        crate::envelope::Envelope::new(PROFILE, &rec.ed_pub, v.created_at, None, body),
+        &rec.ed_priv,
+    )?;
+    let mut share = json!({ "type": "Share", "schema": crate::envelope::SCHEMA, "profile": signed });
+    if let Some(d) = &rec.recovery_decl {
+        share["recovery"] = serde_json::to_value(d).expect("signed objects serialise");
+    }
+    Ok(share)
+}
+
+/// Check a `hic/v1` share and turn it into a [`RemoteEntry`].
+pub fn verify_share_v1(msg: &Value, received_at: u64) -> Result<RemoteEntry, String> {
+    let signed: crate::envelope::Signed =
+        serde_json::from_value(msg.get("profile").cloned().ok_or("missing profile")?).map_err(|_| "bad profile")?;
+    crate::envelope::verify(&signed)?;
+    let env = &signed.envelope;
+    if env.kind != PROFILE {
+        return Err(format!("expected a Profile, got {:?}", env.kind));
+    }
+    let b = &env.body;
+    let field = |k: &str| b.get(k).and_then(|x| x.as_str()).map(String::from).ok_or_else(|| format!("missing {k}"));
+    let handle_ = field("handle")?;
+    if !handle::is_valid(&handle_) {
+        return Err("invalid handle".into());
+    }
+    let visibility = field("visibility")?;
+    match Reach::parse(&visibility) {
+        Some(Reach::Members) => return Err("members-only profiles are not federated".into()),
+        None => return Err("unknown visibility".into()),
+        Some(_) => {}
+    }
+    let profile: Profile =
+        serde_json::from_value(b.get("profile").cloned().ok_or("missing profile")?).map_err(|_| "bad profile")?;
+    let signals = b
+        .get("signals")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    Ok(RemoteEntry {
+        ed_pub: env.author.clone(),
+        box_pub: field("box_key")?,
+        handle: handle_,
+        display_name: field("display_name")?,
+        origin: field("origin")?,
+        origin_label: field("origin_label")?,
+        cid: signed.cid.clone(),
+        visibility,
+        license: field("license")?,
+        signals,
+        created_at: env.created_at,
+        profile,
+        signature: signed.sig.clone(),
+        received_at,
+        signed: Some(signed.clone()),
+    })
+}
+
+/// Read a received share in either format.
+pub fn verify_any_share(msg: &Value, received_at: u64) -> Result<RemoteEntry, String> {
+    if msg.get("type").and_then(|t| t.as_str()) == Some("Share") {
+        verify_share_v1(msg, received_at)
+    } else {
+        verify_share(msg, received_at)
+    }
 }
 
 /// Who already holds handles on this server.
@@ -428,5 +521,50 @@ mod tests {
         newer.created_at = 130;
         newer.cid = "newer".into();
         assert_eq!(admit(&newer, &holders(None, &[], &tomb)), Admission::Accept, "owner may share again later");
+    }
+
+    fn published(handle: &str, avatar: &str) -> (HandleRec, Version) {
+        let rec = rec_with_keys(handle);
+        let draft = crate::publishing::Draft {
+            profile: Profile { name: "Tega".into(), avatar: avatar.into(), ..Default::default() },
+            reach: Reach::Public,
+            license: "cc-by".into(),
+            signals: vec!["credit".into()],
+            created_at: 10,
+        };
+        let v = crate::publishing::sign_version(&rec, draft, &[]).unwrap();
+        (rec, v)
+    }
+
+    #[test]
+    fn v1_share_round_trip_signs_every_field() {
+        let (rec, v) = published("tega", "data:image/png;base64,AAAA");
+        let msg = build_share_v1(&Sender { base_url: "http://n", instance: "Tega's node" }, &rec, &v).unwrap();
+        let e = verify_any_share(&msg, 5).unwrap();
+        assert_eq!(e.profile.avatar, "data:image/png;base64,AAAA");
+        assert_eq!(e.origin_label, "Tega's node");
+        assert!(e.signed.is_some());
+        // Changing anything that used to travel unsigned now breaks the signature.
+        let mut m = msg.clone();
+        m["profile"]["envelope"]["body"]["profile"]["avatar"] = json!("data:image/png;base64,BBBB");
+        assert!(verify_any_share(&m, 5).is_err(), "the picture is signed");
+        for key in ["display_name", "origin", "origin_label", "box_key"] {
+            let mut m = msg.clone();
+            m["profile"]["envelope"]["body"][key] = json!("changed");
+            assert!(verify_any_share(&m, 5).is_err(), "{key} should be signed");
+        }
+    }
+
+    #[test]
+    fn v1_share_is_deterministic_for_one_version() {
+        let (rec, v) = published("tega", "");
+        let s = Sender { base_url: "http://n", instance: "n" };
+        assert_eq!(build_share_v1(&s, &rec, &v).unwrap(), build_share_v1(&s, &rec, &v).unwrap());
+    }
+
+    #[test]
+    fn old_format_still_accepted() {
+        let (a, _) = signed_share("tega", 10, "hi");
+        assert!(verify_any_share(&a, 0).unwrap().signed.is_none());
     }
 }
