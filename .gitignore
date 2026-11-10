@@ -42,3 +42,6 @@ src-tauri/binaries/*
 # macOS folder metadata
 .DS_Store
 Held-In-Common-macOS-AppleSilicon.dmg
+
+# CSS lint tools (installed by scripts/lint-css.sh)
+tools/css-lint/node_modules/

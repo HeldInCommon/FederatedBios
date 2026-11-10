@@ -1,7 +1,7 @@
 //! Shared state and the route table.
 //!
 //! [`router`] is a plain function from state to an axum `Router`, so tests can
-//! build the whole server in-process (see `tests/http.rs`).
+//! build the whole server in-process (see `tests/http/`).
 
 use std::sync::{Arc, Mutex};
 
@@ -17,8 +17,9 @@ use crate::ratelimit::RateLimiter;
 use crate::role::Role;
 use crate::sessions::{AttemptLimiter, Sessions};
 use crate::store::Store;
+use crate::web;
+use crate::web::handlers::{self, account, membership, steward};
 use crate::web::layout::Site;
-use crate::web::{self, account, handlers, membership, steward};
 use crate::{api, web::ROBOTS_TXT};
 
 /// Everything a request handler can reach.

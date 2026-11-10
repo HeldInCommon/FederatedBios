@@ -61,6 +61,12 @@ Decisions are pure functions; every write happens in a clearly named place
 ([decision record 0016](adr/0016-no-hidden-effects.md)). Pages are rendered on
 the server with [maud](https://docs.rs/maud); the only scripts are the photo
 picker and the passphrase show/hide button.
+Each page has its own file twice over: its body in `web/pages/` (pure) and
+its handler in `web/handlers/`, so the site grows by adding files rather than
+lengthening them. The stylesheet (`static/style.css`) is built on design
+tokens (colours, type sizes, spacing) declared once at its top; components
+read the tokens and share a few patterns (the mono label, buttons, panels),
+so a change to a token restyles every page.
 
 ### 2.2 The desktop app (`src-tauri`)
 

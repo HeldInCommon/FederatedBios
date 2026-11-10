@@ -1,6 +1,8 @@
 # Checks for pull requests. Build-only: nothing here publishes a release.
 #   federation-tests  checks formatting and lints, runs `cargo test`, then
 #                     builds hic-commons and runs scripts/test-federation.sh
+#   css-lint          checks the two stylesheets' layout and rules
+#                     (scripts/lint-css.sh)
 #   mac-preview       builds the desktop app for Apple Silicon and attaches the
 #                     unsigned .dmg to this workflow run (Actions -> the run ->
 #                     Artifacts), so reviewers can try a PR without a Rust setup.
@@ -12,6 +14,8 @@ on:
       - 'commons/**'
       - 'src-tauri/**'
       - 'scripts/test-federation.sh'
+      - 'scripts/lint-css.sh'
+      - 'tools/css-lint/**'
       - '.github/workflows/pr-checks.yml'
   workflow_dispatch:
 permissions:
@@ -40,6 +44,18 @@ jobs:
         run: python3 scripts/check_spec_vectors.py
       - name: Federation tests
         run: ./scripts/test-federation.sh
+
+  css-lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tools/css-lint/package-lock.json
+      - name: Stylesheets
+        run: ./scripts/lint-css.sh
 
   mac-preview:
     runs-on: macos-latest

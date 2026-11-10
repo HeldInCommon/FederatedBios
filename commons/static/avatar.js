@@ -18,7 +18,7 @@
       if (dataUrl) { preview.src = dataUrl; preview.classList.remove('empty'); }
       else { preview.removeAttribute('src'); preview.classList.add('empty'); }
     }
-    if (clear) clear.style.display = dataUrl ? '' : 'none';
+    if (clear) clear.hidden = !dataUrl;
   }
 
   photo.addEventListener('change', function () {

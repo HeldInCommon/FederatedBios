@@ -1,0 +1,9 @@
+{
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "no-descending-specificity": null,
+    "media-feature-range-notation": "prefix",
+    "property-no-vendor-prefix": [true, { "ignoreProperties": ["mask"] }],
+    "value-keyword-case": ["lower", { "ignoreProperties": ["/^--/", "font-family", "font"] }]
+  }
+}
