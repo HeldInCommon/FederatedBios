@@ -7,7 +7,7 @@ Prebuilt image (published by CI to GHCR, multi-arch amd64/arm64):
 docker run -d --name hic-node -p 8080:8080 -v hic-node:/data \
   -e HIC_INSTANCE="My node" \
   -e HIC_SHARE_DEFAULT="https://<the-shared-commons>" \
-  ghcr.io/<owner>/hic-node:latest
+  ghcr.io/heldincommon/hic-node:latest
 ```
 
 Then open http://localhost:8080 — you're a node. (The image sets `HIC_BIND=0.0.0.0` so Docker's port mapping can reach it.) Publish locally, then
@@ -34,7 +34,7 @@ docker run -d --name hic-commons -p 8080:8080 -v hic-commons:/data \
   -e HIC_ROLE=commons \
   -e HIC_INSTANCE="Held in Common (federated)" \
   -e HIC_BASE_URL="https://<your-public-host>" \
-  ghcr.io/<owner>/hic-node:latest
+  ghcr.io/heldincommon/hic-node:latest
 ```
 
 On a commons there is **no sign-up**: `/join` and `/login` show a "run a node and

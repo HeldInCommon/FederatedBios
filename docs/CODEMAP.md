@@ -99,7 +99,8 @@ interleave) → redirect to the profile.
 | `src/settings.rs` | `app.json` (the chosen role and name) and the per-role data folders. |
 | `src/network.rs` | Is *our* server answering (launch token check)? This computer's LAN address. |
 | `src/sidecar.rs` | Start and stop the server process; restart it after a crash (up to 3 times). |
-| `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `set_name`, `node_up`, `restart_node`. |
+| `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `set_name`, `close_rename`, `node_up`, `restart_node`. |
+| `src/lib.rs` (also) | The main window (hands `mailto:` links to the mail app), the **Node → Rename…** menu, the log file. |
 | `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser and loading screen. |
 | `capabilities/default.json` | What the screens may call (core APIs only). |
 | `tauri.conf.json` | Window, bundle, and the screens' Content-Security-Policy. |
@@ -110,8 +111,8 @@ interleave) → redirect to the profile.
 |---|---|---|
 | `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http.rs` (the whole router in-process). | ~5 s |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | The app's pure rules (role migration, health check, labels). | ~1 s once built |
-| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, withdrawal, key rotation and recovery. | ~20 s |
+| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching, steward approval, Check now, withdrawal, key rotation and recovery. | ~25 s |
 | `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
-All three run on every pull request (`.github/workflows/pr-checks.yml`), with
+All four run on every pull request (`.github/workflows/pr-checks.yml`), with
 `cargo fmt --check` and `cargo clippy -D warnings`.

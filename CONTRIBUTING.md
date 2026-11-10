@@ -58,5 +58,6 @@ file, and the path a request takes.
 
 Branch from `main` in `HeldInCommon/FederatedBios` (not a fork), describe what
 changed and how you tested it, and wait for the checks. Security-sensitive
-areas (`federation.rs`, `keys.rs`, `passphrase.rs`, `sessions.rs`, `store.rs`)
-need a second reviewer.
+areas need a second reviewer: `federation.rs`, `identity.rs`, `keys.rs`,
+`passphrase.rs`, `sessions.rs`, `store.rs`, `vouching.rs`, `outbound.rs` and
+`web/steward.rs`.
