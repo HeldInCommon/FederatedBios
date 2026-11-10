@@ -48,9 +48,14 @@ the federation endpoints (ActivityPub-shaped actor/outbox/WebFinger + `/inbox`).
 ### 2.2 Desktop app (`src-tauri`)
 A thin [Tauri v2](https://v2.tauri.app) shell. On first launch it asks what this
 computer runs: **a node** or **a commons** (for a commons, where people will reach
-it; "this room" over the local network is available today). The choice is saved in
-`<app data>/app.json`, and each role gets its own data folder (`node-data/`,
-`commons-data/`). Installs that already have a node skip the question. The app then
+it; "this room" over the local network is available today). It then asks for a
+**name** for this computer's node or commons ("Studio laptop"), which the server
+uses as its instance name: it shows in the coloured bar and travels, signed,
+with every share, so one person's several machines are told apart. Earlier
+versions used the computer's account name instead; those installs are asked for
+a name once. Role and name are saved in `<app data>/app.json`, and each role
+gets its own data folder (`node-data/`, `commons-data/`). Installs that already
+have a node skip the role question. The app then
 starts the bundled `hic-commons` binary as a **sidecar** (`tauri-plugin-shell`) in
 that role, shows an on-brand loading screen, polls `http://127.0.0.1:8080/health`
 until it answers with the launch token the app gave its server (so it never shows another program on that port),

@@ -14,8 +14,6 @@ use crate::settings::{data_dir_for, instance_label};
 pub struct AppConfig {
     /// The app data folder (holds `app.json` and one data folder per role).
     pub base: PathBuf,
-    /// The account name, used in the server's name ("phoenix's node").
-    pub who: String,
     /// `HIC_INSTANCE` from the host environment, if set.
     pub instance_override: Option<String>,
     /// The commons pre-filled in "Share to a commons".
@@ -38,7 +36,7 @@ impl Sidecar {
 }
 
 /// Start the server on [`PORT`] in `role`, logging its output to stderr.
-pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str) -> Result<CommandChild, String> {
+pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str, name: &str) -> Result<CommandChild, String> {
     let data_dir = data_dir_for(&cfg.base, role);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
     let mut cmd = app
@@ -47,7 +45,7 @@ pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str) -> Result<Comm
         .map_err(|e| format!("could not locate the server binary: {e}"))?
         .env("HIC_DATA", data_dir.to_string_lossy().to_string())
         .env("PORT", PORT.to_string())
-        .env("HIC_INSTANCE", instance_label(cfg.instance_override.as_deref(), &cfg.who, role))
+        .env("HIC_INSTANCE", instance_label(cfg.instance_override.as_deref(), Some(name), role))
         .env("HIC_ROLE", role)
         .env("HIC_LAUNCH_TOKEN", &cfg.launch_token);
     if role == "node" {
@@ -105,8 +103,8 @@ pub fn open_when_up(app: tauri::AppHandle, token: String) {
 }
 
 /// Start the server in `role`, remember the process, and open it when ready.
-pub fn start(app: &tauri::AppHandle, cfg: &AppConfig, sidecar: &Sidecar, role: &str) -> Result<(), String> {
-    let child = spawn(app, cfg, role)?;
+pub fn start(app: &tauri::AppHandle, cfg: &AppConfig, sidecar: &Sidecar, role: &str, name: &str) -> Result<(), String> {
+    let child = spawn(app, cfg, role, name)?;
     *sidecar.0.lock().unwrap() = Some(child);
     set_title(app, role);
     open_when_up(app.clone(), cfg.launch_token.clone());
