@@ -93,13 +93,14 @@ pub fn permitted(k: Kind, p: Policy) -> bool {
     }
 }
 
-/// The address a resolved name must use: the first one, provided *every*
-/// address the name resolves to is permitted (a name with one safe and one
-/// unsafe address is refused).
-pub fn choose(addrs: &[SocketAddr], p: Policy) -> Result<SocketAddr, String> {
-    let first = *addrs.first().ok_or("that address doesn't resolve")?;
+/// Check every address a name resolves to. All must be permitted: a name
+/// with one safe and one unsafe address is refused.
+pub fn check_all(addrs: &[SocketAddr], p: Policy) -> Result<(), String> {
+    if addrs.is_empty() {
+        return Err("that address doesn't resolve".into());
+    }
     if addrs.iter().all(|a| permitted(kind(a.ip()), p)) {
-        Ok(first)
+        Ok(())
     } else {
         Err("This server can't send to addresses inside its own network.".into())
     }
@@ -115,10 +116,12 @@ pub async fn client_for(url: &str, p: Policy) -> Result<reqwest::Client, String>
     let lookup = host.trim_start_matches('[').trim_end_matches(']').to_string();
     let addrs: Vec<SocketAddr> =
         tokio::net::lookup_host((lookup.as_str(), port)).await.map_err(|_| format!("Couldn't find {host}."))?.collect();
-    let addr = choose(&addrs, p)?;
+    check_all(&addrs, p)?;
+    // Pin the request to the addresses just checked (all of them, so the
+    // client can still fall back from IPv6 to IPv4 as usual).
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .resolve(&lookup, addr)
+        .resolve_to_addrs(&lookup, &addrs)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -171,8 +174,8 @@ mod tests {
     fn a_name_with_any_unsafe_address_is_refused() {
         let p = Policy { personal: false, allow_private: false };
         let mixed: Vec<SocketAddr> = vec!["93.184.216.34:443".parse().unwrap(), "127.0.0.1:443".parse().unwrap()];
-        assert!(choose(&mixed, p).is_err());
-        assert!(choose(&mixed[..1], p).is_ok());
-        assert!(choose(&[], p).is_err());
+        assert!(check_all(&mixed, p).is_err());
+        assert!(check_all(&mixed[..1], p).is_ok());
+        assert!(check_all(&[], p).is_err());
     }
 }
