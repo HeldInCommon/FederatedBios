@@ -94,6 +94,7 @@ deterministic, so an implementation MUST reproduce them exactly.
 | `01-basic.json` | The smallest useful object. |
 | `02-ordering-and-escaping.json` | UTF-16 key order, escaping, negative integers, booleans, null, a non-null `prev`. |
 | `03-key-rotation.json` | A real type with a cosignature. |
+| `04-profile.json` | A shared profile, picture included. |
 
 Check them:
 
@@ -130,7 +131,30 @@ A node sends these to a commons' `/inbox` as the signed object (2.4). A
 `RecoveryKey` declaration also travels inside a profile share, as the field
 `recovery`.
 
-### 5.2 Planned
+### 5.2 Profile shares
+
+A node shares a profile to a commons as
+
+```json
+{ "type": "Share", "schema": "hic/v1", "profile": <signed Profile>, "recovery": <signed RecoveryKey, optional> }
+```
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `Profile` | the handle's key | `handle`, `display_name`, `visibility` (`public` or `commons`), `license`, `signals`, `profile` (`name`, `pronouns`, `role`, `bio`, `places`, `avatar`), `box_key`, `origin`, `origin_label`, `version_cid` |
+
+`created_at` is the version's own time, so the same version always produces
+the same object; `version_cid` names the node's stored version (section 6).
+Every field is signed, including the picture and the node's address and
+name, which version 0 left unsigned. (The address and name are still the
+node's own claims; the signature means nobody else changed them.)
+
+A commons MUST refuse `members` visibility, MUST refuse a share that isn't
+newer than the one it holds for that key, and keeps the signed object as
+proof. A node that gets HTTP 400 from a commons SHOULD retry in version 0, so
+sharing keeps working while commons are upgraded.
+
+### 5.3 Planned
 
 Dataset listings, rights records, licences, adapters, model versions,
 vouches and governance decisions will be added as `hic/v1` types as they are
@@ -138,8 +162,9 @@ built (see `docs/REVIEW-2026-11.md` §4 and decision record 0011).
 
 ## 6. Version 0 (profiles and withdrawals, before `hic/v1`)
 
-Profiles and withdrawals predate the envelope. They remain valid, and new
-profiles still use this format until profiles move to `hic/v1`.
+Profiles and withdrawals predate the envelope. They remain valid. Nodes still
+**store** each profile version in this format (its cid is the `version_cid`
+in section 5.2), and send it to commons that don't understand `hic/v1` yet.
 
 **Profile version.** The cid is the SHA-256 of the compact JSON
 
@@ -153,7 +178,7 @@ output for the body, but the top level is not sorted. The signature is Ed25519
 over the cid **text** (64 hex characters), with no type prefix.
 `commons/src/canonical.rs` holds a golden value.
 
-Known limits of version 0, which `hic/v1` fixes: the signature doesn't say
+Known limits of version 0, which `hic/v1` shares fix: the signature doesn't say
 what kind of object it covers; the avatar, display name, node address, node
 name and encryption key travel alongside but aren't signed; there is no
 `prev` link.

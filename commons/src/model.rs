@@ -213,6 +213,11 @@ pub struct RemoteEntry {
     pub signature: String,
     /// When this commons received it.
     pub received_at: u64,
+    /// The signed `hic/v1` Profile this entry came from, when the node sent
+    /// one: then every field above is covered by the signature. `None` for
+    /// shares in the older format, where only the content hash is signed.
+    #[serde(default)]
+    pub signed: Option<Signed>,
 }
 
 /// What a commons keeps after someone withdraws their shared profile: just

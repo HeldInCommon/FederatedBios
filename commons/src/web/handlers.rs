@@ -379,9 +379,7 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if v.reach() == Reach::Members {
         return error_page(&st.site, "Members-only profiles stay on your node — they are never shared.");
     }
-    let activity =
-        federation::build_share(&Sender { base_url: &st.config.base_url, instance: &st.site.instance }, &rec, &v);
-    let sent = post_to_commons(&st, &commons, &activity).await;
+    let sent = send_share(&st, &commons, &rec, &v).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
@@ -431,6 +429,24 @@ pub(crate) async fn post_to_commons(
         .map_err(|e| format!("Could not reach that commons: {e}"))
 }
 
+/// Share a version to a commons in format `hic/v1` (every field signed). A
+/// commons that predates `hic/v1` answers 400; then send the older format so
+/// sharing keeps working while commons are upgraded.
+pub(crate) async fn send_share(
+    st: &AppState,
+    commons: &str,
+    rec: &HandleRec,
+    v: &Version,
+) -> Result<reqwest::Response, String> {
+    let sender = Sender { base_url: &st.config.base_url, instance: &st.site.instance };
+    let v1 = federation::build_share_v1(&sender, rec, v)?;
+    let r = post_to_commons(st, commons, &v1).await?;
+    if r.status() == StatusCode::BAD_REQUEST {
+        return post_to_commons(st, commons, &federation::build_share(&sender, rec, v)).await;
+    }
+    Ok(r)
+}
+
 /// Add `commons` to the member's list of commons shared to.
 fn remember_shared_to(st: &AppState, h: &str, commons: &str) {
     let _g = st.write.lock().unwrap();
@@ -467,7 +483,7 @@ pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
     if activity.get("envelope").is_some() {
         return receive_identity_change(&st, &activity);
     }
-    let entry = match federation::verify_share(&activity, now()) {
+    let entry = match federation::verify_any_share(&activity, now()) {
         Ok(e) => e,
         Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };

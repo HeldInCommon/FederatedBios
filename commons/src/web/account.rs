@@ -16,10 +16,10 @@ use crate::form::Form;
 use crate::identity::{self, RECOVERY_ROTATION};
 use crate::model::{HandleRec, PendingRotation};
 use crate::publishing::{self, Draft};
-use crate::web::handlers::{authorised_as, post_to_commons, readable_profile};
+use crate::web::handlers::{authorised_as, post_to_commons, readable_profile, send_share};
 use crate::web::layout::{error_page, render, server_error, Page};
 use crate::web::pages;
-use crate::{federation, handle, keys, now};
+use crate::{handle, keys, now};
 
 /// Load the signed-in member's record, or the response to send instead.
 fn member(st: &AppState, headers: &HeaderMap, f: &Form, action: &str) -> Result<HandleRec, Box<Response>> {
@@ -208,9 +208,7 @@ async fn reshare(st: &AppState, h: &str) {
     if v.reach() == crate::model::Reach::Members {
         return;
     }
-    let sender = federation::Sender { base_url: &st.config.base_url, instance: &st.site.instance };
-    let share = federation::build_share(&sender, &rec, &v);
     for c in &rec.shared_to {
-        let _ = post_to_commons(st, c, &share).await;
+        let _ = send_share(st, c, &rec, &v).await;
     }
 }

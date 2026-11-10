@@ -64,6 +64,34 @@ fn cases() -> Vec<(&'static str, &'static str, Envelope, Vec<&'static str>)> {
             ),
             vec![TEST_KEY_B],
         ),
+        (
+            "04-profile.json",
+            "A shared Profile: every field signed, the picture included.",
+            Envelope::new(
+                "Profile",
+                &a,
+                1_700_000_200,
+                None,
+                json!({
+                    "handle": "tega",
+                    "display_name": "Tega Brain",
+                    "visibility": "public",
+                    "license": "cc-by",
+                    "signals": ["credit"],
+                    "profile": {
+                        "name": "Tega Brain", "pronouns": "she/her", "role": "Artist",
+                        "bio": "Works with environmental data.",
+                        "places": [{ "name": "Studio", "city": "Sydney" }],
+                        "avatar": "data:image/png;base64,AAAA",
+                    },
+                    "box_key": "cd".repeat(32),
+                    "origin": "https://tega.example",
+                    "origin_label": "Tega's node",
+                    "version_cid": "1f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+                }),
+            ),
+            vec![],
+        ),
     ]
 }
 

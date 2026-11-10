@@ -1,0 +1,81 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"box_key\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"display_name\":\"Tega Brain\",\"handle\":\"tega\",\"license\":\"cc-by\",\"origin\":\"https://tega.example\",\"origin_label\":\"Tega's node\",\"profile\":{\"avatar\":\"data:image/png;base64,AAAA\",\"bio\":\"Works with environmental data.\",\"name\":\"Tega Brain\",\"places\":[{\"city\":\"Sydney\",\"name\":\"Studio\"}],\"pronouns\":\"she/her\",\"role\":\"Artist\"},\"signals\":[\"credit\"],\"version_cid\":\"1f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659\",\"visibility\":\"public\"},\"created_at\":1700000200,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"Profile\"}",
+  "cid": "155816d8564a0ead169c5768356761b29aa23a486279fea4bb42263c5f883efb",
+  "description": "A shared Profile: every field signed, the picture included.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "box_key": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "display_name": "Tega Brain",
+      "handle": "tega",
+      "license": "cc-by",
+      "origin": "https://tega.example",
+      "origin_label": "Tega's node",
+      "profile": {
+        "avatar": "data:image/png;base64,AAAA",
+        "bio": "Works with environmental data.",
+        "name": "Tega Brain",
+        "places": [
+          {
+            "city": "Sydney",
+            "name": "Studio"
+          }
+        ],
+        "pronouns": "she/her",
+        "role": "Artist"
+      },
+      "signals": [
+        "credit"
+      ],
+      "version_cid": "1f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+      "visibility": "public"
+    },
+    "created_at": 1700000200,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "Profile"
+  },
+  "name": "04-profile.json",
+  "signed": {
+    "cid": "155816d8564a0ead169c5768356761b29aa23a486279fea4bb42263c5f883efb",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "box_key": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "display_name": "Tega Brain",
+        "handle": "tega",
+        "license": "cc-by",
+        "origin": "https://tega.example",
+        "origin_label": "Tega's node",
+        "profile": {
+          "avatar": "data:image/png;base64,AAAA",
+          "bio": "Works with environmental data.",
+          "name": "Tega Brain",
+          "places": [
+            {
+              "city": "Sydney",
+              "name": "Studio"
+            }
+          ],
+          "pronouns": "she/her",
+          "role": "Artist"
+        },
+        "signals": [
+          "credit"
+        ],
+        "version_cid": "1f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+        "visibility": "public"
+      },
+      "created_at": 1700000200,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "Profile"
+    },
+    "sig": "8217a6c4bd0acbdaf29601dbf2cc53ef5b8d19c48c2a34a3ee40c25d9aabe3d9c654d0c0a0567c8e99ee12548cc79641be858a89291cb6141be2caeca26f8e0a"
+  },
+  "signing_input": "hic/v1/Profile\n155816d8564a0ead169c5768356761b29aa23a486279fea4bb42263c5f883efb",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}
