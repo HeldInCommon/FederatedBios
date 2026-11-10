@@ -82,7 +82,8 @@ fn csrf_in(html: &str) -> String {
 async fn join_and_publish(app: &Router, handle: &str, visibility: &str) -> String {
     let r =
         send(app, post_form("/join", &format!("handle={handle}&display_name=T&passphrase=supersecret1"), None)).await;
-    assert_eq!(r.status, StatusCode::SEE_OTHER);
+    assert_eq!(r.status, StatusCode::OK);
+    assert!(r.text.contains("Your recovery code"), "sign-up shows the recovery code once");
     let sid = session_from(&r).expect("session");
     let csrf = csrf_in(&send(app, get("/new", Some(&sid))).await.text);
     let body =

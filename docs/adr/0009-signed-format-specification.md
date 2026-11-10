@@ -1,6 +1,6 @@
 # 0009. A written specification for everything we sign
 
-- **Status:** Accepted, to build
+- **Status:** Accepted (built for new types; profiles still use version 0)
 - **Date:** 2026-11-10
 
 ## Context

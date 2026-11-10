@@ -124,6 +124,9 @@ mod tests {
             secret_hash: "x".into(),
             current_cid: None,
             shared_to: vec!["http://c".into()],
+            recovery_pub: None,
+            recovery_decl: None,
+            pending_rotation: None,
         }
     }
 

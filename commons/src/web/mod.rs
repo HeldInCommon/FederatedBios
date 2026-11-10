@@ -2,8 +2,10 @@
 //!
 //! - [`layout`]: the page frame and shared pieces (pure);
 //! - [`pages`]: the body of each page (pure);
-//! - [`handlers`]: the request handlers that load data and render pages.
+//! - [`handlers`]: the request handlers that load data and render pages;
+//! - [`account`]: handlers for a member's keys (recovery key, replacing a key, recovering).
 
+pub mod account;
 pub mod handlers;
 pub mod layout;
 pub mod pages;

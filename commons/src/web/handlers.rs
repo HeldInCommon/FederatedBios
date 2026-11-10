@@ -10,16 +10,18 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 
 use crate::app::{AppState, Shared};
-use crate::canonical::{content_id, hash_body};
+use crate::envelope::Signed;
 use crate::federation::{self, Admission, Holders, Sender};
 use crate::form::Form;
 use crate::governance::{license_from_form, signals_from_form, DEFAULT_LICENSE};
+use crate::identity::Identity;
 use crate::model::{HandleRec, Place, Profile, Reach, Version};
 use crate::passphrase::{self, Check};
+use crate::publishing::{self, Draft};
 use crate::sessions::{self, Session};
 use crate::web::layout::{error_page, not_found, redirect, redirect_with, render, server_error, Page};
 use crate::web::pages::{self, Card, OwnerPanel};
-use crate::{backup, handle, keys, now, outbound};
+use crate::{backup, handle, identity, keys, now, outbound};
 
 /// Largest accepted profile picture, as a data URI, in bytes.
 const AVATAR_MAX: usize = 600_000;
@@ -29,13 +31,13 @@ const AVATAR_MAX: usize = 600_000;
 // ---------------------------------------------------------------------------
 
 /// The signed-in session for this request, if any.
-fn session(st: &AppState, headers: &HeaderMap) -> Option<Session> {
+pub(crate) fn session(st: &AppState, headers: &HeaderMap) -> Option<Session> {
     sessions::token_from(headers).and_then(|t| st.sessions.get(&t, now()))
 }
 
 /// True when the request is signed in as `handle` and carries that session's
 /// CSRF token in the form.
-fn authorised_as(st: &AppState, headers: &HeaderMap, form: &Form, handle: &str) -> bool {
+pub(crate) fn authorised_as(st: &AppState, headers: &HeaderMap, form: &Form, handle: &str) -> bool {
     session(st, headers)
         .is_some_and(|s| s.handle == handle && !s.csrf.is_empty() && keys::ct_eq(&s.csrf, &form.one("csrf")))
 }
@@ -122,6 +124,8 @@ pub async fn profile(State(st): State<Shared>, Path(h): Path<String>, headers: H
             shareable: version.as_ref().is_some_and(|v| v.reach() != Reach::Members),
             known: pages::known_commons(&st.site.share_default, &rec.shared_to),
             shared_to: rec.shared_to.clone(),
+            has_recovery: rec.recovery_pub.is_some(),
+            rotation_pending: rec.pending_rotation.is_some(),
         }),
         _ => None,
     };
@@ -133,7 +137,7 @@ pub async fn profile(State(st): State<Shared>, Path(h): Path<String>, headers: H
 
 /// The profile in `v` that `viewer` may read: the payload for public and
 /// commons versions; for members-only, the copy encrypted to the viewer.
-fn readable_profile(st: &AppState, v: &Version, viewer: Option<&str>) -> Option<Profile> {
+pub(crate) fn readable_profile(st: &AppState, v: &Version, viewer: Option<&str>) -> Option<Profile> {
     match v.reach() {
         Reach::Members => {
             let viewer = viewer?;
@@ -200,20 +204,14 @@ pub async fn join_submit(State(st): State<Shared>, body: String) -> Response {
         );
     }
     let (salt, hash) = passphrase::hash(&pass);
-    let k = keys::generate();
-    let rec = HandleRec {
-        handle: h.clone(),
-        display_name: display,
-        created_at: now(),
-        ed_pub: k.ed_pub,
-        ed_priv: k.ed_priv,
-        box_pub: k.box_pub,
-        box_priv: k.box_priv,
-        secret_salt: salt,
-        secret_hash: hash,
-        current_cid: None,
-        shared_to: Vec::new(),
-    };
+    let mut rec = HandleRec::new(&h, &display, now(), keys::generate(), salt, hash);
+    // The recovery key: its public half is kept and declared to commons; its
+    // private half is shown once below and never stored (decision record 0010).
+    let (recovery_pub, recovery_priv) = keys::generate_signing();
+    match identity::declare_recovery(&h, &rec.ed_pub, &rec.ed_priv, &recovery_pub, now()) {
+        Ok(d) => (rec.recovery_pub, rec.recovery_decl) = (Some(recovery_pub), Some(d)),
+        Err(e) => return server_error(&st.site, &e),
+    }
     {
         let _g = st.write.lock().unwrap();
         match st.store.handle(&h) {
@@ -227,7 +225,15 @@ pub async fn join_submit(State(st): State<Shared>, body: String) -> Response {
         }
     }
     let token = st.sessions.start(&h, now());
-    redirect_with("/new", Some(sessions::set_cookie(&token, st.config.secure_cookie())))
+    let page = render(
+        &st.site,
+        Page::new(
+            "Your recovery code",
+            Some(&h),
+            pages::recovery_code(&h, &keys::recovery_code(&recovery_priv), "/new"),
+        ),
+    );
+    with_cookie(page, sessions::set_cookie(&token, st.config.secure_cookie()))
 }
 
 /// `GET /new` — the publish form for the signed-in member.
@@ -271,35 +277,16 @@ pub async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String)
         Ok(None) => return error_page(&st.site, "Unknown handle."),
         Err(e) => return server_error(&st.site, &e),
     };
-    let (payload, enc, body_json) = if reach == Reach::Members {
-        let recipients: Vec<(String, String)> = st.store.handles().into_iter().map(|m| (m.handle, m.box_pub)).collect();
-        let boxes = keys::seal_for_members(&profile, &recipients);
-        let bj = serde_json::to_value(&boxes).expect("boxes serialise");
-        (None, Some(boxes), bj)
-    } else {
-        let bj = hash_body(&profile);
-        (Some(profile), None, bj)
-    };
-    let cid = content_id(&h, reach.as_str(), &license, &signals, created_at, &body_json);
-    let signature = match keys::sign_cid(&rec.ed_priv, &cid) {
-        Ok(s) => s,
+    let recipients: Vec<(String, String)> = st.store.handles().into_iter().map(|m| (m.handle, m.box_pub)).collect();
+    let draft = Draft { profile, reach, license, signals, created_at };
+    let version = match publishing::sign_version(&rec, draft, &recipients) {
+        Ok(v) => v,
         Err(e) => return server_error(&st.site, &format!("@{h}: {e}")),
-    };
-    let version = Version {
-        cid: cid.clone(),
-        handle: h.clone(),
-        visibility: reach.as_str().into(),
-        license,
-        signals,
-        created_at,
-        signature,
-        payload,
-        enc,
     };
     if let Err(e) = st.store.save_version(&version) {
         return server_error(&st.site, &e);
     }
-    rec.current_cid = Some(cid);
+    rec.current_cid = Some(version.cid.clone());
     if let Err(e) = st.store.save_handle(&rec) {
         return server_error(&st.site, &e);
     }
@@ -425,7 +412,11 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
 /// POST `body` to a commons' `/inbox`, checking first that this server may
 /// contact that address (see [`crate::outbound`]). Errors are messages for
 /// the member.
-async fn post_to_commons(st: &AppState, commons: &str, body: &serde_json::Value) -> Result<reqwest::Response, String> {
+pub(crate) async fn post_to_commons(
+    st: &AppState,
+    commons: &str,
+    body: &serde_json::Value,
+) -> Result<reqwest::Response, String> {
     let policy = outbound::Policy {
         personal: st.config.bind_addr(st.site.role).is_loopback(),
         allow_private: st.config.allow_private_share,
@@ -454,23 +445,27 @@ fn remember_shared_to(st: &AppState, h: &str, commons: &str) {
 }
 
 /// Plain-text reply for server-to-server endpoints.
-fn reply(status: StatusCode, msg: &str) -> Response {
+pub(crate) fn reply(status: StatusCode, msg: &str) -> Response {
     (status, msg.to_string()).into_response()
 }
 
 /// Log a storage failure and answer 500.
-fn store_failed(e: &dyn std::fmt::Display) -> Response {
+pub(crate) fn store_failed(e: &dyn std::fmt::Display) -> Response {
     eprintln!("error: {e}");
     reply(StatusCode::INTERNAL_SERVER_ERROR, "could not read or write the data folder")
 }
 
-/// `POST /inbox` — receive a share or a withdrawal from another node.
+/// `POST /inbox` — receive a share, a withdrawal, or an identity change
+/// (recovery key, key rotation) from another node.
 pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
         return reply(StatusCode::BAD_REQUEST, "invalid json");
     };
     if activity.get("type").and_then(|t| t.as_str()) == Some("Withdraw") {
         return receive_withdraw(&st, &activity);
+    }
+    if activity.get("envelope").is_some() {
+        return receive_identity_change(&st, &activity);
     }
     let entry = match federation::verify_share(&activity, now()) {
         Ok(e) => e,
@@ -481,8 +476,17 @@ pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
         Ok(r) => r.map(|r| r.ed_pub),
         Err(e) => return store_failed(&e),
     };
+    let existing = match st.store.identity(&entry.handle) {
+        Ok(i) => i,
+        Err(e) => return store_failed(&e),
+    };
     let (held, withdrawn) = (st.store.remotes(), st.store.tombstones());
-    let holders = Holders { local: local.as_deref(), held: &held, withdrawn: &withdrawn };
+    let holders = Holders {
+        local: local.as_deref(),
+        held: &held,
+        withdrawn: &withdrawn,
+        claimed: existing.as_ref().map(|i| i.key.as_str()),
+    };
     match federation::admit(&entry, &holders) {
         Admission::HandleTaken => {
             reply(StatusCode::CONFLICT, "that handle is already used on this commons by a different key")
@@ -491,10 +495,58 @@ pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
             StatusCode::CONFLICT,
             "this commons already holds a newer version from this key, or a later withdrawal",
         ),
-        Admission::Accept => match st.store.save_remote(&entry) {
-            Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
-            Err(e) => store_failed(&e),
+        Admission::Accept => {
+            // Record who holds the handle, and the recovery key if one came along.
+            let mut id = existing.unwrap_or_else(|| Identity::new(&entry.handle, &entry.ed_pub, &entry.box_pub));
+            if id.recovery_key.is_none() {
+                if let Some(decl) =
+                    activity.get("recovery").and_then(|d| serde_json::from_value::<Signed>(d.clone()).ok())
+                {
+                    if let Ok(next) = identity::apply(&id, &decl, now()) {
+                        id = next;
+                    }
+                }
+            }
+            match st.store.save_remote(&entry).and_then(|_| st.store.save_identity(&id)) {
+                Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
+                Err(e) => store_failed(&e),
+            }
+        }
+    }
+}
+
+/// Apply a signed identity change (a `RecoveryKey`, `KeyRotation` or
+/// `RecoveryRotation`, see [`crate::identity`]) to the handle's record, and
+/// move what this server holds to the new key.
+fn receive_identity_change(st: &AppState, activity: &serde_json::Value) -> Response {
+    let Ok(change) = serde_json::from_value::<Signed>(activity.clone()) else {
+        return reply(StatusCode::BAD_REQUEST, "rejected: not a signed object");
+    };
+    let Some(h) = change.envelope.body.get("handle").and_then(|v| v.as_str()).map(String::from) else {
+        return reply(StatusCode::BAD_REQUEST, "rejected: missing handle");
+    };
+    let _g = st.write.lock().unwrap();
+    // Profiles shared before identity records existed get one on first use.
+    let current = match st.store.identity(&h) {
+        Ok(Some(i)) => i,
+        Ok(None) => match st.store.remotes().into_iter().find(|r| r.handle == h) {
+            Some(r) => Identity::new(&h, &r.ed_pub, &r.box_pub),
+            None => return reply(StatusCode::NOT_FOUND, "this commons doesn't hold that handle"),
         },
+        Err(e) => return store_failed(&e),
+    };
+    let next = match identity::apply(&current, &change, now()) {
+        Ok(n) => n,
+        Err(e) => return reply(StatusCode::CONFLICT, &format!("rejected: {e}")),
+    };
+    if next.key != current.key {
+        if let Err(e) = st.store.rekey(&current.key, &next.key, &next.box_key) {
+            return store_failed(&e);
+        }
+    }
+    match st.store.save_identity(&next) {
+        Ok(()) => reply(StatusCode::OK, "applied"),
+        Err(e) => store_failed(&e),
     }
 }
 
@@ -506,7 +558,7 @@ fn receive_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
         Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };
     let _g = st.write.lock().unwrap();
-    let tomb = match federation::apply_withdraw(&w, &st.store.remotes()) {
+    let tomb = match federation::apply_withdraw(&w, &st.store.remotes(), &st.store.tombstones()) {
         Ok(t) => t,
         Err(e) => return reply(StatusCode::CONFLICT, e),
     };
@@ -665,6 +717,14 @@ pub async fn federated(State(st): State<Shared>, Path(kid): Path<String>, header
 pub async fn about(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session(&st, &headers).map(|s| s.handle);
     render(&st.site, Page::new("How this works", me.as_deref(), pages::about()))
+}
+
+/// Add a `Set-Cookie` header to a response.
+pub(crate) fn with_cookie(mut resp: Response, cookie: String) -> Response {
+    if let Ok(v) = axum::http::HeaderValue::from_str(&cookie) {
+        resp.headers_mut().insert(axum::http::header::SET_COOKIE, v);
+    }
+    resp
 }
 
 /// Small extension so a page response can carry a different status.

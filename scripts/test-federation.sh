@@ -19,7 +19,11 @@ trap cleanup EXIT
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8090/health >/dev/null && ok "node up" || no "node failed to start"
 
-SID=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+SIGNUP=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" | tr -d '\r')
+SID=$(printf '%s\n' "$SIGNUP" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+# Sign-up shows the recovery code once (decision record 0010); keep it for later.
+RCODE=$(printf '%s\n' "$SIGNUP" | grep -oE '[0-9a-f]{8}(-[0-9a-f]{8}){7}' | head -1)
+[ -n "$RCODE" ] && ok "sign-up showed a recovery code" || no "no recovery code at sign-up"
 [ -n "$SID" ] && ok "created @tega + session" || no "no session from /join"
 CSRF=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 [ -n "$CSRF" ] && ok "got CSRF token" || no "no CSRF token"
@@ -112,6 +116,20 @@ CSRF2=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID2" | grep 
 curl -s -o /dev/null -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "name=Mo Secret" --data-urlencode "bio=Private." --data-urlencode "visibility=members" --data-urlencode "license=cc-by"
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "never shared\|stay on your node" && ok "members-only share blocked on node" || no "members-only not blocked"
 curl -s http://localhost:8091/ | grep -qi 'Mo Secret\|@mo' && no "members handle leaked to commons" || ok "members handle never reached commons"
+
+# Key rotation (decision record 0010): tega replaces their key; every commons
+# moves @tega to the new key, and the old key stops working there.
+OLDKEY=$(curl -s http://localhost:8090/api/@tega | grep -oE '"ed25519_public":"[0-9a-f]+"')
+cp "$T/cap.json" "$T/old-key-share.json"   # a share signed by the key about to be replaced
+curl -s -X POST http://localhost:8090/rotate -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" | grep -q "Key replaced" && ok "node replaced @tega's key on every commons" || no "key replacement failed"
+NEWKEY=$(curl -s http://localhost:8090/api/@tega | grep -oE '"ed25519_public":"[0-9a-f]+"')
+[ -n "$NEWKEY" ] && [ "$NEWKEY" != "$OLDKEY" ] && ok "node now signs with the new key" || no "node key unchanged"
+grep -q "${NEWKEY#*:\"}" "$T/commons/identities/tega.json" && ok "commons records @tega under the new key" || no "commons didn't move @tega"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/old-key-share.json")" = "409" ] && ok "a share signed by the old key is refused (409)" || no "old key still accepted"
+# Recovery: the recovery code takes the handle to fresh keys and issues a new code.
+REC=$(curl -s -X POST http://localhost:8090/recover -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "code=$RCODE")
+printf '%s' "$REC" | grep -q "Your new recovery code" && ok "recovery code moved @tega to fresh keys" || no "recovery failed"
+curl -s http://localhost:8091/ | grep -q "@tega" && ok "@tega still listed on the commons after recovery" || no "@tega lost after recovery"
 
 # Withdrawal: @tega asks the commons to remove its copy. The commons drops it,
 # keeps @tega reserved for tega's key, and refuses a replay of the old share.

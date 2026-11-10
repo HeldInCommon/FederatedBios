@@ -18,6 +18,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use crate::model::{MemberBox, Profile};
 
 /// A new set of keys for a handle, all hex-encoded.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct NewKeys {
     pub ed_pub: String,
     pub ed_priv: String,
@@ -55,6 +56,31 @@ pub fn verify_message(ed_pub_hex: &str, msg: &[u8], sig_hex: &str) -> Result<(),
     let vk = VerifyingKey::from_bytes(&hex32(ed_pub_hex).ok_or("bad key")?).map_err(|_| "bad key")?;
     let sig_bytes: [u8; 64] = hex::decode(sig_hex).ok().and_then(|b| b.try_into().ok()).ok_or("bad signature")?;
     vk.verify(msg, &Signature::from_bytes(&sig_bytes)).map_err(|_| "signature does not verify")
+}
+
+/// The hex public key for a hex Ed25519 private key, or `None` if damaged.
+pub fn public_from_private(ed_priv_hex: &str) -> Option<String> {
+    Some(hex::encode(SigningKey::from_bytes(&hex32(ed_priv_hex)?).verifying_key().to_bytes()))
+}
+
+/// A new Ed25519 keypair alone, as `(public, private)` hex. Used for recovery keys.
+pub fn generate_signing() -> (String, String) {
+    let k = SigningKey::generate(&mut OsRng);
+    (hex::encode(k.verifying_key().to_bytes()), hex::encode(k.to_bytes()))
+}
+
+/// A private key written for printing: 64 hex characters in eight groups of
+/// eight, e.g. `1a2b3c4d-…`. Easy to copy by hand and to read back.
+pub fn recovery_code(priv_hex: &str) -> String {
+    priv_hex.as_bytes().chunks(8).map(|c| String::from_utf8_lossy(c).into_owned()).collect::<Vec<_>>().join("-")
+}
+
+/// Read a recovery code back (spaces, dashes and case are ignored). `None`
+/// if it isn't 64 hex characters.
+pub fn parse_recovery_code(text: &str) -> Option<String> {
+    let hex: String = text.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_lowercase();
+    let other = text.chars().any(|c| !(c.is_ascii_hexdigit() || c == '-' || c.is_whitespace()));
+    (hex.len() == 64 && !other).then_some(hex)
 }
 
 /// Sign a version's `cid` (the signature is over the `cid` string itself).
@@ -152,6 +178,17 @@ mod tests {
         assert_eq!(open_for(&boxes, "mo", &a.box_priv), Some(p));
         assert_eq!(open_for(&boxes, "mo", &b.box_priv), None);
         assert_eq!(open_for(&boxes, "someone", &a.box_priv), None);
+    }
+
+    #[test]
+    fn recovery_code_round_trip() {
+        let (public, private) = generate_signing();
+        let code = recovery_code(&private);
+        assert_eq!(code.len(), 64 + 7);
+        assert_eq!(parse_recovery_code(&code.to_uppercase().replace('-', " ")), Some(private.clone()));
+        assert_eq!(public_from_private(&private), Some(public));
+        assert_eq!(parse_recovery_code("not a code"), None);
+        assert_eq!(parse_recovery_code(&code[..20]), None);
     }
 
     #[test]

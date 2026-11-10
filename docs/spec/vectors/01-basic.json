@@ -1,0 +1,35 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"text\":\"hello\"},\"created_at\":1700000000,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"Note\"}",
+  "cid": "ec686eff324062e82809c167fa8302476ad47cdf737d1d7f6ae204e39e21cf8f",
+  "description": "The smallest useful object: one string in the body, no previous object.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "text": "hello"
+    },
+    "created_at": 1700000000,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "Note"
+  },
+  "name": "01-basic.json",
+  "signed": {
+    "cid": "ec686eff324062e82809c167fa8302476ad47cdf737d1d7f6ae204e39e21cf8f",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "text": "hello"
+      },
+      "created_at": 1700000000,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "Note"
+    },
+    "sig": "84b0e92633450fb2893dcd97b4aa904af96788ecfb2d63f7283412bb9a7da0cf927a7801c4ad916e724e08fd2768859268aeef89e5888d8452aa51662b2a9e03"
+  },
+  "signing_input": "hic/v1/Note\nec686eff324062e82809c167fa8302476ad47cdf737d1d7f6ae204e39e21cf8f",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

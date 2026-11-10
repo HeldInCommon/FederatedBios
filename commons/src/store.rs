@@ -7,6 +7,7 @@
 //!   versions/<cid>.json      immutable, content-addressed versions (nodes)
 //!   remote/<keyid>.json      profiles shared in from other nodes (commons)
 //!   tombstones/<keyid>.json  what remains after a withdrawal (commons)
+//!   identities/<handle>.json who holds each handle, recovery key, rotation history (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -25,6 +26,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::canonical::is_cid;
 use crate::handle;
+use crate::identity::Identity;
 use crate::keys::{is_keyid, keyid};
 use crate::model::{HandleRec, RemoteEntry, Tombstone, Version};
 
@@ -77,7 +79,7 @@ impl Store {
     /// Use `root` as the data folder, creating its sub-folders.
     pub fn open(root: impl Into<PathBuf>) -> std::io::Result<Store> {
         let root = root.into();
-        for sub in ["handles", "versions", "remote", "tombstones"] {
+        for sub in ["handles", "versions", "remote", "tombstones", "identities"] {
             std::fs::create_dir_all(root.join(sub))?;
         }
         Ok(Store { root })
@@ -224,12 +226,66 @@ impl Store {
 
     /// Save the record of a withdrawal.
     pub fn save_tombstone(&self, t: &Tombstone) -> Result<(), StoreError> {
-        Self::write(&self.root.join("tombstones").join(format!("{}.json", keyid(&t.ed_pub))), t)
+        Self::write(&self.tombstone_path(&t.ed_pub), t)
     }
 
     /// Every withdrawal recorded here.
     pub fn tombstones(&self) -> Vec<Tombstone> {
         self.read_all("tombstones")
+    }
+
+    fn tombstone_path(&self, ed_pub: &str) -> PathBuf {
+        self.root.join("tombstones").join(format!("{}.json", keyid(ed_pub)))
+    }
+
+    /// Remove the withdrawal record for a key (used when a handle moves to a
+    /// new key). Removing one that isn't there is not an error.
+    pub fn delete_tombstone(&self, ed_pub: &str) -> Result<(), StoreError> {
+        let p = self.tombstone_path(ed_pub);
+        match std::fs::remove_file(&p) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(StoreError::Io(p, e)),
+        }
+    }
+
+    // ---- identities (who holds each handle, on a commons) -------------------
+
+    fn identity_path(&self, h: &str) -> PathBuf {
+        self.root.join("identities").join(format!("{h}.json"))
+    }
+
+    /// The identity record for a handle, if any.
+    pub fn identity(&self, h: &str) -> Result<Option<Identity>, StoreError> {
+        if !handle::is_valid(h) {
+            return Ok(None);
+        }
+        Self::read(&self.identity_path(h))
+    }
+
+    /// Save an identity record.
+    pub fn save_identity(&self, id: &Identity) -> Result<(), StoreError> {
+        if !handle::is_valid(&id.handle) {
+            return Err(StoreError::Io(self.identity_path("invalid"), std::io::Error::other("invalid handle")));
+        }
+        Self::write(&self.identity_path(&id.handle), id)
+    }
+
+    /// Move everything this server holds for `old_key` to `new_key` (after a
+    /// key rotation): the shared profile and any withdrawal record.
+    pub fn rekey(&self, old_key: &str, new_key: &str, new_box_key: &str) -> Result<(), StoreError> {
+        if let Some(mut r) = self.remote(&keyid(old_key))? {
+            r.ed_pub = new_key.to_string();
+            r.box_pub = new_box_key.to_string();
+            self.save_remote(&r)?;
+            self.delete_remote(&keyid(old_key))?;
+        }
+        if let Some(mut t) = self.tombstones().into_iter().find(|t| t.ed_pub == old_key) {
+            t.ed_pub = new_key.to_string();
+            self.save_tombstone(&t)?;
+            self.delete_tombstone(old_key)?;
+        }
+        Ok(())
     }
 }
 
@@ -260,6 +316,9 @@ mod tests {
             secret_hash: String::new(),
             current_cid: None,
             shared_to: vec![],
+            recovery_pub: None,
+            recovery_decl: None,
+            pending_rotation: None,
         }
     }
 

@@ -36,6 +36,8 @@ jobs:
         run: cargo test --manifest-path commons/Cargo.toml --locked
       - name: Build hic-commons
         run: cargo build --release --manifest-path commons/Cargo.toml --locked
+      - name: Spec vectors, checked independently in Python
+        run: python3 scripts/check_spec_vectors.py
       - name: Federation tests
         run: ./scripts/test-federation.sh
 
