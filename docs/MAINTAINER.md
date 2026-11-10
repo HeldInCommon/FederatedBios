@@ -1,128 +1,124 @@
-# Maintainer guide — reviewing & shipping from the org
+# Maintainer guide — releasing, signing and hosting
 
-Instructions for a **HeldInCommon/FederatedBios** maintainer to review PR #2 and
-publish Held in Common from the org. The work currently lives on the fork
-`phoenixperry/FederatedBios` (branch `feat/federation`); contributors there have
-read-only access to the org, so the final hosting steps need a maintainer.
-
-> **Signing status: unsigned for now.** Desktop builds are intentionally unsigned
-> this release. Users open them with the one-time "right-click → Open" (macOS) or
-> "More info → Run anyway" (Windows) flow — documented in `docs/INSTALL.md`.
-> Code signing (Apple notarization, Windows cert) is a follow-up, not a blocker.
+For maintainers of **HeldInCommon/FederatedBios**. All work happens in this
+repository (not personal forks): branch from `main`, open a pull request, merge
+when the checks pass. App identity: `org.heldincommon.node`, product name
+**Held In Common**.
 
 ---
 
-## 1. Review PR #2
+## 1. Checks on every pull request
 
-https://github.com/HeldInCommon/FederatedBios/pull/2 — adds the commons/node
-server, node↔commons federation, encrypted members-only, CC governance, the
-desktop app, the Docker image, the install guide, the architecture slides, and
-`docs/ARCHITECTURE.md`.
+`.github/workflows/pr-checks.yml` runs:
 
-**Verify locally:**
+- formatting (`cargo fmt --check`) and lints (`cargo clippy -D warnings`);
+- the server's unit, HTTP and format-vector tests (`cargo test`);
+- the independent Python check of the format vectors;
+- the end-to-end test (`scripts/test-federation.sh`): real nodes and commons,
+  sharing, tampering, impostors, vouching and steward approval, withdrawal, key
+  replacement and recovery;
+- a macOS build of the desktop app (unsigned; attached to the run as an
+  artifact so reviewers can try it), and its tests.
+
+Security-sensitive code needs a second reviewer: `federation.rs`, `identity.rs`,
+`keys.rs`, `passphrase.rs`, `sessions.rs`, `store.rs`, `vouching.rs`,
+`outbound.rs`, `web/steward.rs`.
+
+---
+
+## 2. Releasing the desktop app
+
+The public download is the rolling **node-app-preview** release. Its assets keep
+stable names (`Held-In-Common-macOS-AppleSilicon.dmg`,
+`Held-In-Common-Linux.{deb,AppImage,rpm}`), so download links never change.
+
+1. **Bump the version** in `commons/Cargo.toml`, `src-tauri/Cargo.toml` and
+   `src-tauri/tauri.conf.json`, through a pull request.
+2. **Run the release:** Actions → **desktop-app** → Run workflow on `main`, or
+   push a tag `node-app-vX.Y.Z`. It builds macOS and Linux; the macOS build is
+   signed, notarized, checked, and uploaded under the stable name.
+3. **Check** the release page and download the `.dmg` on a Mac other than the
+   build machine to confirm it opens without warnings.
+
+### Signing and notarizing by hand (fallback)
+
+If the GitHub build can't sign, a maintainer with the Developer ID certificate
+in their keychain and a `notarytool` profile can do it locally:
+
 ```
-git fetch origin pull/2/head:pr-2 && git checkout pr-2
-cargo build --manifest-path commons/Cargo.toml     # server builds
-./scripts/test-federation.sh                        # 15/15: publish→sign→federate, tamper→400, members guard
+cargo build --release --manifest-path commons/Cargo.toml
+cp commons/target/release/hic-commons src-tauri/binaries/hic-commons-$(rustc -vV | sed -n 's/host: //p')
+cd src-tauri && APPLE_SIGNING_IDENTITY="Developer ID Application: NAME (TEAMID)" \
+  HIC_SHARE_DEFAULT="<default commons>" cargo tauri build --bundles app
+# notarize and staple the app, wrap it in a .dmg (with an Applications link),
+# sign, notarize and staple the .dmg:
+xcrun notarytool submit app.zip --keychain-profile <profile> --wait && xcrun stapler staple "Held In Common.app"
+xcrun notarytool submit Held-In-Common-macOS-AppleSilicon.dmg --keychain-profile <profile> --wait
+xcrun stapler staple Held-In-Common-macOS-AppleSilicon.dmg
+gh release upload node-app-preview Held-In-Common-macOS-AppleSilicon.dmg --clobber
 ```
 
-**Give these a close read** (security-sensitive):
-- `commons/src/federation.rs` → `verify_share` / `admit` (cid recompute + Ed25519 verify + handle pinning + rollback refusal).
-- `commons/src/keys.rs` → `seal_for_members` / `open_for` (members-only, ChaChaBox/X25519).
-- `commons/src/passphrase.rs` and `commons/src/sessions.rs`: Argon2id hashes, sign-in limits, expiring sessions, per-session CSRF on `publish`/`share`.
+Store the notarization profile once with
+`xcrun notarytool store-credentials <profile>` (it asks for an app-specific
+password; never paste it anywhere else).
 
 ---
 
-## 2. Merge
+## 3. macOS signing secrets
 
-Merge `feat/federation` → `main`. App identity is `org.heldincommon.node`,
-product name **"Held In Common"**.
+GitHub signs with a **Developer ID Application** certificate. The six secrets
+live in the GitHub environment **`macos-signing`** (Settings → Environments),
+which only `main` and `node-app-v*` tags can use, so a workflow on another
+branch can't read them ([decision record 0015](adr/0015-macos-signing.md)). If
+any is missing, the macOS job stops instead of publishing an unsigned build.
 
----
+Set them from your own Terminal, with `gh` signed in as an admin. Run each
+command **on its own**, and paste a value only at the "Paste your secret"
+prompt:
 
-## 3. Publish installers from the org
+1. **Export the certificate:** Keychain Access → *login* → *My Certificates* →
+   right-click **Developer ID Application: … (TEAMID)** → **Export…** → `.p12`
+   with a strong password.
+2. **Make an app-specific password** at account.apple.com → Sign-In and
+   Security → App-Specific Passwords.
+3. **Add the secrets** (`R=HeldInCommon/FederatedBios`):
+   ```
+   base64 -i ~/Desktop/hic-developer-id.p12 | gh secret set APPLE_CERTIFICATE --repo $R --env macos-signing
+   gh secret set APPLE_CERTIFICATE_PASSWORD --repo $R --env macos-signing
+   gh secret set APPLE_PASSWORD --repo $R --env macos-signing
+   gh secret set APPLE_ID --repo $R --env macos-signing
+   gh secret set APPLE_TEAM_ID --repo $R --env macos-signing --body TEAMID
+   gh secret set APPLE_SIGNING_IDENTITY --repo $R --env macos-signing --body "Developer ID Application: NAME (TEAMID)"
+   ```
+4. **Delete the `.p12`.**
 
-CI (`.github/workflows/desktop-app.yml`) builds **macOS + Linux** via
-`tauri-action`. To cut a release on the org:
-
-1. Settings → Actions → General → **Workflow permissions = Read and write**
-   (lets `tauri-action` create the release).
-2. Push a tag: `git tag node-app-v0.1.0 && git push origin node-app-v0.1.0`.
-   CI builds and publishes to a `node-app-preview` release on the **org**.
-3. (Optional polish) Rename the uploaded assets to version-less names
-   (`Held-In-Common-macOS-AppleSilicon.dmg`, `Held-In-Common-Linux.{deb,AppImage,rpm}`)
-   and retitle the release "Held In Common — app". Then update the download links
-   in `docs/INSTALL.md` to the org release.
-
-A working reference release (built from this branch) is on the fork:
-https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview
-
-> **Not built yet:** Windows and Intel-mac. Add `windows-latest` / an
-> `x86_64-apple-darwin` target to the matrix when wanted (Windows needs a sign
-> step for a clean SmartScreen experience).
+The workflow tidies stray spaces and line breaks in pasted secrets. When the
+certificate expires, repeat steps 1, 3 and 4.
 
 ---
 
 ## 4. Docker image
 
-`.github/workflows/node-image.yml` publishes a multi-arch image on push to
-`main`/`feat/federation`. The fork's image is already **public** and anonymously
-pullable:
-```
-docker pull ghcr.io/phoenixperry/hic-node:latest
-```
-To host it under the org, let CI publish `ghcr.io/heldincommon/hic-node`, then set
-that package public once: **org → Packages → `hic-node` → Package settings →
-Danger Zone → Change visibility → Public**. (Package visibility is a UI action;
-there is no REST endpoint for it.)
+`.github/workflows/node-image.yml` publishes a multi-arch image
+`ghcr.io/heldincommon/hic-node:latest` on every push to `main` that touches
+`commons/`. Make the package public once: **org → Packages → `hic-node` →
+Package settings → Change visibility → Public**. How to run a node or a commons
+from it: [commons/README.md](../commons/README.md).
 
 ---
 
-## 5. Architecture slides (GitHub Pages)
+## 5. Architecture slides
 
-`docs/architecture.html` is a self-contained reveal.js deck. To serve it from the
-org: Settings → **Pages** → Deploy from branch `main`, folder `/docs`. It will be
-at `https://heldincommon.github.io/FederatedBios/architecture.html`.
-(Currently served from the fork.)
+`docs/architecture.html` is a self-contained reveal.js deck, currently served
+from the original fork at
+https://phoenixperry.github.io/FederatedBios/architecture.html. To serve it from
+the organisation instead: Settings → **Pages** → deploy from `main`, folder
+`/docs`; it will be at `https://heldincommon.github.io/FederatedBios/architecture.html`.
 
 ---
 
-## 6. macOS signing
+## 6. Not yet
 
-macOS builds from `desktop-app.yml` are signed with a **Developer ID
-Application** certificate and notarized by Apple. The six secrets live in the
-GitHub environment **`macos-signing`** (Settings → Environments), which only
-`main` and `node-app-v*` tags can use, so a workflow pushed to another branch
-cannot read them. If any secret is missing, the macOS job fails instead of
-publishing an unsigned build.
-
-Set them from **your own Terminal** (not a shared screen or chat), with the
-`gh` CLI signed in as a repo admin:
-
-1. **Export the certificate.** Keychain Access → *login* → *My Certificates* →
-   expand **Developer ID Application: … (TEAMID)** to check a private key sits
-   under it → right-click the certificate → **Export…** → save as `.p12` with a
-   strong password.
-2. **Make an app-specific password** at account.apple.com → Sign-In and
-   Security → App-Specific Passwords (label it e.g. `hic-github`).
-3. **Add the secrets** (each `gh secret set` without `--body` asks for the
-   value with hidden input):
-   ```bash
-   R=HeldInCommon/FederatedBios
-   base64 -i ~/Desktop/hic-developer-id.p12 | gh secret set APPLE_CERTIFICATE --repo $R --env macos-signing
-   gh secret set APPLE_CERTIFICATE_PASSWORD --repo $R --env macos-signing
-   gh secret set APPLE_PASSWORD             --repo $R --env macos-signing
-   gh secret set APPLE_ID                   --repo $R --env macos-signing
-   gh secret set APPLE_TEAM_ID              --repo $R --env macos-signing
-   gh secret set APPLE_SIGNING_IDENTITY     --repo $R --env macos-signing
-   ```
-   `APPLE_SIGNING_IDENTITY` is the full name shown by
-   `security find-identity -v -p codesigning` (e.g. `Developer ID Application: NAME (TEAMID)`).
-4. **Delete the `.p12`** from your disk once the secrets are set.
-5. **Run a build:** Actions → desktop-app → Run workflow (on `main`), or push a
-   `node-app-v*` tag. The last macOS step checks the signature and notarization
-   and replaces `Held-In-Common-macOS-AppleSilicon.dmg` on the release.
-
-When the certificate expires or is revoked, repeat steps 1, 3 and 4.
-
-**Windows:** not signed yet; needs a code-signing certificate and a sign step.
+- **Automatic updates** (issue #17): needs an updater signing key.
+- **Windows** builds (and a Windows code-signing certificate) and **Intel Mac**
+  builds.

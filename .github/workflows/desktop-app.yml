@@ -89,6 +89,10 @@ jobs:
           # the ends of the others, and stop (naming the secret, never its value)
           # if one still spans several lines.
           C=$(printf '%s' "$C" | tr -d ' \t\r\n')
+          # The signing identity is ordinary text ("Developer ID Application:
+          # NAME (TEAMID)"); a long pasted line often wraps, so join its lines
+          # with single spaces rather than refusing it.
+          SI=$(printf '%s' "$SI" | tr '\r\n\t' '   ' | tr -s ' ' | sed -e 's/^ //' -e 's/ $//')
           trim(){ printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d'; }
           bad=""
           for v in CP:APPLE_CERTIFICATE_PASSWORD SI:APPLE_SIGNING_IDENTITY AI:APPLE_ID AP:APPLE_PASSWORD TI:APPLE_TEAM_ID; do

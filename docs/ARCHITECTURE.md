@@ -1,231 +1,277 @@
 # Held in Common — Architecture
 
 > A federated commons for creative work. Everyone runs their own **node** (a
-> personal commons on hardware they control) and can **share signed copies** to a
-> **commons** that anyone can host. Work stays on the node unless the owner sends
-> a copy, and each version carries the terms (license + CC signals) it travels
-> under. Members-only work is **encrypted** and never leaves the node readable.
+> personal commons on hardware they control) and can **share signed copies** to
+> a **commons** that anyone can host. Work stays on the node unless the owner
+> sends a copy, and each version carries the terms (licence + CC signals) it
+> travels under. Members-only work is **encrypted** and never leaves the node.
 
-This document is for the dev teams building on and operating Held in Common.
+This document is for the people building on and operating Held in Common. For
+*where things live in the code*, read [CODEMAP.md](CODEMAP.md); for *why* each
+major choice was made, the [decision records](adr/README.md); for the exact
+bytes that are signed, the [format specification](spec/README.md).
+
+Current version: **0.4.0** (November 2026).
 
 ---
 
 ## 1. Topology
 
-The same binary (`hic-commons`) is **both** a node and a commons — a commons is
-just a node that others point at. Nodes publish locally and federate signed
-copies to one or more commons; the commons aggregates them into a browsable
-directory. There is no central server and no landlord.
+The same binary (`hic-commons`) is **both** a node and a commons. A **node** is
+someone's own server: they create their identity there, publish, and share. A
+**commons** is a shared directory: it has no sign-up, receives signed copies
+from nodes at `/inbox`, checks them, and lists them. There is no central server.
 
 <img src="diagrams/topology.svg" width="760" alt="Nodes federate signed copies into a commons" />
 
-**Three visibility reaches**, chosen per version:
+| | Node | Commons |
+|---|---|---|
+| Who runs it | each person, usually in the desktop app | a host: a workshop leader, a collective, a server |
+| Listens on | this computer only (`127.0.0.1`) | the network (`0.0.0.0`) |
+| Identities | creates them (handle, keys, passphrase) | none: it only holds signed copies |
+| Who's in charge | the member | its **steward** (whoever runs it) |
 
-| Reach | Listed | Searchable | Federates | At rest |
+**Three reaches**, chosen per version:
+
+| Reach | Listed | Search engines | Shared to a commons | At rest |
 |---|---|---|---|---|
-| **Public** | yes | yes | yes (signed copy) | plaintext |
-| **Commons** | yes | no (shared by link) | yes (signed copy) | plaintext |
-| **Members-only** | to members | no | **never** | **encrypted** |
+| **Public** | yes | allowed | yes, as a signed copy | plaintext |
+| **Commons** | yes | asked not to (`noindex`) | yes, as a signed copy | plaintext |
+| **Members only** | to this node's members | no | **never** | **encrypted** |
 
 ---
 
 ## 2. Components
 
 ```
-commons/       hic-commons — the node + commons server (Rust / axum). One binary.
-src-tauri/     the native desktop app: a Tauri shell that runs hic-commons as a sidecar.
-docs/          this doc, the workshop INSTALL guide, the reveal.js architecture slides.
-scripts/       test-federation.sh — the end-to-end federation test.
+commons/       hic-commons: the node + commons server (Rust, axum). One binary.
+  src/         one module per job (see docs/CODEMAP.md)
+  static/      the stylesheet and two small scripts, compiled in
+  tests/       in-process HTTP tests and the format test vectors
+src-tauri/     the desktop app: a Tauri shell that runs hic-commons as a sidecar
+docs/          this document, CODEMAP, the install guide, decision records (adr/),
+               the format spec (spec/), the November 2026 review, the slides
+scripts/       test-federation.sh (end to end), check_spec_vectors.py (independent check)
 ```
 
 ### 2.1 `hic-commons` (the server)
-A single self-contained [axum](https://docs.rs/axum) service, split into one module per job (see [CODEMAP.md](CODEMAP.md)). Responsibilities:
-identity + auth, content-addressed signed publishing, the three visibility tiers
-(incl. members-only encryption), CC governance metadata, the directory + profile
-pages (server-rendered with [maud](https://docs.rs/maud)), a small JSON API, and
-the federation endpoints (ActivityPub-shaped actor/outbox/WebFinger + `/inbox`).
 
-### 2.2 Desktop app (`src-tauri`)
-A thin [Tauri v2](https://v2.tauri.app) shell. On first launch it asks what this
-computer runs: **a node** or **a commons** (for a commons, where people will reach
-it; "this room" over the local network is available today). It then asks for a
-**name** for this computer's node or commons ("Studio laptop"), which the server
-uses as its instance name: it shows in the coloured bar and travels, signed,
-with every share, so one person's several machines are told apart. Earlier
-versions used the computer's account name instead; those installs are asked for
-a name once. Role and name are saved in `<app data>/app.json`, and each role
-gets its own data folder (`node-data/`, `commons-data/`). Installs that already
-have a node skip the role question. The app then
-starts the bundled `hic-commons` binary as a **sidecar** (`tauri-plugin-shell`) in
-that role, shows an on-brand loading screen, polls `http://127.0.0.1:8080/health`
-until it answers with the launch token the app gave its server (so it never shows another program on that port),
-then hands off to the server's own web UI. No Docker, no terminal. The
-sidecar binary (`binaries/hic-commons-<target-triple>`) is gitignored and built
-+ copied by CI (and by the from-source steps in the README).
+An [axum](https://docs.rs/axum) server split into single-purpose modules.
+Decisions are pure functions; every write happens in a clearly named place
+([decision record 0016](adr/0016-no-hidden-effects.md)). Pages are rendered on
+the server with [maud](https://docs.rs/maud); the only scripts are the photo
+picker and the passphrase show/hide button.
+
+### 2.2 The desktop app (`src-tauri`)
+
+A thin [Tauri v2](https://v2.tauri.app) shell, signed with a Developer ID and
+notarized by Apple ([0015](adr/0015-macos-signing.md)).
+
+- **First launch:** choose **a node** or **a commons**, then **name it**
+  ("Studio laptop"). The name shows in the coloured bar and travels, signed,
+  with every share; it is never the computer's account name. Rename any time
+  with **Node → Rename…**. Role and name are saved in `<app data>/app.json`;
+  each role has its own data folder (`node-data/`, `commons-data/`).
+- **Running the server:** the app starts the bundled `hic-commons` as a
+  sidecar with a per-launch token, and opens a page only when `/health`
+  echoes that token ([0008](adr/0008-app-trusts-only-its-server.md)). If the
+  server crashes, the app restarts it (up to three times). A commons opens in
+  its **steward view**.
+- **Notifications and email:** the app shows the node's news (for example
+  "now listed on …") as macOS notifications, and opens **Email this invite**
+  links in the person's own mail app.
+- **Logs:** `~/Library/Logs/org.heldincommon.node/held-in-common.log`.
 
 ---
 
-## 3. Data model
+## 3. Data model and storage
 
-Everything an artist holds hangs off their **handle**. A **profile** points at its
-current **version**; every publish mints a new content-addressed, signed version
-that carries its own license and CC signals. (Works/datasets are modelled the
-same way; profiles are the first object type implemented.)
+Everything hangs off a member's **handle**. Each publish makes a new
+content-addressed, signed **version** carrying its own licence and signals.
 
 <img src="diagrams/data-model.svg" width="900" alt="You → Profile → Works/Datasets → Version → License/Signals" />
 
-**On-disk layout** (filesystem under `$HIC_DATA`, default `./data`):
+Storage is plain JSON files under `$HIC_DATA` (default `./data`). Every write is
+atomic (temporary file, flush, rename); a damaged file is an error, never
+"missing". The member and shared-profile lists are cached in memory and the
+cache is cleared by every write through the store.
 
 ```
-data/
-  instance.json             this instance's role ("node" | "commons"), fixed for the folder
-  handles/<handle>.json     identity: display name, Ed25519 + X25519 keys, current_cid, shared_to[]
-  versions/<cid>.json       a signed version (plaintext profile, or encrypted member boxes)
-  remote/<keyid>.json       a RemoteEntry federated in from another node (verified + key-pinned)
+instance.json              the folder's role ("node" | "commons"), fixed for the folder
+handles/<handle>.json      a member: keys, passphrase hash (Argon2id), current version,
+                           commons shared to, recovery key, pending key change, waiting_on
+versions/<cid>.json        a signed version (plaintext, or encrypted copies for members)
+notices.json               news for members (e.g. "now listed on …")       [node]
+remote/<keyid>.json        a profile shared in and verified                [commons]
+identities/<handle>.json   who holds each handle; recovery key; change history  [commons]
+tombstones/<keyid>.json    what remains after a withdrawal                 [commons]
+pending/<keyid>.json       shares waiting for a vouch or approval          [commons]
+intros/<keyid>.json        how each person joined, and who vouched         [commons]
+used-invites/, commons-invites/, founding-invite.json, steward.json        [commons]
 ```
-Sessions are in-memory (cookie token → handle + per-session CSRF).
+
+Sessions live in memory and expire after 24 hours.
 
 ---
 
-## 4. Publish + federation flow
-
-Publishing is local and content-addressed; federation is an explicit, signed push
-that the receiving commons independently verifies.
+## 4. Publishing and sharing
 
 <img src="diagrams/publish-federate.svg" width="820" alt="Publish, sign, federate, verify flow" />
 
-1. **Publish** — the node builds the profile, picks visibility/license/signals.
-2. **Content-address + sign** — `cid = sha256(handle, visibility, license, signals, created_at, body)`; `sig = Ed25519.sign(cid)`. The `cid` is the version's permanent identity; the signature binds it to the handle's key.
-3. **Store** locally as a `Version`.
-4. **Share** — build an ActivityPub-shaped `Create` and `POST` it to `<commons>/inbox`.
-5. **Verify (`verify_inbound`)** — the commons **recomputes the `cid`** from the sent content (tamper check), **verifies the Ed25519 signature**, and **TOFU-pins** the handle to the first key it saw (on a commons a handle belongs to one key; the sender's `origin` and origin label are self-asserted, so they are not part of the pin). Mismatch or malformed → **400**; a handle re-appearing under a different key, or colliding with a local member's handle → **409**. On success it stores a `RemoteEntry` and returns **202**, and the directory lists it as *federated* (not re-hosted as local).
+1. **Publish** on the node: the profile, its reach, licence and signals.
+2. **Sign:** the version gets a content address (`cid`) and an Ed25519
+   signature, and is stored on the node.
+3. **Share:** the node sends a signed **`hic/v1` Profile** to the commons'
+   `/inbox`. Every field is signed: the profile (picture included), display
+   name, reach, licence, signals, encryption key, and the node's address and
+   name ([spec §5.2](spec/README.md)). Commons that predate `hic/v1` get the
+   older format.
+4. **Check:** the commons recomputes the content address and checks the
+   signature (tampering → 400), then applies its rules:
+   - a handle belongs to the first key that used it here; another key → 409
+     ([0003](adr/0003-handles-unique-per-commons.md));
+   - an older version than the one held, or one from before a withdrawal → 409
+     ([0006](adr/0006-withdrawal-and-rollback.md));
+   - a **new** handle needs a vouch (section 5).
+5. **List:** the commons stores the copy and records who holds the handle
+   (and the recovery key, if the share declared one).
 
-Identity is the handle's **public key**, so this works for laptops with no public
-URL (NAT-friendly). Narrowing a version's visibility stops the commons serving it,
-but a copy already fetched stays with the fetcher — content-addressing is
-append-only by nature.
+Members-only versions are never sent.
 
 ---
 
-## 5. Members-only encryption (Option B)
+## 5. Joining a commons
 
-Members-only is **encrypt-to-member-set**: a fresh random content key encrypts the
-profile; that key is wrapped to each member's public key with a sealed box. The
-ciphertext lives on the node and **never federates**.
+A new handle is listed only when someone already there vouches for it
+([0011](adr/0011-joining-needs-a-vouch.md), [0017](adr/0017-steward-approval.md)):
+
+| Route | How |
+|---|---|
+| **Member's invite code** | a member presses **Invite someone**, sends the code (there's an **Email this invite** button), and the newcomer pastes it when they share |
+| **Member's vouch** | the newcomer waits on the commons' list; a member who knows them vouches from their node |
+| **Steward approval** | the steward opens the **steward view** and presses **Approve** (or **Decline**) |
+| **Steward's invite code** | the steward presses **Make an invite** in the steward view |
+| **Founding invite** | a new commons makes a one-time code for its first person |
+
+The **steward view** opens at the commons' own computer (the desktop app goes
+straight there), or with the private **steward link** the commons prints in its
+log. Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 5).
+`HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
+
+**Hearing you were listed** ([0018](adr/0018-hearing-you-were-listed.md)):
+commons can't contact nodes, so a waiting node asks (`GET /api/status`) when it
+starts and when the member presses **Check now**. A change becomes a banner on
+the member's pages and a macOS notification.
+
+---
+
+## 6. Identity over time
+
+- **Backups** ([0007](adr/0007-identity-backup.md)): **Download backup** saves
+  the keys and current profile, encrypted with the passphrase; **Restore from
+  a backup** on a new computer keeps the same keys, so every commons still
+  recognises the handle.
+- **Recovery key and key rotation** ([0010](adr/0010-recovery-key.md)): sign-up
+  shows a recovery code once, to keep offline. **Replace my key** moves the
+  handle to new keys on every commons shared to (kept pending until all
+  accept). **Recover** with the code overrides any change made with a stolen
+  key.
+- **Withdrawal:** **Withdraw** asks a commons to remove the shared copy; it
+  keeps a small tombstone so the handle stays yours and the old copy can't be
+  replayed.
+
+---
+
+## 7. Members-only encryption
+
+Each members-only version is encrypted once per member of the node with
+`crypto_box` (X25519 + XChaCha20-Poly1305), using a one-time key per copy. It
+never leaves the node. The node holds every member's keys, so this protects
+copies outside the node, not against whoever runs it; the `/about` page says so.
 
 <img src="diagrams/members-encryption.svg" width="760" alt="Members-only encrypt-to-member-set" />
 
-- Encryption: `crypto_box` **ChaChaBox** (X25519 + XChaCha20-Poly1305).
-- The node holds each member's encryption **public** key; only a signed-in member can unwrap the content key with their secret key and decrypt.
-- `/share` rejects members-only outright — it is never sent, never seen by a commons, never used to train a model.
+---
+
+## 8. Security model
+
+- **Keys:** Ed25519 (signing) and X25519 (encryption) per handle, made and held
+  by the member's node.
+- **Signed formats:** written down in [spec/](spec/README.md): canonical JSON
+  (RFC 8785), a type in every signature, test vectors checked in Rust and,
+  independently, Python.
+- **Passphrases:** Argon2id; five wrong tries per handle, then a 15-minute wait.
+  Show/hide eye button in every passphrase box. No recovery of a forgotten
+  passphrase.
+- **Sessions:** `HttpOnly`, `SameSite=Lax` cookies (`Secure` on https), 24-hour
+  expiry, a CSRF token on every form that changes something.
+- **Network exposure:** a node listens only on its own computer
+  ([0004](adr/0004-node-listens-only-locally.md)). A node reachable from the
+  network won't share to internal addresses ([0012](adr/0012-block-internal-addresses-on-share.md)).
+- **Abuse:** vouching for new handles; at most 120 `/inbox` requests per minute
+  per address.
+- **Crash safety:** atomic writes; clean shutdown on SIGTERM.
+- **Web pages:** strict Content-Security-Policy; `X-Robots-Tag: noindex` for
+  the Commons reach; `robots.txt`.
 
 ---
 
-## 6. Security model
-
-- **Keys** — each handle gets an Ed25519 signing keypair and an X25519 encryption keypair, minted and held by the node; users never touch a private key.
-- **Integrity / authenticity** — content-addressing (sha256) + Ed25519 signatures. A single changed character breaks the `cid` and the signature → rejected at `/inbox`.
-- **Federation trust** — TOFU key pinning per handle: the first key to federate a handle owns it on that instance, and a different key is refused (409). Handles are **unique per commons, not globally**: the same @handle can live on several commons, but on each one it belongs to one key. A node checks its default commons (`HIC_SHARE_DEFAULT`) through `GET /api/handle/<h>` at sign-up and refuses a handle that is already taken there; if the commons is unreachable, sign-up goes ahead and the commons still refuses a clash at share time. Federated cards show the sending node's address and a short key fingerprint next to the name, so lookalike display names can be told apart. Origin is not part of the pin because the sender asserts it. *P2: reachable-origin verification by fetching `<origin>/ap/@handle`, after which the pin can widen to a verified `handle@origin` so two people on different nodes can share a handle.*
-- **Auth** — passphrase stored as an **Argon2id** hash (no recovery; older SHA-256 hashes are upgraded at the next sign-in), five wrong tries per handle then a 15-minute wait → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` on https) that expires after 24 hours, + a per-session **CSRF** token guarding `publish`/`share`.
-- **Network exposure** — a node listens only on `127.0.0.1` (this computer); a commons listens on all interfaces. Override with `HIC_BIND`.
-- **Withdrawal** — a member can withdraw a shared copy. The node sends a signed `Withdraw` addressed to that commons (so it can't be replayed elsewhere); the commons deletes the copy and keeps a tombstone (`tombstones/<keyid>.json`: key, handle, time). The handle stays reserved for that key, and the withdrawn version can't be replayed. An older withdrawal can't remove a later re-share.
-- **Hearing you were listed** — no callbacks (nodes aren't reachable); a node asks the commons it's waiting on when it starts and when the member presses Check now, then shows a banner and a system notification. See ADR 0018.
-- **Steward view** — the person running a commons opens `/steward` at the commons' computer, or with the steward link from its log, to approve or decline people waiting and to make invite codes. Every invite page can open a ready-written email in the person's own mail app (`mailto:`). See ADR 0017.
-- **Joining needs a vouch** — a new handle is listed on a commons only with a member's invite code, a member's vouch from the pending list, or (for the first person) the commons' founding invite, which only someone at the commons' own computer can see. Each member can bring in `HIC_VOUCH_LIMIT` people a week. See ADR 0011 and `docs/spec/` §5.3.
-- **Recovery key and key rotation** — sign-up makes a recovery key whose code is shown once, to keep offline. A member can replace their key; a commons moves the handle only on a rotation signed by the current key and cosigned by the new one, and a rotation signed by the recovery key overrides any other (so a thief who rotates first still loses). See ADR 0010 and `docs/spec/` §5.1.
-- **Signed formats** — written down in [spec/](spec/README.md), with test vectors checked by Rust and, independently, Python.
-- **Identity backup** — a member can download their record (keys included) and current version, encrypted with XChaCha20-Poly1305 under a key derived from their passphrase with Argon2id, and restore it on another node. See `commons/src/backup.rs`.
-- **Rollback protection** — a commons refuses a share older than the version it already holds for that key (409), so an old signed copy can't be replayed over a newer one.
-- **Crash safety** — every file is written to a temporary file, flushed and renamed; a damaged file is reported, never treated as missing.
-- **Confidentiality** — members-only ciphertext at rest; the content key is never stored unwrapped.
-- **Input hardening** — handles validated (`[a-z0-9_]{2,30}`) and path-traversal-guarded before becoming filenames.
-
----
-
-## 7. HTTP surface
+## 9. HTTP surface
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | Directory (local + federated) |
-| GET | `/about` | How it works |
-| GET/POST | `/join` | Create a handle (mints keys, starts session). **Node only** — on a commons (`HIC_ROLE=commons`) this returns a "run a node and share" page and mints nothing |
-| GET | `/new` | Publish / edit form (auth) |
-| POST | `/publish` | Create a signed version (auth + CSRF) |
-| POST | `/share` | Federate a signed copy to a commons (auth + CSRF) |
-| POST | `/inbox` | Receive + verify a federated share (the only way onto a commons), or a signed withdrawal |
-| POST | `/withdraw` | Ask a commons to remove this member's shared copy (auth + CSRF) |
-| POST | `/invite` | Make a single-use invite code for a commons the member is listed on (auth + CSRF) |
-| POST | `/vouch` | Vouch for someone on a commons' pending list (auth + CSRF) |
-| GET | `/api/pending` | Shares waiting for a vouch on this commons |
-| GET | `/api/status` | Is this handle and key listed here, waiting, or neither? |
-| POST | `/waiting/check` | Ask the commons we're waiting on, now (auth + CSRF) |
-| POST | `/notices/dismiss` | Hide the member's news banner (auth + CSRF) |
-| POST | `/api/notices/claim` | For the desktop app: news to show as notifications (launch token) |
-| GET | `/steward` | Open the steward view (at the commons' computer, or with `?key=` from the steward link) |
-| POST | `/steward/approve`, `/steward/decline` | Approve or decline someone waiting (steward + CSRF) |
-| POST | `/steward/invite` | Make a single-use invite code (steward + CSRF) |
-| POST | `/recovery/new` | Make a recovery key for a handle that has none; shows its code once (auth + CSRF) |
-| POST | `/rotate` | Replace the member's key on this node and every commons shared to (auth + CSRF) |
-| POST | `/recover` | Take the handle back with the recovery code (auth + CSRF) |
-| POST | `/backup` | Download an encrypted identity backup (auth + CSRF + passphrase) |
-| GET/POST | `/restore` | Restore an identity from a backup on a new node (node only) |
-| GET | `/federated/{keyid}` | View a federated-in profile |
-| GET/POST | `/login`, POST `/logout` | Session. `/login` is **node only** — gated the same way on a commons |
-| GET | `/@{handle}` | Profile page |
-| GET | `/health` | Liveness, version, and the desktop app's launch token |
-| GET | `/api/handle/{handle}` | Is this handle free here? |
-| GET | `/robots.txt` | Keeps the forms out of search engines |
-| GET | `/api/directory`, `/api/@{handle}` | JSON |
-| GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityStreams-shaped discovery (not yet full ActivityPub) |
+| GET | `/` | Directory (and, for the steward, the steward view) |
+| GET | `/@{handle}`, `/federated/{keyid}` | A member's profile; a shared-in profile |
+| GET/POST | `/join`, `/login`, POST `/logout` | Sign-up and sign-in (nodes only; a commons shows "run a node") |
+| GET/POST | `/restore` | Restore an identity from a backup (nodes) |
+| GET | `/new`, POST `/publish` | Publish a version |
+| POST | `/share`, `/withdraw` | Share to / withdraw from a commons |
+| POST | `/invite`, `/vouch` | Make an invite code; vouch for someone waiting |
+| POST | `/waiting/check`, `/notices/dismiss` | Check now; hide the news banner |
+| POST | `/backup`, `/recovery/new`, `/rotate`, `/recover` | Backup; recovery key; replace key; recover |
+| POST | `/inbox` | Receive shares, withdrawals, vouches, key changes (commons) |
+| GET | `/steward`; POST `/steward/approve`, `/steward/decline`, `/steward/invite` | The steward view (commons) |
+| GET | `/api/directory`, `/api/@{handle}`, `/api/handle/{h}`, `/api/pending`, `/api/status` | JSON |
+| POST | `/api/notices/claim` | For the desktop app (needs its launch token) |
+| GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityStreams-shaped discovery (not full ActivityPub) |
+| GET | `/health`, `/robots.txt`, `/style.css`, `/avatar.js`, `/password.js` | Housekeeping |
 
-### Configuration (env)
+### Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PORT` | `8080` | Listen port |
-| `HIC_BIND` | node: `127.0.0.1`, commons: `0.0.0.0` | Address to listen on. A node listens only on this computer unless set; Docker images set `0.0.0.0` |
-| `HIC_OPEN_COMMONS` | *(off)* | `1` lets anyone share in without a vouch (ADR 0011) |
-| `HIC_VOUCH_LIMIT` | `5` | People one member may bring in per week; set by the steward (ADR 0011) |
-| `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1` lets a node reachable from the network share to local-network addresses (see ADR 0012) |
-| `HIC_DATA` | `./data` | Data directory |
-| `HIC_INSTANCE` | `My node` | Human label |
-| `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `instance.json` on first start; must match it afterwards or the server refuses to start |
-| `HIC_SHARE_DEFAULT` | *(blank)* | Commons pre-filled in the share form |
-| `HIC_BASE_URL` | `http://localhost:$PORT` | Public base URL for federation/ActivityPub |
+| `PORT` | `8080` | Port |
+| `HIC_BIND` | node `127.0.0.1`, commons `0.0.0.0` | Address to listen on (Docker images set `0.0.0.0`) |
+| `HIC_DATA` | `./data` | Data folder |
+| `HIC_ROLE` | saved, else `node` | `node` or `commons`; fixed for the folder once saved |
+| `HIC_INSTANCE` | `Held in Common` | This server's name |
+| `HIC_BASE_URL` | `http://localhost:$PORT` | This server's public address |
+| `HIC_SHARE_DEFAULT` | *(blank)* | The commons a node offers first |
+| `HIC_VOUCH_LIMIT` | `5` | People one member may bring in per week |
+| `HIC_OPEN_COMMONS` | *(off)* | `1`: no vouching |
+| `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
+| `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 
 ---
 
-## 8. Tech stack
-
-Rust · axum 0.8 · tokio · maud (server-rendered HTML) · ed25519-dalek ·
-crypto_box (ChaChaBox / X25519) · sha2 · reqwest (rustls) · Tauri v2 +
-tauri-plugin-shell. Zero client JS framework in the product path (the server
-renders HTML; the desktop shell is a thin loader).
-
----
-
-## 9. Build, run, test
+## 10. Build, run, test
 
 ```
-# run a node / commons
-cargo run --manifest-path commons/Cargo.toml          # → http://127.0.0.1:8080
-
-# unit and in-process HTTP tests (fast)
-cargo test --manifest-path commons/Cargo.toml
-cargo test --manifest-path src-tauri/Cargo.toml
-
-# desktop app from source (see README for the sidecar copy step)
-cargo tauri build
-
-# end-to-end federation test (publish → sign → federate, tamper→400, members guard)
-./scripts/test-federation.sh
+cargo run --manifest-path commons/Cargo.toml                 # a node at http://127.0.0.1:8080
+cargo test --manifest-path commons/Cargo.toml                # unit + HTTP + format vectors
+cargo test --manifest-path src-tauri/Cargo.toml              # desktop app rules
+cargo build --release --manifest-path commons/Cargo.toml && ./scripts/test-federation.sh
+python3 scripts/check_spec_vectors.py                        # the format, checked in Python
 ```
+
+All of these run on every pull request. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
-## 10. Known gaps / roadmap
+## 11. Not built yet
 
-- Reachable-origin verification (fetch `<origin>/ap/@handle` to confirm the key) and unshare/revoke.
-- Fan-out to multiple commons; works/datasets payloads (profiles land first).
-- Signed desktop builds (Apple notarization / Windows cert) — preview builds are unsigned today.
-- Durable storage for hosted commons (the preview pods use ephemeral disk).
+- Automatic app updates ([0014](adr/0014-automatic-updates.md), issue #17).
+- Dataset listings, rights records, licences, adapters and model versions as
+  `hic/v1` objects, for the BRAID work ([review §4](REVIEW-2026-11.md)).
+- Windows and Intel-Mac builds.
+- A database instead of files, if commons grow to many thousands of profiles.

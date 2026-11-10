@@ -1,7 +1,7 @@
 name: node-image
 on:
   push:
-    branches: [feat/federation, main]
+    branches: [main]
     paths: ['commons/**', '.github/workflows/node-image.yml']
   workflow_dispatch:
 permissions:
@@ -19,9 +19,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Image names must be lowercase; the organisation name isn't.
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hic-node" >> "$GITHUB_ENV"
       - uses: docker/build-push-action@v6
         with:
           context: ./commons
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/hic-node:latest
+          tags: ${{ env.IMAGE }}:latest
