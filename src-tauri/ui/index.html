@@ -48,6 +48,23 @@
     <p class="err" id="choose-err" role="alert"></p>
   </main>
 
+  <!-- Name this computer's node or commons (first launch, or once for older installs) -->
+  <main class="choose" id="naming" hidden>
+    <p class="eyebrow" id="naming-eyebrow">Held in Common · first launch</p>
+    <h1>What should we call this <span id="naming-role">node</span><span class="dot">?</span></h1>
+    <p class="sub">People see this name next to your profile on every commons you share to. If you run Held in Common on more than one computer, give each its own name, like &ldquo;Studio laptop&rdquo; or &ldquo;Home desktop&rdquo;.</p>
+    <p class="note" id="naming-why" hidden>Earlier versions used this computer's account name. From now on they'll use the name you choose here.</p>
+    <form class="name-form" id="name-form">
+      <label for="node-name" class="name-label">Name</label>
+      <input id="node-name" name="name" type="text" maxlength="60" placeholder="Studio laptop" autocomplete="off" required />
+      <div class="row">
+        <button class="btn" id="name-go" type="submit">Start</button>
+        <button class="link" id="name-back" type="button">Back</button>
+      </div>
+    </form>
+    <p class="err" id="name-err" role="alert"></p>
+  </main>
+
   <!-- Loading: the server is starting -->
   <div class="box" id="loading" hidden>
     <div class="loader" aria-hidden="true">

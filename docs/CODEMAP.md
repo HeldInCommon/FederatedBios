@@ -91,10 +91,10 @@ interleave) → redirect to the profile.
 | File | One job |
 |---|---|
 | `src/lib.rs` | Wires the modules together; injects the "Back to your node" button. |
-| `src/settings.rs` | `app.json` (the chosen role) and the per-role data folders. |
+| `src/settings.rs` | `app.json` (the chosen role and name) and the per-role data folders. |
 | `src/network.rs` | Is *our* server answering (launch token check)? This computer's LAN address. |
 | `src/sidecar.rs` | Start and stop the server process. |
-| `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `node_up`, `restart_node`. |
+| `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `set_name`, `node_up`, `restart_node`. |
 | `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser and loading screen. |
 | `capabilities/default.json` | What the screens may call (core APIs only). |
 | `tauri.conf.json` | Window, bundle, and the screens' Content-Security-Policy. |

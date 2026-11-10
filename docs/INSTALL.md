@@ -42,11 +42,17 @@ From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases
 - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (If it won't start, install `libfuse2`.)
 - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
 
-### 3. Choose "A node"
+### 3. Choose "A node" and name it
 
 The first time you open the app, it asks **what you want to run**. Choose
 **A node**. (A *commons* is for whoever is hosting the shared directory, usually
-your facilitator.) The app remembers your choice, so you only see this once.
+your facilitator.)
+
+Then **name it**, for example "Studio laptop". People see this name next to
+your profile on every commons you share to. If you use Held in Common on more
+than one computer, give each its own name. The app remembers both choices, so
+you only see these screens once. (If you installed an earlier version, the app
+asks for a name once, the next time you open it.)
 
 ### 4. You're up and running when…
 

@@ -8,7 +8,7 @@
 //!
 //! | Module | Job |
 //! |---|---|
-//! | [`settings`] | the saved role and the data folders (`app.json`) |
+//! | [`settings`] | the saved role and name, and the data folders (`app.json`) |
 //! | [`network`] | is *our* server answering; this computer's network address |
 //! | [`sidecar`] | starting and stopping the server process |
 //! | [`commands`] | what the app's screens (`ui/app.js`) can ask for |
@@ -25,7 +25,7 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-use commands::ChosenRole;
+use commands::Chosen;
 use sidecar::{AppConfig, Sidecar};
 
 /// Injected into every server page (the node, or a commons the person
@@ -71,7 +71,6 @@ fn log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 
 /// Everything fixed for this run of the app.
 fn app_config(base: PathBuf) -> AppConfig {
-    let who = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_default().trim().to_string();
     let instance_override = std::env::var("HIC_INSTANCE").ok().filter(|s| !s.trim().is_empty());
     // The default commons to pre-fill: a runtime override, else one baked in
     // at build time from the HIC_SHARE_DEFAULT CI variable (never committed).
@@ -80,7 +79,7 @@ fn app_config(base: PathBuf) -> AppConfig {
         .filter(|s| !s.trim().is_empty())
         .or_else(|| option_env!("HIC_SHARE_DEFAULT").map(str::to_string))
         .unwrap_or_default();
-    AppConfig { base, who, instance_override, share_default, launch_token: network::launch_token() }
+    AppConfig { base, instance_override, share_default, launch_token: network::launch_token() }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -92,6 +91,7 @@ pub fn run() {
             commands::node_up,
             commands::setup_state,
             commands::choose_role,
+            commands::set_name,
             commands::restart_node
         ])
         .on_page_load(|window, payload| {
@@ -103,14 +103,15 @@ pub fn run() {
             let base = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
             std::fs::create_dir_all(&base).ok();
             let cfg = app_config(base.clone());
-            let role = settings::load_role(&base);
+            let saved = settings::load(&base);
             let proc_ = Sidecar::default();
-            // A returning user starts straight away; a new one sees the chooser.
-            if let Some(r) = &role {
-                sidecar::start(app.handle(), &cfg, &proc_, r).map_err(std::io::Error::other)?;
+            // A returning user starts straight away. A new one sees the chooser;
+            // one from before names existed is asked for a name first.
+            if let (Some(role), Some(name)) = (&saved.role, &saved.name) {
+                sidecar::start(app.handle(), &cfg, &proc_, role, name).map_err(std::io::Error::other)?;
             }
             app.manage(cfg);
-            app.manage(ChosenRole(Mutex::new(role)));
+            app.manage(Chosen(Mutex::new(saved)));
             app.manage(proc_);
             Ok(())
         })

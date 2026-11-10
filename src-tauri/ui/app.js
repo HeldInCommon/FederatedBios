@@ -2,8 +2,9 @@
 // and the loading screen shown while the server starts.
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
-//   setup_state  -> { role, lan_url }   has a role been chosen yet?
-//   choose_role  (role)                 save the choice and start the server
+//   setup_state  -> { role, name, lan_url }   chosen and named yet?
+//   choose_role  (role, name)           save the choice and name, start the server
+//   set_name     (name)                 name (or rename) this computer's node
 //   node_up      -> bool                is *our* server answering yet?
 //   restart_node                        start (or restart) the server
 // When opened in an ordinary browser (no Tauri), it just waits for the server.
@@ -64,13 +65,47 @@ function showLoading(role){
   poll();
 }
 
-// ---- first launch: choose node or commons ---------------------------
-async function choose(role, btn){
+// ---- first launch: choose node or commons, then name it ---------------
+// `naming` is { role, firstLaunch }: firstLaunch means the role isn't saved yet.
+let naming = null;
+
+function choose(role){
   $('choose-err').textContent = '';
-  btn.disabled = true;
-  try { await invoke('choose_role', { role }); showLoading(role); }
-  catch(e){ $('choose-err').textContent = ('' + e) || 'Could not start.'; btn.disabled = false; }
+  showNaming(role, true);
 }
+
+function showNaming(role, firstLaunch){
+  naming = { role, firstLaunch };
+  $('naming-role').textContent = role === 'commons' ? 'commons' : 'node';
+  $('naming-eyebrow').textContent = firstLaunch ? 'Held in Common · first launch' : 'Held in Common · one new step';
+  $('naming-why').hidden = firstLaunch;
+  $('name-back').hidden = !firstLaunch;
+  $('chooser').hidden = true;
+  $('naming').hidden = false;
+  $('node-name').focus();
+}
+
+$('name-back').addEventListener('click', () => {
+  $('naming').hidden = true;
+  $('chooser').hidden = false;
+});
+
+$('name-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('node-name').value.trim();
+  if (!name){ $('name-err').textContent = 'Give it a name first.'; return; }
+  $('name-err').textContent = '';
+  $('name-go').disabled = true;
+  try {
+    if (naming.firstLaunch) await invoke('choose_role', { role: naming.role, name });
+    else await invoke('set_name', { name });
+    $('naming').hidden = true;
+    showLoading(naming.role);
+  } catch(err){
+    $('name-err').textContent = ('' + err) || 'Could not start.';
+    $('name-go').disabled = false;
+  }
+});
 
 function showChooser(lanUrl){
   if (lanUrl){
@@ -81,7 +116,7 @@ function showChooser(lanUrl){
     $('room-detail').textContent = "We couldn't find this computer's network address. Connect to Wi-Fi, then reopen the app.";
     $('start-commons').disabled = true;
   }
-  $('pick-node').addEventListener('click', e => choose('node', e.currentTarget));
+  $('pick-node').addEventListener('click', () => choose('node'));
   $('pick-commons').addEventListener('click', () => {
     $('pick-commons').setAttribute('aria-pressed', 'true');
     $('reach').hidden = false;
@@ -92,7 +127,7 @@ function showChooser(lanUrl){
     $('reach').hidden = true;
     $('pick-commons').focus();
   });
-  $('start-commons').addEventListener('click', e => choose('commons', e.currentTarget));
+  $('start-commons').addEventListener('click', () => choose('commons'));
   $('chooser').hidden = false;
 }
 
@@ -100,7 +135,9 @@ async function init(){
   // Outside the app (opened in a browser) there is nothing to choose: just wait for the server.
   if (!invoke){ showLoading('node'); return; }
   let st = null;
-  try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node' }; }
-  if (st.role) showLoading(st.role); else showChooser(st.lan_url);
+  try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node', name: 'node' }; }
+  if (st.role && st.name) showLoading(st.role);
+  else if (st.role) showNaming(st.role, false);   // installed before names existed
+  else showChooser(st.lan_url);
 }
 init();

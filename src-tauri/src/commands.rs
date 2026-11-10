@@ -5,11 +5,11 @@ use std::sync::Mutex;
 use serde::Serialize;
 
 use crate::network::{self, Probe};
-use crate::settings::{save_role, valid_role};
+use crate::settings::{self, clean_name, valid_role, Saved};
 use crate::sidecar::{self, AppConfig, Sidecar};
 
-/// The role chosen for this computer, once known.
-pub struct ChosenRole(pub Mutex<Option<String>>);
+/// What this computer runs and what it's called, as far as known.
+pub struct Chosen(pub Mutex<Saved>);
 
 /// Shown when another program holds the port.
 const PORT_TAKEN: &str = "Another program is using port 8080, so Held in Common can't start. \
@@ -28,41 +28,76 @@ pub fn node_up(cfg: tauri::State<'_, AppConfig>) -> bool {
 pub struct SetupState {
     /// "node", "commons", or null before the person has chosen.
     role: Option<String>,
+    /// The name, or null before the person has named this computer's node.
+    name: Option<String>,
     /// Where nodes in the same room would reach a commons on this computer.
     lan_url: Option<String>,
 }
 
-/// Has a role been chosen, and what would a room commons' address be?
+/// Has a role been chosen and a name given, and what would a room commons'
+/// address be?
 #[tauri::command]
-pub fn setup_state(chosen: tauri::State<'_, ChosenRole>) -> SetupState {
-    SetupState { role: chosen.0.lock().unwrap().clone(), lan_url: network::lan_url() }
+pub fn setup_state(chosen: tauri::State<'_, Chosen>) -> SetupState {
+    let s = chosen.0.lock().unwrap().clone();
+    SetupState { role: s.role, name: s.name, lan_url: network::lan_url() }
 }
 
-/// Save the person's choice and start the server in that role. The choice is
+/// First launch: save the role and name, and start the server. The role is
 /// fixed for this app's data folder (the server enforces the same rule).
 #[tauri::command]
 pub fn choose_role(
     app: tauri::AppHandle,
     role: String,
+    name: String,
     cfg: tauri::State<'_, AppConfig>,
-    chosen: tauri::State<'_, ChosenRole>,
+    chosen: tauri::State<'_, Chosen>,
     proc_: tauri::State<'_, Sidecar>,
 ) -> Result<(), String> {
     if !valid_role(&role) {
         return Err("Choose a node or a commons.".into());
     }
+    let name = clean_name(&name)?;
     let mut current = chosen.0.lock().unwrap();
-    match current.as_deref() {
-        Some(existing) if existing == role => return Ok(()),
-        Some(existing) => return Err(format!("This computer is already set up as a {existing}.")),
-        None => {}
+    if let Some(existing) = current.role.as_deref().filter(|r| *r != role) {
+        return Err(format!("This computer is already set up as a {existing}."));
     }
     if network::probe(&cfg.launch_token) == Probe::Other {
         return Err(PORT_TAKEN.into());
     }
-    save_role(&cfg.base, &role)?;
-    sidecar::start(&app, &cfg, &proc_, &role)?;
-    *current = Some(role);
+    let next = Saved { role: Some(role.clone()), name: Some(name.clone()) };
+    settings::save(&cfg.base, &next)?;
+    sidecar::start(&app, &cfg, &proc_, &role, &name)?;
+    *current = next;
+    Ok(())
+}
+
+/// Name (or rename) this computer's node or commons. If the server is
+/// running, it restarts under the new name.
+#[tauri::command]
+pub fn set_name(
+    app: tauri::AppHandle,
+    name: String,
+    cfg: tauri::State<'_, AppConfig>,
+    chosen: tauri::State<'_, Chosen>,
+    proc_: tauri::State<'_, Sidecar>,
+) -> Result<(), String> {
+    let name = clean_name(&name)?;
+    let mut current = chosen.0.lock().unwrap();
+    let Some(role) = current.role.clone() else {
+        return Err("Choose a node or a commons first.".into());
+    };
+    let next = Saved { role: Some(role.clone()), name: Some(name.clone()) };
+    settings::save(&cfg.base, &next)?;
+    proc_.stop();
+    // Give the old server up to three seconds to let go of the port.
+    for _ in 0..30 {
+        if network::probe(&cfg.launch_token) == Probe::Nothing {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    sidecar::start(&app, &cfg, &proc_, &role, &name)?;
+    *current = next;
     Ok(())
 }
 
@@ -72,11 +107,12 @@ pub fn choose_role(
 pub fn restart_node(
     app: tauri::AppHandle,
     cfg: tauri::State<'_, AppConfig>,
-    chosen: tauri::State<'_, ChosenRole>,
+    chosen: tauri::State<'_, Chosen>,
     proc_: tauri::State<'_, Sidecar>,
 ) -> Result<(), String> {
-    let Some(role) = chosen.0.lock().unwrap().clone() else {
-        return Err("Choose a node or a commons first.".into());
+    let s = chosen.0.lock().unwrap().clone();
+    let (Some(role), Some(name)) = (s.role, s.name) else {
+        return Err("Choose a node or a commons, and name it, first.".into());
     };
     match network::probe(&cfg.launch_token) {
         Probe::Ours => return Ok(()), // already running: the screen will open it
@@ -84,7 +120,7 @@ pub fn restart_node(
         Probe::Nothing => {}
     }
     proc_.stop();
-    let child = sidecar::spawn(&app, &cfg, &role)?;
+    let child = sidecar::spawn(&app, &cfg, &role, &name)?;
     *proc_.0.lock().unwrap() = Some(child);
     Ok(())
 }
