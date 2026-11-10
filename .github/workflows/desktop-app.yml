@@ -84,8 +84,25 @@ jobs:
             echo "::error::macOS signing secrets missing from the macos-signing environment:$missing"
             exit 1
           fi
+          # Pasted values often carry a stray newline, carriage return or space.
+          # Base64 ignores whitespace, so strip it all from the certificate; trim
+          # the ends of the others, and stop (naming the secret, never its value)
+          # if one still spans several lines.
+          C=$(printf '%s' "$C" | tr -d ' \t\r\n')
+          trim(){ printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | sed '/^$/d'; }
+          bad=""
+          for v in CP:APPLE_CERTIFICATE_PASSWORD SI:APPLE_SIGNING_IDENTITY AI:APPLE_ID AP:APPLE_PASSWORD TI:APPLE_TEAM_ID; do
+            short="${v%%:*}"
+            val=$(trim "${!short}")
+            [ "$(printf '%s' "$val" | wc -l)" -eq 0 ] || bad="$bad ${v#*:}"
+            printf -v "$short" '%s' "$val"
+          done
+          if [ -n "$bad" ]; then
+            echo "::error::These secrets contain more than one line; set them again with only the value:$bad"
+            exit 1
+          fi
           {
-            echo "APPLE_CERTIFICATE<<EOF_CERT"; echo "$C"; echo "EOF_CERT"
+            echo "APPLE_CERTIFICATE=$C"
             echo "APPLE_CERTIFICATE_PASSWORD=$CP"
             echo "APPLE_SIGNING_IDENTITY=$SI"
             echo "APPLE_ID=$AI"
