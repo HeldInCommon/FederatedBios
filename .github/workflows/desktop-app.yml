@@ -1,5 +1,7 @@
-# Builds the native node app for macOS and Linux and attaches installers to the
-# 'node-app-preview' prerelease.
+# Builds the native node app and attaches installers to the 'node-app-preview'
+# prerelease. Run by hand it builds Linux by default; the Mac app is usually
+# released from a Mac with scripts/release-mac.sh (much faster). A pushed
+# node-app-v* tag builds both.
 #
 # macOS builds are SIGNED with a Developer ID Application certificate and
 # NOTARIZED by Apple, so the .dmg opens normally (no "disk is damaged" step).
@@ -19,6 +21,12 @@
 name: desktop-app
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "What to build. The Mac app is usually released from a Mac with scripts/release-mac.sh, which is much faster."
+        type: choice
+        default: linux
+        options: [linux, macos, all]
   push:
     tags: ['node-app-v*']
 permissions:
@@ -29,9 +37,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest      # Apple Silicon .dmg/.app
-          - os: ubuntu-22.04       # .deb + .AppImage
+        # Run by hand: the platforms chosen (default Linux). A release tag: both.
+        os: ${{ fromJSON(github.event.inputs.platforms == 'macos' && '["macos-latest"]' || (github.event_name == 'push' || github.event.inputs.platforms == 'all') && '["macos-latest","ubuntu-22.04"]' || '["ubuntu-22.04"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

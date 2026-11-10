@@ -34,16 +34,25 @@ stable names (`Held-In-Common-macOS-AppleSilicon.dmg`,
 
 1. **Bump the version** in `commons/Cargo.toml`, `src-tauri/Cargo.toml` and
    `src-tauri/tauri.conf.json`, through a pull request.
-2. **Run the release:** Actions → **desktop-app** → Run workflow on `main`, or
-   push a tag `node-app-vX.Y.Z`. It builds macOS and Linux; the macOS build is
-   signed, notarized, checked, and uploaded under the stable name.
-3. **Check** the release page and download the `.dmg` on a Mac other than the
-   build machine to confirm it opens without warnings.
+2. **Release the Mac app from a Mac** (fast; about 5–10 minutes, mostly
+   Apple's notarization):
+   ```
+   ./scripts/release-mac.sh
+   ```
+   It builds, signs with your Developer ID, notarizes the app and the `.dmg`,
+   checks them, and uploads `Held-In-Common-macOS-AppleSilicon.dmg` to the
+   release. `--no-upload` stops before uploading. It needs the certificate in
+   your keychain and a `notarytool` profile (see the script's header).
+3. **Release Linux on GitHub:** Actions → **desktop-app** → Run workflow on
+   `main` (it builds Linux by default; choose `macos` or `all` to have GitHub
+   build the Mac app too, which is slower). A pushed `node-app-vX.Y.Z` tag
+   builds both.
+4. **Check** the release page, and download the `.dmg` on another Mac to
+   confirm it opens without warnings.
 
-### Signing and notarizing by hand (fallback)
+### What the script does
 
-If the GitHub build can't sign, a maintainer with the Developer ID certificate
-in their keychain and a `notarytool` profile can do it locally:
+For reference, or to do it step by step:
 
 ```
 cargo build --release --manifest-path commons/Cargo.toml
