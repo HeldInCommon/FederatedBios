@@ -25,6 +25,7 @@
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -75,9 +76,19 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// The data folder.
+///
+/// The two lists read on almost every request, all members ([`Store::handles`])
+/// and all shared profiles ([`Store::remotes`]), are kept in memory after the
+/// first read, so a page doesn't read every file (review item M8). **Every
+/// write through the store that changes one of those lists clears its cache**
+/// (`save_handle`, `save_remote`, `delete_remote`, and so everything built on
+/// them). Files changed by hand while the server runs aren't seen until a
+/// restart. Clones of a `Store` share the cache.
 #[derive(Clone, Debug)]
 pub struct Store {
     root: PathBuf,
+    handles_cache: Arc<Mutex<Option<Vec<HandleRec>>>>,
+    remotes_cache: Arc<Mutex<Option<Vec<RemoteEntry>>>>,
 }
 
 impl Store {
@@ -87,7 +98,7 @@ impl Store {
         for sub in ["handles", "versions", "remote", "tombstones", "identities", "intros", "pending", "used-invites"] {
             std::fs::create_dir_all(root.join(sub))?;
         }
-        Ok(Store { root })
+        Ok(Store { root, handles_cache: Arc::default(), remotes_cache: Arc::default() })
     }
 
     /// The data folder's path.
@@ -147,14 +158,21 @@ impl Store {
         if !handle::is_valid(&rec.handle) {
             return Err(StoreError::Io(self.handle_path("invalid"), std::io::Error::other("invalid handle")));
         }
-        Self::write(&self.handle_path(&rec.handle), rec)
+        Self::write(&self.handle_path(&rec.handle), rec)?;
+        *self.handles_cache.lock().unwrap() = None;
+        Ok(())
     }
 
-    /// Every member, newest first.
+    /// Every member, newest first (from memory after the first read).
     pub fn handles(&self) -> Vec<HandleRec> {
-        let mut out: Vec<HandleRec> = self.read_all("handles");
-        out.sort_by_key(|r| std::cmp::Reverse(r.created_at));
-        out
+        let mut cache = self.handles_cache.lock().unwrap();
+        cache
+            .get_or_insert_with(|| {
+                let mut out: Vec<HandleRec> = self.read_all("handles");
+                out.sort_by_key(|r| std::cmp::Reverse(r.created_at));
+                out
+            })
+            .clone()
     }
 
     // ---- versions --------------------------------------------------------
@@ -203,14 +221,22 @@ impl Store {
 
     /// Save a shared profile, replacing that key's previous one.
     pub fn save_remote(&self, r: &RemoteEntry) -> Result<(), StoreError> {
-        Self::write(&self.remote_path(&keyid(&r.ed_pub)), r)
+        Self::write(&self.remote_path(&keyid(&r.ed_pub)), r)?;
+        *self.remotes_cache.lock().unwrap() = None;
+        Ok(())
     }
 
-    /// Every shared profile, most recently received first.
+    /// Every shared profile, most recently received first (from memory after
+    /// the first read).
     pub fn remotes(&self) -> Vec<RemoteEntry> {
-        let mut out: Vec<RemoteEntry> = self.read_all("remote");
-        out.sort_by_key(|r| std::cmp::Reverse(r.received_at));
-        out
+        let mut cache = self.remotes_cache.lock().unwrap();
+        cache
+            .get_or_insert_with(|| {
+                let mut out: Vec<RemoteEntry> = self.read_all("remote");
+                out.sort_by_key(|r| std::cmp::Reverse(r.received_at));
+                out
+            })
+            .clone()
     }
 
     /// Remove a shared profile (after a withdrawal). Removing one that isn't
@@ -219,12 +245,8 @@ impl Store {
         if !is_keyid(kid) {
             return Ok(());
         }
-        let p = self.remote_path(kid);
-        match std::fs::remove_file(&p) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(StoreError::Io(p, e)),
-        }
+        *self.remotes_cache.lock().unwrap() = None;
+        Self::remove_if_present(self.remote_path(kid))
     }
 
     // ---- tombstones (withdrawals on a commons) ------------------------------
@@ -448,6 +470,17 @@ mod tests {
         let names: Vec<_> =
             std::fs::read_dir(s.root().join("handles")).unwrap().flatten().map(|e| e.file_name()).collect();
         assert_eq!(names.len(), 1, "{names:?}");
+    }
+
+    #[test]
+    fn cached_lists_follow_writes() {
+        let s = temp_store();
+        assert!(s.handles().is_empty());
+        s.save_handle(&rec("tega")).unwrap();
+        assert_eq!(s.handles().len(), 1, "a save clears the cache");
+        let copy = s.clone();
+        copy.save_handle(&rec("mo")).unwrap();
+        assert_eq!(s.handles().len(), 2, "clones share the cache");
     }
 
     #[test]

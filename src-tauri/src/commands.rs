@@ -139,7 +139,5 @@ pub fn restart_node(
         Probe::Nothing => {}
     }
     proc_.stop();
-    let child = sidecar::spawn(&app, &cfg, &role, &name)?;
-    *proc_.0.lock().unwrap() = Some(child);
-    Ok(())
+    sidecar::start(&app, &cfg, &proc_, &role, &name)
 }

@@ -1,6 +1,7 @@
 //! Starting and stopping the bundled `hic-commons` server (the "sidecar").
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use tauri::Manager;
@@ -22,21 +23,63 @@ pub struct AppConfig {
     pub launch_token: String,
 }
 
-/// The running server process, if any.
+/// The running server process, if any, and what's needed to restart it
+/// after a crash.
 #[derive(Default)]
-pub struct Sidecar(pub Mutex<Option<CommandChild>>);
+pub struct Sidecar {
+    child: Mutex<Option<CommandChild>>,
+    /// Bumped each time a server is started or deliberately stopped, so an
+    /// old process ending can be told apart from the current one crashing.
+    generation: AtomicU64,
+    /// Automatic restarts since the last deliberate start.
+    restarts: AtomicU32,
+}
+
+/// How many times a crashed server is restarted automatically before the
+/// app stops trying (the loading screen's Start button can still restart it).
+pub const MAX_RESTARTS: u32 = 3;
+
+/// Should a server that stopped be restarted automatically? Only if it was
+/// the current server (not stopped on purpose or replaced), it hasn't been
+/// restarted too often, and it didn't refuse to start because of its
+/// settings (exit code 2, e.g. a data folder belonging to the other role),
+/// which would only fail again.
+pub fn should_restart(its_generation: u64, current_generation: u64, restarts: u32, exit_code: Option<i32>) -> bool {
+    its_generation == current_generation && restarts < MAX_RESTARTS && exit_code != Some(2)
+}
 
 impl Sidecar {
-    /// Stop the server if it is running.
+    /// Begin a new server generation. `deliberate` (a person started it)
+    /// also resets the automatic-restart count. Returns the generation.
+    fn begin(&self, deliberate: bool) -> u64 {
+        if deliberate {
+            self.restarts.store(0, Ordering::SeqCst);
+        }
+        self.generation.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Remember the running process.
+    fn set(&self, child: CommandChild) {
+        *self.child.lock().unwrap() = Some(child);
+    }
+
+    /// Stop the server if it is running. It won't be restarted automatically.
     pub fn stop(&self) {
-        if let Some(child) = self.0.lock().unwrap().take() {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        if let Some(child) = self.child.lock().unwrap().take() {
             let _ = child.kill();
         }
     }
 }
 
 /// Start the server on [`PORT`] in `role`, logging its output to stderr.
-pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str, name: &str) -> Result<CommandChild, String> {
+fn spawn(
+    app: &tauri::AppHandle,
+    cfg: &AppConfig,
+    role: &str,
+    name: &str,
+    generation: u64,
+) -> Result<CommandChild, String> {
     let data_dir = data_dir_for(&cfg.base, role);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
     let mut cmd = app
@@ -58,8 +101,10 @@ pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str, name: &str) ->
     let (mut rx, child) = cmd.spawn().map_err(|e| format!("could not start the {role}: {e}"))?;
     log::info!("started the {role} server (data in {})", data_dir.display());
     let tag = role.to_string();
+    let (app, role, name) = (app.clone(), role.to_string(), name.to_string());
     // Everything the server prints goes to the app's log file (see lib.rs),
-    // including how it stopped, so a crash leaves a trace.
+    // including how it stopped, so a crash leaves a trace; a crash of the
+    // current server is followed by an automatic restart.
     tauri::async_runtime::spawn(async move {
         while let Some(ev) = rx.recv().await {
             match ev {
@@ -67,13 +112,37 @@ pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str, name: &str) ->
                 CommandEvent::Stderr(l) => log::warn!("[{tag}] {}", String::from_utf8_lossy(&l).trim_end()),
                 CommandEvent::Error(e) => log::error!("[{tag}] {e}"),
                 CommandEvent::Terminated(t) => {
-                    log::warn!("[{tag}] server stopped (exit code {:?}, signal {:?})", t.code, t.signal)
+                    log::warn!("[{tag}] server stopped (exit code {:?}, signal {:?})", t.code, t.signal);
+                    restart_after_crash(&app, &role, &name, generation, t.code);
                 }
                 _ => {}
             }
         }
     });
     Ok(child)
+}
+
+/// If the server that just stopped should come back (see [`should_restart`]),
+/// start it again after a short pause, on another thread.
+fn restart_after_crash(app: &tauri::AppHandle, role: &str, name: &str, generation: u64, code: Option<i32>) {
+    let (Some(sc), Some(_)) = (app.try_state::<Sidecar>(), app.try_state::<AppConfig>()) else { return };
+    let current = sc.generation.load(Ordering::SeqCst);
+    let restarts = sc.restarts.load(Ordering::SeqCst);
+    if !should_restart(generation, current, restarts, code) {
+        return;
+    }
+    sc.restarts.fetch_add(1, Ordering::SeqCst);
+    log::warn!("restarting the {role} server (attempt {} of {MAX_RESTARTS})", restarts + 1);
+    let (app, role, name) = (app.clone(), role.to_string(), name.to_string());
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let (Some(sc), Some(cfg)) = (app.try_state::<Sidecar>(), app.try_state::<AppConfig>()) else { return };
+        let generation = sc.begin(false);
+        match spawn(&app, &cfg, &role, &name, generation) {
+            Ok(child) => sc.set(child),
+            Err(e) => log::error!("couldn't restart the server: {e}"),
+        }
+    });
 }
 
 /// Set the window title to say which role is running.
@@ -102,11 +171,26 @@ pub fn open_when_up(app: tauri::AppHandle, token: String) {
     });
 }
 
-/// Start the server in `role`, remember the process, and open it when ready.
+/// Start the server in `role` (a deliberate start: the restart count resets),
+/// remember the process, and open it when ready.
 pub fn start(app: &tauri::AppHandle, cfg: &AppConfig, sidecar: &Sidecar, role: &str, name: &str) -> Result<(), String> {
-    let child = spawn(app, cfg, role, name)?;
-    *sidecar.0.lock().unwrap() = Some(child);
+    let generation = sidecar.begin(true);
+    sidecar.set(spawn(app, cfg, role, name, generation)?);
     set_title(app, role);
     open_when_up(app.clone(), cfg.launch_token.clone());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restarts_only_the_current_server_a_few_times() {
+        assert!(should_restart(5, 5, 0, Some(1)), "a crash of the current server");
+        assert!(should_restart(5, 5, 0, None), "killed by a signal");
+        assert!(!should_restart(4, 5, 0, Some(1)), "an old server, replaced or stopped on purpose");
+        assert!(!should_restart(5, 5, MAX_RESTARTS, Some(1)), "gave up after too many restarts");
+        assert!(!should_restart(5, 5, 0, Some(2)), "refused its settings: restarting won't help");
+    }
 }

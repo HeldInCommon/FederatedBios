@@ -47,7 +47,7 @@ Writes happen in clearly named places that say what they change.
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
 | `sessions.rs` | Sessions (expire after 24 h) and the sign-in attempt limit. | cookie helpers yes |
-| `store.rs` | **The only module that touches files.** Atomic writes; "missing" vs "damaged". | no |
+| `store.rs` | **The only module that touches files.** Atomic writes; "missing" vs "damaged"; the member and shared-profile lists cached in memory, cleared by every write. | no |
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
 | `web/pages.rs` | The body of each page. | yes |
 | `web/handlers.rs` | Request handlers: load → decide (pure) → render. | no |
@@ -95,7 +95,7 @@ interleave) → redirect to the profile.
 | `src/lib.rs` | Wires the modules together; injects the "Back to your node" button. |
 | `src/settings.rs` | `app.json` (the chosen role and name) and the per-role data folders. |
 | `src/network.rs` | Is *our* server answering (launch token check)? This computer's LAN address. |
-| `src/sidecar.rs` | Start and stop the server process. |
+| `src/sidecar.rs` | Start and stop the server process; restart it after a crash (up to 3 times). |
 | `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `set_name`, `node_up`, `restart_node`. |
 | `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser and loading screen. |
 | `capabilities/default.json` | What the screens may call (core APIs only). |
