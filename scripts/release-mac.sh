@@ -3,7 +3,7 @@
 #
 # Faster than the GitHub build. Produces Held-In-Common-macOS-AppleSilicon.dmg
 # (signed with your Developer ID, notarized by Apple, ticket stapled) and
-# uploads it to the node-app-preview release, replacing the previous one.
+# publishes it to the release for this version (v<version>, marked Latest).
 #
 # Needs, once per computer:
 #   - your "Developer ID Application" certificate in the login keychain
@@ -18,7 +18,9 @@
 #   HIC_NOTARY_PROFILE   notarytool profile name        (default: hic-notary)
 #   HIC_SIGNING_IDENTITY signing identity               (default: the first Developer ID in the keychain)
 #   HIC_SHARE_DEFAULT    commons pre-filled in the app  (default: the repo's Actions variable)
-#   HIC_RELEASE_TAG      release to upload to           (default: node-app-preview)
+#
+# Publishes to the numbered release v<version> (from src-tauri/Cargo.toml),
+# creating it and marking it Latest if needed. Edit its notes on GitHub after.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -26,7 +28,6 @@ export PATH="$HOME/.cargo/bin:$PATH"
 UPLOAD=1; [ "${1:-}" = "--no-upload" ] && UPLOAD=0
 REPO=HeldInCommon/FederatedBios
 PROFILE="${HIC_NOTARY_PROFILE:-hic-notary}"
-TAG="${HIC_RELEASE_TAG:-node-app-preview}"
 ID="${HIC_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)}"
 [ -n "$ID" ] || { echo "No Developer ID Application certificate found in the keychain." >&2; exit 1; }
 SHARE="${HIC_SHARE_DEFAULT:-$(gh variable get HIC_SHARE_DEFAULT --repo "$REPO" 2>/dev/null || true)}"
@@ -69,9 +70,19 @@ xcrun stapler validate "$DMG"
 spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 | grep -E "origin|accepted|rejected|override" || true
 
 if [ "$UPLOAD" = 1 ]; then
-  step "Uploading to the $TAG release"
-  gh release upload "$TAG" "$DMG" --repo "$REPO" --clobber
-  echo "Published: https://github.com/$REPO/releases/tag/$TAG"
+  # Each version has one release, v$VERSION, marked Latest; created on the
+  # first upload for that version. Only the most recent release is kept, so
+  # delete the previous one on GitHub once this is out.
+  REL="v$VERSION"
+  step "Publishing to the $REL release"
+  if gh release view "$REL" --repo "$REPO" >/dev/null 2>&1; then
+    gh release upload "$REL" "$DMG" --repo "$REPO" --clobber
+  else
+    gh release create "$REL" "$DMG" --repo "$REPO" --target main --latest \
+      --title "Held In Common $VERSION" \
+      --notes "Held in Common $VERSION. macOS: signed and notarized; open the .dmg and drag Held In Common into Applications. Install guide: https://github.com/$REPO/blob/main/docs/INSTALL.md"
+  fi
+  echo "Published: https://github.com/$REPO/releases/tag/$REL"
 else
   cp "$DMG" ./Held-In-Common-macOS-AppleSilicon.dmg
   echo "Not uploaded. The .dmg is at ./Held-In-Common-macOS-AppleSilicon.dmg"

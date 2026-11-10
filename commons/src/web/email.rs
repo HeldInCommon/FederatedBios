@@ -5,7 +5,7 @@
 //! address ever passes through a node or a commons.
 
 /// Where newcomers download the app.
-pub const APP_DOWNLOAD: &str = "https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview";
+pub const APP_DOWNLOAD: &str = "https://github.com/HeldInCommon/FederatedBios/releases/latest";
 
 /// The subject and body of an invitation to `commons_label` (reached at
 /// `commons_url`), from `from` (e.g. "@ada", or "the steward of …").

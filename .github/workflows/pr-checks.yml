@@ -4,7 +4,7 @@
 #   mac-preview       builds the desktop app for Apple Silicon and attaches the
 #                     unsigned .dmg to this workflow run (Actions -> the run ->
 #                     Artifacts), so reviewers can try a PR without a Rust setup.
-# The public 'node-app-preview' prerelease is only updated by desktop-app.yml.
+# Releases are published only by desktop-app.yml and scripts/release-mac.sh.
 name: pr-checks
 on:
   pull_request:
