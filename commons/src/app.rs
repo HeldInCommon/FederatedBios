@@ -100,6 +100,9 @@ pub fn router(state: Shared) -> Router {
         .route("/new", get(handlers::publish_form))
         .route("/publish", post(handlers::publish))
         .route("/share", post(handlers::share))
+        .route("/withdraw", post(handlers::withdraw))
+        .route("/backup", post(handlers::backup))
+        .route("/restore", get(handlers::restore_form).post(handlers::restore_submit))
         .route("/@{handle}", get(handlers::profile))
         .route("/federated/{kid}", get(handlers::federated))
         // Federation

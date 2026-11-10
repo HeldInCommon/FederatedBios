@@ -13,8 +13,9 @@ use serde_json::{json, Value};
 
 use crate::canonical::{content_id, hash_body};
 use crate::handle;
-use crate::keys::verify_cid;
-use crate::model::{HandleRec, Profile, Reach, RemoteEntry, Version};
+use crate::keys::{self, verify_cid};
+use crate::model::{HandleRec, Profile, Reach, RemoteEntry, Tombstone, Version};
+use crate::web::layout::host_label;
 
 /// Who is sending a share: this node's public address and name.
 pub struct Sender<'a> {
@@ -111,6 +112,16 @@ pub fn verify_share(activity: &Value, received_at: u64) -> Result<RemoteEntry, S
     })
 }
 
+/// Who already holds handles on this server.
+pub struct Holders<'a> {
+    /// The Ed25519 key of a member of this server with the handle in question.
+    pub local: Option<&'a str>,
+    /// Every shared profile this server holds.
+    pub held: &'a [RemoteEntry],
+    /// Every withdrawal recorded here.
+    pub withdrawn: &'a [Tombstone],
+}
+
 /// Whether a commons accepts a verified share.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Admission {
@@ -118,47 +129,121 @@ pub enum Admission {
     Accept,
     /// Another key already holds this handle here (HTTP 409).
     HandleTaken,
-    /// Older than (or the same age as, but different from) the version
-    /// already held for this key: a replay or rollback (HTTP 409).
+    /// Not newer than what this server already holds, or than the owner's
+    /// withdrawal: a replay or rollback (HTTP 409).
     Stale,
 }
 
-/// Decide whether to accept `incoming`, given who holds handles here.
+/// Decide whether to accept `incoming`.
 ///
-/// - `local_holder`: the Ed25519 key of a member of this server with the same
-///   handle, if any.
-/// - `held`: every shared profile this server already holds.
-///
-/// A handle belongs to the first key that used it here (it is not part of
-/// the pin where a share came from, because the sender writes that itself).
-/// A key may re-share, but only a newer version: otherwise anyone holding an
-/// old signed share could roll a profile back.
-pub fn admit(incoming: &RemoteEntry, local_holder: Option<&str>, held: &[RemoteEntry]) -> Admission {
-    if local_holder.is_some_and(|k| k != incoming.ed_pub) {
+/// A handle belongs to the first key that used it here, and stays theirs
+/// after they withdraw. (Where a share came from isn't part of this, because
+/// the sender writes that itself.) A key may re-share, but only a version
+/// newer than the one held and newer than its last withdrawal: otherwise
+/// anyone holding an old signed share could roll a profile back or undo a
+/// withdrawal.
+pub fn admit(incoming: &RemoteEntry, h: &Holders) -> Admission {
+    if handle_taken(&incoming.handle, Some(&incoming.ed_pub), h) {
         return Admission::HandleTaken;
     }
-    if held.iter().any(|r| r.handle == incoming.handle && r.ed_pub != incoming.ed_pub) {
-        return Admission::HandleTaken;
+    let withdrawn_at = h.withdrawn.iter().filter(|t| t.ed_pub == incoming.ed_pub).map(|t| t.withdrawn_at).max();
+    if withdrawn_at.is_some_and(|w| incoming.created_at <= w) {
+        return Admission::Stale;
     }
-    let current = held.iter().find(|r| r.ed_pub == incoming.ed_pub);
-    match current {
+    match h.held.iter().find(|r| r.ed_pub == incoming.ed_pub) {
         Some(c) if c.cid == incoming.cid => Admission::Accept, // same version again: harmless
         Some(c) if incoming.created_at <= c.created_at => Admission::Stale,
         _ => Admission::Accept,
     }
 }
 
-/// True when `handle` is held here by someone other than `except_key`.
-/// `local_holder` and `held` are as for [`admit`].
-pub fn handle_taken(handle: &str, except_key: Option<&str>, local_holder: Option<&str>, held: &[RemoteEntry]) -> bool {
+/// True when `handle` is held here (by a member, a shared profile or a
+/// withdrawal) by a key other than `except_key`.
+pub fn handle_taken(handle: &str, except_key: Option<&str>, h: &Holders) -> bool {
     let other = |k: &str| except_key != Some(k);
-    local_holder.is_some_and(other) || held.iter().any(|r| r.handle == handle && other(&r.ed_pub))
+    h.local.is_some_and(other)
+        || h.held.iter().any(|r| r.handle == handle && other(&r.ed_pub))
+        || h.withdrawn.iter().any(|t| t.handle == handle && other(&t.ed_pub))
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawal
+// ---------------------------------------------------------------------------
+
+/// The exact bytes a withdrawal signature covers. The prefix keeps this
+/// signature from being mistaken for any other kind; `audience` (the
+/// commons' host) means a withdrawal sent to one commons can't be replayed
+/// to another.
+pub fn withdraw_message(handle: &str, audience: &str, created_at: u64) -> String {
+    format!("hic/v1/withdraw\n{handle}\n{audience}\n{created_at}")
+}
+
+/// Build the signed withdrawal a node sends to a commons it shared to.
+pub fn build_withdraw(rec: &HandleRec, commons_url: &str, created_at: u64) -> Result<Value, &'static str> {
+    let audience = host_label(commons_url);
+    let sig = keys::sign_message(&rec.ed_priv, withdraw_message(&rec.handle, &audience, created_at).as_bytes())?;
+    Ok(json!({
+        "type": "Withdraw",
+        "actor": { "preferredUsername": rec.handle, "ed25519PublicKey": rec.ed_pub },
+        "object": { "handle": rec.handle, "audience": audience, "createdAt": created_at },
+        "signature": { "type": "ed25519", "value": sig },
+    }))
+}
+
+/// A verified withdrawal request.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Withdrawal {
+    pub handle: String,
+    pub ed_pub: String,
+    pub created_at: u64,
+}
+
+/// Check a received withdrawal: well-formed, addressed to this server
+/// (`my_base_url`), and signed by the key it names.
+pub fn verify_withdraw(v: &Value, my_base_url: &str) -> Result<Withdrawal, String> {
+    let actor = v.get("actor").ok_or("missing actor")?;
+    let object = v.get("object").ok_or("missing object")?;
+    let ed_pub = str_at(actor, "ed25519PublicKey").ok_or("missing key")?;
+    let handle_ = str_at(object, "handle").ok_or("missing handle")?;
+    if !handle::is_valid(handle_) || str_at(actor, "preferredUsername") != Some(handle_) {
+        return Err("invalid handle".into());
+    }
+    let audience = str_at(object, "audience").ok_or("missing audience")?;
+    if audience != host_label(my_base_url) {
+        return Err("this withdrawal was addressed to a different commons".into());
+    }
+    let created_at = object.get("createdAt").and_then(|x| x.as_u64()).ok_or("missing createdAt")?;
+    let sig = v.get("signature").and_then(|s| s.get("value")).and_then(|x| x.as_str()).ok_or("missing signature")?;
+    keys::verify_message(ed_pub, withdraw_message(handle_, audience, created_at).as_bytes(), sig)?;
+    Ok(Withdrawal { handle: handle_.into(), ed_pub: ed_pub.into(), created_at })
+}
+
+/// What a commons does with a verified withdrawal: the tombstone to record,
+/// or why not. The caller then deletes the key's shared profile.
+///
+/// Refused when the key's held profile is under a different handle, or was
+/// shared *after* this withdrawal was signed (an old withdrawal must not
+/// remove a later re-share).
+pub fn apply_withdraw(w: &Withdrawal, held: &[RemoteEntry]) -> Result<Tombstone, &'static str> {
+    if let Some(r) = held.iter().find(|r| r.ed_pub == w.ed_pub) {
+        if r.handle != w.handle {
+            return Err("that key holds a different handle here");
+        }
+        if r.created_at > w.created_at {
+            return Err("a newer version was shared after this withdrawal");
+        }
+    }
+    Ok(Tombstone { ed_pub: w.ed_pub.clone(), handle: w.handle.clone(), withdrawn_at: w.created_at })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::keys;
+
+    fn holders<'a>(local: Option<&'a str>, held: &'a [RemoteEntry], withdrawn: &'a [Tombstone]) -> Holders<'a> {
+        Holders { local, held, withdrawn }
+    }
 
     /// A signed share for `handle` at time `t`, plus the sender's keys.
     fn signed_share(handle: &str, t: u64, bio: &str) -> (Value, keys::NewKeys) {
@@ -221,13 +306,16 @@ mod tests {
         let (a, _) = signed_share("tega", 10, "real");
         let (b, _) = signed_share("tega", 11, "impostor");
         let held = vec![verify_share(&a, 0).unwrap()];
-        assert_eq!(admit(&verify_share(&b, 0).unwrap(), None, &held), Admission::HandleTaken);
+        assert_eq!(admit(&verify_share(&b, 0).unwrap(), &holders(None, &held, &[])), Admission::HandleTaken);
     }
 
     #[test]
     fn local_member_keeps_their_handle() {
         let (a, _) = signed_share("tega", 10, "x");
-        assert_eq!(admit(&verify_share(&a, 0).unwrap(), Some("someone-else"), &[]), Admission::HandleTaken);
+        assert_eq!(
+            admit(&verify_share(&a, 0).unwrap(), &holders(Some("someone-else"), &[], &[])),
+            Admission::HandleTaken
+        );
     }
 
     #[test]
@@ -237,16 +325,85 @@ mod tests {
         let mut old = held[0].clone();
         old.created_at = 10;
         old.cid = "older".into();
-        assert_eq!(admit(&old, None, &held), Admission::Stale);
-        assert_eq!(admit(&held[0], None, &held), Admission::Accept, "re-sending the same version is fine");
+        assert_eq!(admit(&old, &holders(None, &held, &[])), Admission::Stale);
+        assert_eq!(
+            admit(&held[0], &holders(None, &held, &[])),
+            Admission::Accept,
+            "re-sending the same version is fine"
+        );
     }
 
     #[test]
     fn handle_taken_ignores_the_owner() {
         let (a, k) = signed_share("tega", 10, "x");
         let held = vec![verify_share(&a, 0).unwrap()];
-        assert!(handle_taken("tega", None, None, &held));
-        assert!(!handle_taken("tega", Some(&k.ed_pub), None, &held));
-        assert!(!handle_taken("mo", None, None, &held));
+        assert!(handle_taken("tega", None, &holders(None, &held, &[])));
+        assert!(!handle_taken("tega", Some(&k.ed_pub), &holders(None, &held, &[])));
+        assert!(!handle_taken("mo", None, &holders(None, &held, &[])));
+    }
+
+    /// A record with real keys, for withdrawal tests.
+    fn rec_with_keys(handle: &str) -> HandleRec {
+        let k = keys::generate();
+        HandleRec {
+            handle: handle.into(),
+            display_name: handle.into(),
+            created_at: 0,
+            ed_pub: k.ed_pub,
+            ed_priv: k.ed_priv,
+            box_pub: k.box_pub,
+            box_priv: k.box_priv,
+            secret_salt: String::new(),
+            secret_hash: String::new(),
+            current_cid: None,
+            shared_to: vec![],
+        }
+    }
+
+    #[test]
+    fn withdrawal_round_trip() {
+        let rec = rec_with_keys("tega");
+        let w = build_withdraw(&rec, "https://c.example/", 50).unwrap();
+        let v = verify_withdraw(&w, "https://c.example").unwrap();
+        assert_eq!(v, Withdrawal { handle: "tega".into(), ed_pub: rec.ed_pub.clone(), created_at: 50 });
+    }
+
+    #[test]
+    fn withdrawal_for_another_commons_is_refused() {
+        let rec = rec_with_keys("tega");
+        let w = build_withdraw(&rec, "https://other.example", 50).unwrap();
+        assert!(verify_withdraw(&w, "https://c.example").unwrap_err().contains("different commons"));
+    }
+
+    #[test]
+    fn tampered_withdrawal_is_refused() {
+        let rec = rec_with_keys("tega");
+        let mut w = build_withdraw(&rec, "https://c.example", 50).unwrap();
+        w["object"]["createdAt"] = json!(99);
+        assert!(verify_withdraw(&w, "https://c.example").is_err());
+    }
+
+    #[test]
+    fn old_withdrawal_cannot_remove_a_later_reshare() {
+        let (share, k) = signed_share("tega", 100, "back again");
+        let held = vec![verify_share(&share, 0).unwrap()];
+        let w = Withdrawal { handle: "tega".into(), ed_pub: k.ed_pub.clone(), created_at: 60 };
+        assert!(apply_withdraw(&w, &held).is_err());
+        let w = Withdrawal { created_at: 150, ..w };
+        assert_eq!(apply_withdraw(&w, &held).unwrap().withdrawn_at, 150);
+    }
+
+    #[test]
+    fn withdrawn_versions_cannot_be_replayed_and_the_handle_stays_theirs() {
+        let (share, k) = signed_share("tega", 100, "x");
+        let entry = verify_share(&share, 0).unwrap();
+        let tomb = vec![Tombstone { ed_pub: k.ed_pub.clone(), handle: "tega".into(), withdrawn_at: 120 }];
+        assert_eq!(admit(&entry, &holders(None, &[], &tomb)), Admission::Stale);
+        let (impostor, _) = signed_share("tega", 200, "mine now");
+        assert_eq!(admit(&verify_share(&impostor, 0).unwrap(), &holders(None, &[], &tomb)), Admission::HandleTaken);
+        let mut newer = entry.clone();
+        newer.created_at = 130;
+        newer.cid = "newer".into();
+        assert_eq!(admit(&newer, &holders(None, &[], &tomb)), Admission::Accept, "owner may share again later");
     }
 }

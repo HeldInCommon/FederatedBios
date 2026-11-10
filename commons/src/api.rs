@@ -107,7 +107,9 @@ pub async fn handle_available(State(st): State<Shared>, Path(h): Path<String>) -
     let h = h.to_lowercase();
     let valid = handle::is_valid(&h);
     let local = st.store.handle(&h).ok().flatten().map(|r| r.ed_pub);
-    let taken = federation::handle_taken(&h, None, local.as_deref(), &st.store.remotes());
+    let (held, withdrawn) = (st.store.remotes(), st.store.tombstones());
+    let holders = federation::Holders { local: local.as_deref(), held: &held, withdrawn: &withdrawn };
+    let taken = federation::handle_taken(&h, None, &holders);
     Json(json!({ "handle": h, "valid": valid, "available": valid && !taken }))
 }
 

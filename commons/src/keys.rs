@@ -43,18 +43,28 @@ fn hex32(h: &str) -> Option<[u8; 32]> {
     hex::decode(h).ok()?.try_into().ok()
 }
 
-/// Sign a `cid` with a hex Ed25519 private key. Returns the hex signature, or
+/// Sign `msg` with a hex Ed25519 private key. Returns the hex signature, or
 /// an error if the stored key is damaged.
-pub fn sign_cid(ed_priv_hex: &str, cid: &str) -> Result<String, &'static str> {
+pub fn sign_message(ed_priv_hex: &str, msg: &[u8]) -> Result<String, &'static str> {
     let key = SigningKey::from_bytes(&hex32(ed_priv_hex).ok_or("the signing key is damaged")?);
-    Ok(hex::encode(key.sign(cid.as_bytes()).to_bytes()))
+    Ok(hex::encode(key.sign(msg).to_bytes()))
 }
 
-/// Check a hex signature over a `cid` against a hex Ed25519 public key.
-pub fn verify_cid(ed_pub_hex: &str, cid: &str, sig_hex: &str) -> Result<(), &'static str> {
+/// Check a hex signature over `msg` against a hex Ed25519 public key.
+pub fn verify_message(ed_pub_hex: &str, msg: &[u8], sig_hex: &str) -> Result<(), &'static str> {
     let vk = VerifyingKey::from_bytes(&hex32(ed_pub_hex).ok_or("bad key")?).map_err(|_| "bad key")?;
     let sig_bytes: [u8; 64] = hex::decode(sig_hex).ok().and_then(|b| b.try_into().ok()).ok_or("bad signature")?;
-    vk.verify(cid.as_bytes(), &Signature::from_bytes(&sig_bytes)).map_err(|_| "signature does not verify")
+    vk.verify(msg, &Signature::from_bytes(&sig_bytes)).map_err(|_| "signature does not verify")
+}
+
+/// Sign a version's `cid` (the signature is over the `cid` string itself).
+pub fn sign_cid(ed_priv_hex: &str, cid: &str) -> Result<String, &'static str> {
+    sign_message(ed_priv_hex, cid.as_bytes())
+}
+
+/// Check a signature over a version's `cid`.
+pub fn verify_cid(ed_pub_hex: &str, cid: &str, sig_hex: &str) -> Result<(), &'static str> {
+    verify_message(ed_pub_hex, cid.as_bytes(), sig_hex)
 }
 
 /// Encrypt a profile once per recipient. `recipients` is `(handle, box_pub hex)`;

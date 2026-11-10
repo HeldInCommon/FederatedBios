@@ -21,6 +21,7 @@
 //! | [`canonical`] | the content address (`cid`) of a version | none |
 //! | [`keys`] | signing, verifying, encrypting to members | randomness only when generating keys |
 //! | [`passphrase`] | hashing and checking passphrases | randomness only when hashing |
+//! | [`backup`] | encrypted identity backups | randomness only when sealing |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
@@ -36,6 +37,7 @@
 
 pub mod api;
 pub mod app;
+pub mod backup;
 pub mod canonical;
 pub mod config;
 pub mod federation;
