@@ -129,6 +129,7 @@ ciphertext lives on the node and **never federates**.
 - **Auth** — passphrase stored as an **Argon2id** hash (no recovery; older SHA-256 hashes are upgraded at the next sign-in), five wrong tries per handle then a 15-minute wait → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` on https) that expires after 24 hours, + a per-session **CSRF** token guarding `publish`/`share`.
 - **Network exposure** — a node listens only on `127.0.0.1` (this computer); a commons listens on all interfaces. Override with `HIC_BIND`.
 - **Withdrawal** — a member can withdraw a shared copy. The node sends a signed `Withdraw` addressed to that commons (so it can't be replayed elsewhere); the commons deletes the copy and keeps a tombstone (`tombstones/<keyid>.json`: key, handle, time). The handle stays reserved for that key, and the withdrawn version can't be replayed. An older withdrawal can't remove a later re-share.
+- **Steward view** — the person running a commons opens `/steward` at the commons' computer, or with the steward link from its log, to approve or decline people waiting and to make invite codes. Every invite page can open a ready-written email in the person's own mail app (`mailto:`). See ADR 0017.
 - **Joining needs a vouch** — a new handle is listed on a commons only with a member's invite code, a member's vouch from the pending list, or (for the first person) the commons' founding invite, which only someone at the commons' own computer can see. Each member can bring in `HIC_VOUCH_LIMIT` people a week. See ADR 0011 and `docs/spec/` §5.3.
 - **Recovery key and key rotation** — sign-up makes a recovery key whose code is shown once, to keep offline. A member can replace their key; a commons moves the handle only on a rotation signed by the current key and cosigned by the new one, and a rotation signed by the recovery key overrides any other (so a thief who rotates first still loses). See ADR 0010 and `docs/spec/` §5.1.
 - **Signed formats** — written down in [spec/](spec/README.md), with test vectors checked by Rust and, independently, Python.
@@ -155,6 +156,9 @@ ciphertext lives on the node and **never federates**.
 | POST | `/invite` | Make a single-use invite code for a commons the member is listed on (auth + CSRF) |
 | POST | `/vouch` | Vouch for someone on a commons' pending list (auth + CSRF) |
 | GET | `/api/pending` | Shares waiting for a vouch on this commons |
+| GET | `/steward` | Open the steward view (at the commons' computer, or with `?key=` from the steward link) |
+| POST | `/steward/approve`, `/steward/decline` | Approve or decline someone waiting (steward + CSRF) |
+| POST | `/steward/invite` | Make a single-use invite code (steward + CSRF) |
 | POST | `/recovery/new` | Make a recovery key for a handle that has none; shows its code once (auth + CSRF) |
 | POST | `/rotate` | Replace the member's key on this node and every commons shared to (auth + CSRF) |
 | POST | `/recover` | Take the handle back with the recovery code (auth + CSRF) |

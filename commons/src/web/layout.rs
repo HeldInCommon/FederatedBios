@@ -99,7 +99,12 @@ fn frame(site: &Site, page: &Page) -> Markup {
                         a class="wordmark" href="/" { "Held in Common" span class="dot" { "." } }
                         span class="topbar-links" {
                             a href="/" { "Directory" }
-                            @if let Some(h) = page.me {
+                            @if page.me == Some("@steward") {
+                                a href="/" { "Steward view" }
+                                form method="post" action="/logout" class="inline-form" {
+                                    button class="linklike" type="submit" { "Sign out" }
+                                }
+                            } @else if let Some(h) = page.me {
                                 a href={ "/@" (h) } { "@" (h) }
                                 form method="post" action="/logout" class="inline-form" {
                                     button class="linklike" type="submit" { "Sign out" }
@@ -118,6 +123,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                         a href="/about" { "How this works" }
                     }
                 }
+                script src="/password.js" {}
             }
         }
     }

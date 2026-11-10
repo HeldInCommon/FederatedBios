@@ -110,10 +110,16 @@ pub async fn directory(
     }
     let remotes = st.store.remotes();
     let pending = if st.site.is_commons() { st.store.pending() } else { Vec::new() };
-    // The founding invite is shown only to someone at this computer.
-    let local_viewer = peer.is_some_and(|Extension(ConnectInfo(a))| a.ip().is_loopback());
-    let founding = if st.site.is_commons() && local_viewer { st.store.founding_code().ok().flatten() } else { None };
-    let body = pages::directory(&st.site, &cards, &remotes, &pending, founding.as_deref());
+    // The steward sees their tools (and the founding invite); someone at the
+    // commons' own computer gets a link to the steward view.
+    let steward = if st.site.is_commons() { crate::web::steward::steward_session(&st, &headers) } else { None };
+    let view = steward.map(|s| pages::StewardView { csrf: s.csrf, founding: st.store.founding_code().ok().flatten() });
+    let viewer = match &view {
+        Some(v) => pages::Viewer::Steward(v),
+        None if st.site.is_commons() && crate::web::steward::from_this_computer(&peer) => pages::Viewer::AtThisComputer,
+        None => pages::Viewer::Visitor,
+    };
+    let body = pages::directory(&st.site, &cards, &remotes, &pending, &viewer);
     render(&st.site, Page::new("Directory", me.as_deref(), body))
 }
 
@@ -395,8 +401,11 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
                 eprintln!("warning: shared, but couldn't remember it for @{h}: {e}");
             }
             let pending = r.text().await.unwrap_or_default().starts_with("pending");
-            let body =
-                if pending { pages::shared_pending(&h, &commons, &rec.ed_pub) } else { pages::shared(&h, &commons) };
+            let body = if pending {
+                pages::shared_pending(&h, &commons, &rec.ed_pub, &f.one("csrf"))
+            } else {
+                pages::shared(&h, &commons)
+            };
             render(&st.site, Page::new("Shared", Some(&h), body))
         }
         Ok(r) if r.status() == StatusCode::FORBIDDEN => {
@@ -591,6 +600,19 @@ fn admit_newcomer(st: &AppState, entry: &RemoteEntry, message: &serde_json::Valu
         }
         return list_entry(st, entry, message, None, Some(intro("founding", None, None)));
     }
+    if code.starts_with(vouching::STEWARD_INVITE_PREFIX) {
+        let unused = match st.store.commons_invite_unused(&code) {
+            Ok(u) => u,
+            Err(e) => return store_failed(&e),
+        };
+        if !unused {
+            return reply(StatusCode::FORBIDDEN, "that invite code isn't valid here (it may already have been used)");
+        }
+        if let Err(e) = st.store.use_commons_invite(&code, now()) {
+            return store_failed(&e);
+        }
+        return list_entry(st, entry, message, None, Some(intro("steward-invite", None, None)));
+    }
     let Some(invite) = vouching::code_to_invite(&code) else {
         return reply(StatusCode::FORBIDDEN, "that isn't an invite code");
     };
@@ -627,6 +649,19 @@ fn vouch_ctx<'a>(
         intros,
         limit: st.config.vouch_limit,
     }
+}
+
+/// Plan and write a listing (see [`list_entry`]); for callers that answer
+/// with a page rather than to a node. **Writes the listing.**
+pub(crate) fn list_entry_response(
+    st: &AppState,
+    entry: &RemoteEntry,
+    message: &serde_json::Value,
+    intro: Option<Intro>,
+) -> Result<(), String> {
+    let existing = st.store.identity(&entry.handle).map_err(|e| e.to_string())?;
+    let plan = federation::plan_listing(entry, message, existing, intro, now());
+    st.store.apply_listing(&plan).map_err(|e| e.to_string())
 }
 
 /// List a share: plan it (pure), then write it with

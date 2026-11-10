@@ -23,6 +23,8 @@ const MSGS = {
   commons: ['Warming up the commons…', 'Opening the directory…', 'Getting ready for visitors…']
 };
 let msgs = MSGS.node, n = 0, done = false;
+// A commons opens in its steward view (approve people, make invites).
+let startPage = '/';
 
 // Is the server listening? Prefer the host-side command (a fetch to
 // http://localhost from this secure origin is blocked as mixed content). Fall
@@ -48,7 +50,7 @@ async function poll(){
   if (done) return;
   n++;
   if (n <= msgs.length * 3) $('s').textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
-  if (await isUp()){ done = true; location.href = url; return; }
+  if (await isUp()){ done = true; location.href = url + startPage; return; }
   // ~12s of patience, then reveal the manual Start button + fallback link.
   if (n > 20){
     $('s').textContent = 'Taking longer than usual.';
@@ -60,6 +62,7 @@ async function poll(){
 function showLoading(role){
   const what = role === 'commons' ? 'commons' : 'node';
   msgs = MSGS[what];
+  startPage = what === 'commons' ? '/steward' : '/';
   $('loading-title').firstChild.textContent = 'Starting your ' + what;
   $('start').textContent = 'Start the ' + what;
   $('chooser').hidden = true;

@@ -48,16 +48,41 @@ pub struct Card {
     pub version: Version,
 }
 
+/// What the steward of a commons sees on its page (see `web::steward`).
+pub struct StewardView {
+    /// The steward session's CSRF token, for the approve/decline/invite forms.
+    pub csrf: String,
+    /// The founding invite, while it is unused.
+    pub founding: Option<String>,
+}
+
+/// Who is looking at a commons' page.
+pub enum Viewer<'a> {
+    /// Anyone.
+    Visitor,
+    /// Someone at the commons' own computer who hasn't opened the steward view.
+    AtThisComputer,
+    /// The steward.
+    Steward(&'a StewardView),
+}
+
 /// The directory: shared-in profiles first, then this server's members.
 pub fn directory(
     site: &Site,
     cards: &[Card],
     remotes: &[RemoteEntry],
     pending: &[PendingShare],
-    founding: Option<&str>,
+    viewer: &Viewer,
 ) -> Markup {
+    let steward = match viewer {
+        Viewer::Steward(v) => Some(*v),
+        _ => None,
+    };
     html! {
-        @if let Some(code) = founding { (founding_box(code)) }
+        @if let Some(v) = steward { (steward_panel(v)) }
+        @if let Viewer::AtThisComputer = viewer {
+            p class="hint steward-hint" { "You're at this commons' computer. " a href="/steward" { "Open the steward view" } " to approve people and make invites." }
+        }
         header class="intro" {
             h1 { "The commons" }
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }
@@ -106,7 +131,7 @@ pub fn directory(
                 }
             }
         }
-        @if !pending.is_empty() { (pending_list(pending)) }
+        @if !pending.is_empty() { (pending_list(pending, steward)) }
         div class="actions" {
             @if site.is_commons() {
                 a class="primary" href="/join" { "Run a node to join" }
@@ -117,30 +142,75 @@ pub fn directory(
     }
 }
 
-/// Shown only to someone at the commons' own computer, until it's used.
-fn founding_box(code: &str) -> Markup {
+/// The steward's tools at the top of the commons page.
+fn steward_panel(v: &StewardView) -> Markup {
     html! {
         section class="recovery steward" {
-            h2 class="field-label" { "You're the steward of this commons" }
-            p { "Nobody is listed yet, so the first person needs this founding invite. Give it to them (it can be you); they paste it into " strong { "Invite code" } " when they share from their node. It works once." }
-            p class="recovery-code mono" { (code) }
-            p class="hint" { "Only someone at this computer sees this box. After the first person joins, members bring others in with invites or vouches." }
+            h2 class="field-label" { "Steward view" }
+            @if let Some(code) = &v.founding {
+                p { "Nobody is listed yet, so the first person needs this founding invite. Give it to them (it can be you); they paste it into " strong { "Invite code" } " when they share from their node. It works once." }
+                p class="recovery-code mono" { (code) }
+            }
+            p { "Approve or decline people waiting below, or make an invite code to send to someone." }
+            form method="post" action="/steward/invite" class="share-form" {
+                input type="hidden" name="csrf" value=(v.csrf);
+                button class="secondary" type="submit" { "Make an invite" }
+            }
         }
     }
 }
 
 /// Shares waiting for a vouch: enough for a member to recognise who's asking.
-fn pending_list(pending: &[PendingShare]) -> Markup {
+/// The steward also gets Approve and Decline buttons.
+fn pending_list(pending: &[PendingShare], steward: Option<&StewardView>) -> Markup {
     html! {
         section class="pending" {
             h2 class="section-h" { "Waiting for a vouch" }
-            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from their own node (under " strong { "Vouch for someone" } "), using the handle and key shown here." }
+            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from their own node (under " strong { "Vouch for someone" } "), using the handle and key shown here, or the steward can approve them." }
             ul class="pending-list" {
                 @for p in pending {
-                    li { strong { "@" (p.entry.handle) } " · key " span class="mono" { (short(&p.entry.ed_pub)) } " · from " (origin_host(&p.entry)) }
+                    li class="pending-item" {
+                        span { strong { "@" (p.entry.handle) } " · key " span class="mono" { (short(&p.entry.ed_pub)) } " · from " (origin_host(&p.entry)) }
+                        @if let Some(v) = steward {
+                            span class="commons-actions" {
+                                form method="post" action="/steward/approve" {
+                                    input type="hidden" name="csrf" value=(v.csrf);
+                                    input type="hidden" name="key" value=(p.entry.ed_pub);
+                                    button class="secondary" type="submit" { "Approve" }
+                                }
+                                form method="post" action="/steward/decline" {
+                                    input type="hidden" name="csrf" value=(v.csrf);
+                                    input type="hidden" name="key" value=(p.entry.ed_pub);
+                                    button class="secondary" type="submit" { "Decline" }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/// A steward-made invite code, with an email button.
+pub fn steward_invite(site: &Site, code: &str) -> Markup {
+    let label = host_label(&site.base_url);
+    let from = format!("— the steward of {}", site.instance);
+    let (subject, body) = crate::web::email::invitation(&label, &site.base_url, code, &from, None);
+    html! {
+        header class="intro" {
+            h1 { "Invite code" }
+            p class="lede" { "Give this to the person you're inviting. They paste it into " strong { "Invite code" } " when they share to this commons, and are listed straight away." }
+        }
+        section class="recovery" {
+            p class="recovery-code mono" { (code) }
+            p class="hint" { "It works once." }
+        }
+        div class="actions" {
+            a class="primary" href=(crate::web::email::mailto(&subject, &body)) { "Email this invite" }
+            a class="secondary-link" href="/" { "Back to the commons" }
+        }
+        p class="hint" { "Email this invite opens your own mail app with the message written; you choose who to send it to." }
     }
 }
 
@@ -228,6 +298,12 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
     html! {
         div class="owner-panel" {
             div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
+            @if !o.shareable {
+                section class="share-panel" {
+                    h2 class="field-label" { "Share to a commons" }
+                    p class="hint" { "This profile is " strong { "members only" } ", so it stays on your node and is never shared. To share it to a commons, choose " strong { "Update your profile" } " and set who can see it to Public or Listed in the commons." }
+                }
+            }
             @if o.shareable {
                 section class="share-panel" {
                     h2 class="field-label" { "Share to a commons" }
@@ -252,7 +328,7 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
                         }
                     }
                     details class="add-commons" open[o.known.is_empty()] {
-                        summary { (if o.known.is_empty() { "Add a commons" } else { "Share to a different commons" }) }
+                        summary { (if o.known.is_empty() { "Add a commons" } else { "Share with an invite code, or to another commons" }) }
                         form method="post" action="/share" class="share-form" {
                             input type="hidden" name="handle" value=(handle);
                             input type="hidden" name="csrf" value=(o.csrf);
@@ -459,31 +535,48 @@ pub fn restore_form() -> Markup {
 }
 
 /// After sharing to a commons that lists newcomers only once vouched for.
-pub fn shared_pending(handle: &str, commons: &str, key: &str) -> Markup {
+pub fn shared_pending(handle: &str, commons: &str, key: &str, csrf: &str) -> Markup {
     html! {
         header class="intro" {
             h1 { "Waiting for a vouch" }
-            p class="lede" { (host_label(commons)) " has your signed profile, and will list it once a member vouches for you." }
+            p class="lede" { (host_label(commons)) " has your signed profile, and will list it once a member vouches for you or its steward approves you." }
         }
         p { "Ask someone you know there to vouch for you from their node. They'll need your handle and key:" }
         p class="recovery-code mono" { "@" (handle) " · " (short(key)) }
-        p class="hint" { "Or, if someone gives you an invite code, share again with the code." }
+        section class="share-panel" {
+            h2 class="field-label" { "Got an invite code?" }
+            form method="post" action="/share" class="share-form" {
+                input type="hidden" name="handle" value=(handle);
+                input type="hidden" name="csrf" value=(csrf);
+                input type="hidden" name="commons_url" value=(commons);
+                div class="share-row" {
+                    input name="invite" type="text" placeholder="Paste the invite code" required autocomplete="off";
+                    button class="secondary" type="submit" { "Share with the code" }
+                }
+            }
+        }
         div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
 }
 
-/// A new invite code to hand to someone.
-pub fn invite_code(handle: &str, commons_label: &str, code: &str, days: u64) -> Markup {
+/// A new invite code to hand to someone, with an email button.
+pub fn invite_code(handle: &str, commons_url: &str, code: &str, days: u64) -> Markup {
+    let label = host_label(commons_url);
+    let (subject, body) = crate::web::email::invitation(&label, commons_url, code, &format!("— @{handle}"), Some(days));
     html! {
         header class="intro" {
             h1 { "Invite code" }
-            p class="lede" { "Give this to the person you're inviting to " (commons_label) ". They paste it into " strong { "Invite code" } " when they first share there, and are listed straight away." }
+            p class="lede" { "Give this to the person you're inviting to " (label) ". They paste it into " strong { "Invite code" } " when they first share there, and are listed straight away." }
         }
         section class="recovery" {
             textarea class="recovery-code mono" readonly rows="6" { (code) }
             p class="hint" { "It works once, for " (days) " days, and says that @" (handle) " vouched for them." }
         }
-        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
+        div class="actions" {
+            a class="primary" href=(crate::web::email::mailto(&subject, &body)) { "Email this invite" }
+            a class="secondary-link" href={ "/@" (handle) } { "Back to your profile" }
+        }
+        p class="hint" { "Email this invite opens your own mail app with the message written, including how to install the app; you choose who to send it to." }
     }
 }
 

@@ -407,3 +407,17 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .commons-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .commons-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .commons-actions form { margin: 0; }
+
+/* Steward view */
+.steward-hint { margin: 0 0 18px; }
+.pending-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.secondary-link { margin-left: 18px; font: 700 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+
+/* Show/hide passphrase (static/password.js) */
+.pw-wrap { position: relative; display: block; }
+.share-row .pw-wrap { flex: 1; }
+.pw-wrap input { width: 100%; padding-right: 48px; }
+.pw-toggle { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); display: grid; place-items: center;
+  width: 34px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--gray); cursor: pointer; }
+.pw-toggle:hover, .pw-toggle[aria-pressed="true"] { color: var(--ink); }
+.pw-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

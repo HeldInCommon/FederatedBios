@@ -8,6 +8,8 @@
 //! | **Invite code** | a signed `Invite` a member's node made in advance | the inviter is a member; the code is for this commons, unexpired, unused |
 //! | **Pending list** | nothing: their share waits until a member sends a signed `Vouch` | the voucher is a member; the vouch names this handle and key |
 //! | **Founding invite** | the one-time code the commons made when it started | the stored code (for the first person, when there are no members) |
+//! | **Steward invite** | a code the commons' steward made (`hic-invite-…`) | the stored, unused code |
+//! | **Steward approval** | nothing: the steward approves them from the waiting list | the steward's session |
 //!
 //! Each member can bring in at most `limit` people per week (set by the
 //! steward, `HIC_VOUCH_LIMIT`). Every admission is recorded as an [`Intro`].
@@ -34,6 +36,8 @@ pub const WEEK: u64 = 7 * 86_400;
 pub const DEFAULT_LIMIT: u32 = 5;
 /// Founding invites start with this, so they're easy to tell from member invites.
 pub const FOUNDING_PREFIX: &str = "hic-founding-";
+/// Invites made by a commons' steward start with this.
+pub const STEWARD_INVITE_PREFIX: &str = "hic-invite-";
 
 /// How someone came to be listed on a commons. Lives in `intros/<keyid>.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -172,6 +176,17 @@ pub fn needs_founding_invite(ever_had_one: bool, lists_anyone: bool) -> bool {
     !ever_had_one && !lists_anyone
 }
 
+/// A fresh steward invite code (single use, made from the steward view).
+pub fn new_steward_invite_code() -> String {
+    format!("{STEWARD_INVITE_PREFIX}{}", crate::sessions::random_hex(12))
+}
+
+/// A fresh steward key: the secret in the steward link a commons prints when
+/// it starts (see `docs/adr/0017-steward-approval.md`).
+pub fn new_steward_key() -> String {
+    crate::sessions::random_hex(16)
+}
+
 /// A fresh founding invite.
 pub fn new_founding_code() -> String {
     format!("{FOUNDING_PREFIX}{}", crate::sessions::random_hex(12))
@@ -248,6 +263,12 @@ mod tests {
         assert!(needs_founding_invite(false, false));
         assert!(!needs_founding_invite(true, false));
         assert!(!needs_founding_invite(false, true));
+    }
+
+    #[test]
+    fn steward_codes_have_their_own_prefix() {
+        assert!(new_steward_invite_code().starts_with(STEWARD_INVITE_PREFIX));
+        assert_eq!(new_steward_key().len(), 32);
     }
 
     #[test]

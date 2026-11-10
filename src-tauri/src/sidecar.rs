@@ -153,16 +153,25 @@ pub fn set_title(app: &tauri::AppHandle, role: &str) {
     }
 }
 
+/// The page the window opens on: a node's directory, or a commons' steward view.
+pub fn start_page(role: &str) -> &'static str {
+    if role == "commons" {
+        "/steward"
+    } else {
+        "/"
+    }
+}
+
 /// In the background, open the server in the window as soon as *our* server
 /// answers (a backstop in case the loading screen's own polling stalls).
 /// Gives up after about four minutes.
-pub fn open_when_up(app: tauri::AppHandle, token: String) {
+pub fn open_when_up(app: tauri::AppHandle, token: String, path: &'static str) {
     std::thread::spawn(move || {
         for _ in 0..600 {
             if network::probe(&token) == Probe::Ours {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.eval(format!("location.replace('{LOCAL_URL}')"));
+                    let _ = win.eval(format!("location.replace('{LOCAL_URL}{path}')"));
                 }
                 return;
             }
@@ -177,13 +186,20 @@ pub fn start(app: &tauri::AppHandle, cfg: &AppConfig, sidecar: &Sidecar, role: &
     let generation = sidecar.begin(true);
     sidecar.set(spawn(app, cfg, role, name, generation)?);
     set_title(app, role);
-    open_when_up(app.clone(), cfg.launch_token.clone());
+    // A commons opens in the steward view (approve people, make invites).
+    open_when_up(app.clone(), cfg.launch_token.clone(), start_page(role));
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_commons_opens_in_the_steward_view() {
+        assert_eq!(start_page("commons"), "/steward");
+        assert_eq!(start_page("node"), "/");
+    }
 
     #[test]
     fn restarts_only_the_current_server_a_few_times() {

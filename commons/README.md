@@ -54,3 +54,48 @@ members bring people in with invite codes or vouches from their own nodes.
 
 - `HIC_VOUCH_LIMIT=5`: how many people one member may bring in per week.
 - `HIC_OPEN_COMMONS=1`: no vouching (for example a test commons).
+
+## Run a test commons with Docker (for development)
+
+Use this to test your node against a commons on your own computer. It needs
+Docker Desktop running.
+
+1. **Build the image** from the code you have checked out (repeat after
+   pulling new code):
+   ```
+   docker build -t hic-commons-test ./commons
+   ```
+2. **Start the commons** on port 8081 (your node app uses 8080):
+   ```
+   docker run -d --name hic-test-commons -p 8081:8080 \
+     -v hic-test-commons-data:/data \
+     -e HIC_ROLE=commons -e HIC_INSTANCE="Test commons (Docker)" \
+     -e HIC_BASE_URL=http://localhost:8081 \
+     hic-commons-test
+   ```
+   For a commons where anyone can share without a vouch, add
+   `-e HIC_OPEN_COMMONS=1` before the image name.
+3. **Open the steward view** to approve people and make invites. The
+   commons prints a private steward link in its log:
+   ```
+   docker logs hic-test-commons | grep steward
+   ```
+   Open that link in your browser. Each person waiting has **Approve** and
+   **Decline**; **Make an invite** gives you a code you can email.
+
+   **Get the founding invite** (a new commons only; one use) from the log, or
+   see it in the steward view:
+   ```
+   docker logs hic-test-commons | grep founding
+   ```
+   Docker doesn't count as "the commons' own computer", so use the log or
+   the steward link.
+4. **Open the commons** at http://localhost:8081.
+5. **Share from your node:** open your profile, under **Share to a commons**
+   open **Add a commons**, enter `http://localhost:8081`, paste the founding
+   invite into **Invite code**, and press **Share**.
+
+**Stop it:** `docker stop hic-test-commons` (start again with
+`docker start hic-test-commons`; its data stays).
+**Start over:** `docker rm -f hic-test-commons && docker volume rm hic-test-commons-data`,
+then repeat step 2 (a new founding invite appears).
