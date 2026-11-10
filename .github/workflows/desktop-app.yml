@@ -1,5 +1,5 @@
-# Builds the native node app and attaches installers to the 'node-app-preview'
-# prerelease. Run by hand it builds Linux by default; the Mac app is usually
+# Builds the native node app and attaches installers to the release for this
+# version, v<version> (e.g. v0.4.0), creating it if needed. Run by hand it builds Linux by default; the Mac app is usually
 # released from a Mac with scripts/release-mac.sh (much faster). A pushed
 # node-app-v* tag builds both.
 #
@@ -130,8 +130,8 @@ jobs:
           HIC_SHARE_DEFAULT: ${{ vars.HIC_SHARE_DEFAULT }}
           # APPLE_* come from the signing step above via $GITHUB_ENV (macOS only).
         with:
-          tagName: node-app-preview
-          releaseName: "Held In Common"
+          tagName: v__VERSION__
+          releaseName: "Held In Common __VERSION__"
           # Kept here (not just hand-edited on the release) so each CI run re-applies it.
           releaseBody: |
             **Held in Common — the desktop node app.** Download the file for your computer, open it, and you're running your own node.
@@ -148,8 +148,7 @@ jobs:
             - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
             - Full guide: `docs/INSTALL.md`.
 
-            _This is a rolling preview — assets are replaced in place with each new build._
-          prerelease: true
+          prerelease: false
       # Check Apple accepted it, then publish the .dmg under the stable name the
       # install guide links to (replacing the old unsigned one).
       - name: Verify notarization and publish the stable .dmg name
@@ -164,4 +163,5 @@ jobs:
           xcrun stapler validate "$APP"
           spctl --assess --type execute --verbose=4 "$APP"
           cp "$DMG" Held-In-Common-macOS-AppleSilicon.dmg
-          gh release upload node-app-preview Held-In-Common-macOS-AppleSilicon.dmg --clobber
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          gh release upload "v$VERSION" Held-In-Common-macOS-AppleSilicon.dmg --clobber

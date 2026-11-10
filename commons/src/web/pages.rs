@@ -12,7 +12,7 @@ use crate::model::{display_name_or_handle, HandleRec, PendingShare, Profile, Rea
 use crate::web::layout::{gov_row, host_label, reach_badge, reach_bar_class, Site};
 
 /// Where the "Get the app" button points.
-const APP_DOWNLOAD: &str = "https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview";
+const APP_DOWNLOAD: &str = "https://github.com/HeldInCommon/FederatedBios/releases/latest";
 
 /// The host a shared profile says it came from, or its node's name if it
 /// sent no usable address. Both are the sender's own claims.

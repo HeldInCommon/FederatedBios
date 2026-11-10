@@ -16,14 +16,14 @@ copy.
 
 ### 1. Download
 
-From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview**
+From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases/latest**
 
 | Your computer | Download |
 |---|---|
 | **macOS — Apple Silicon (M1–M4)** | `Held-In-Common-macOS-AppleSilicon.dmg` |
-| **Linux — Ubuntu / Debian** | `Held-In-Common-Linux.deb` |
-| **Linux — any distro** | `Held-In-Common-Linux.AppImage` |
-| **Linux — Fedora / RHEL** | `Held-In-Common-Linux.rpm` |
+| **Linux — Ubuntu / Debian** | the `.deb` file |
+| **Linux — any distro** | the `.AppImage` file |
+| **Linux — Fedora / RHEL** | the `.rpm` file |
 
 Windows and Intel Macs aren't supported by the app yet; use Docker (Part 4).
 
@@ -32,9 +32,9 @@ Windows and Intel Macs aren't supported by the app yet; use Docker (Part 4).
 - **macOS:** open the `.dmg` and drag **Held In Common** into **Applications**,
   then open it from Applications. The app is signed and notarized by Apple, so
   it opens normally.
-- **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it
+- **Linux (.AppImage):** `chmod +x` the `.AppImage`, then run it
   (install `libfuse2` if it won't start).
-- **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch
+- **Linux (.deb):** `sudo apt install ./<the .deb file>`, then launch
   **Held In Common**.
 
 ### 3. Choose "A node" and name it

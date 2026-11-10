@@ -28,9 +28,9 @@ Security-sensitive code needs a second reviewer: `federation.rs`, `identity.rs`,
 
 ## 2. Releasing the desktop app
 
-The public download is the rolling **node-app-preview** release. Its assets keep
-stable names (`Held-In-Common-macOS-AppleSilicon.dmg`,
-`Held-In-Common-Linux.{deb,AppImage,rpm}`), so download links never change.
+Each version gets one release, **vX.Y.Z**, marked **Latest**; the docs and the
+app link to `releases/latest`. **Only the most recent release is kept:** once a
+new one is out, delete the previous one (`gh release delete vA.B.C --cleanup-tag`).
 
 1. **Bump the version** in `commons/Cargo.toml`, `src-tauri/Cargo.toml` and
    `src-tauri/tauri.conf.json`, through a pull request.
@@ -40,13 +40,14 @@ stable names (`Held-In-Common-macOS-AppleSilicon.dmg`,
    ./scripts/release-mac.sh
    ```
    It builds, signs with your Developer ID, notarizes the app and the `.dmg`,
-   checks them, and uploads `Held-In-Common-macOS-AppleSilicon.dmg` to the
-   release. `--no-upload` stops before uploading. It needs the certificate in
+   checks them, and publishes `Held-In-Common-macOS-AppleSilicon.dmg` to the
+   `vX.Y.Z` release (creating it, marked Latest). Then edit that release's
+   notes on GitHub to say what's new. `--no-upload` stops before uploading. It needs the certificate in
    your keychain and a `notarytool` profile (see the script's header).
 3. **Release Linux on GitHub:** Actions → **desktop-app** → Run workflow on
    `main` (it builds Linux by default; choose `macos` or `all` to have GitHub
-   build the Mac app too, which is slower). A pushed `node-app-vX.Y.Z` tag
-   builds both.
+   build the Mac app too, which is slower). It uploads to the `vX.Y.Z`
+   release. A pushed `node-app-vX.Y.Z` tag builds both.
 4. **Check** the release page, and download the `.dmg` on another Mac to
    confirm it opens without warnings.
 
@@ -64,7 +65,7 @@ cd src-tauri && APPLE_SIGNING_IDENTITY="Developer ID Application: NAME (TEAMID)"
 xcrun notarytool submit app.zip --keychain-profile <profile> --wait && xcrun stapler staple "Held In Common.app"
 xcrun notarytool submit Held-In-Common-macOS-AppleSilicon.dmg --keychain-profile <profile> --wait
 xcrun stapler staple Held-In-Common-macOS-AppleSilicon.dmg
-gh release upload node-app-preview Held-In-Common-macOS-AppleSilicon.dmg --clobber
+gh release upload vX.Y.Z Held-In-Common-macOS-AppleSilicon.dmg --clobber
 ```
 
 Store the notarization profile once with

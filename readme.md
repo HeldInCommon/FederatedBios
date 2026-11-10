@@ -36,7 +36,7 @@ Slides: https://phoenixperry.github.io/FederatedBios/architecture.html
 ## Run it
 
 **Desktop app (recommended):** download it from
-[the releases page](https://github.com/HeldInCommon/FederatedBios/releases/tag/node-app-preview)
+[the releases page](https://github.com/HeldInCommon/FederatedBios/releases/latest)
 (macOS Apple Silicon, Linux). On a Mac, open the `.dmg` and drag
 **Held In Common** into **Applications**. Then follow
 [docs/INSTALL.md](docs/INSTALL.md).
