@@ -1,5 +1,6 @@
 # Checks for pull requests. Build-only: nothing here publishes a release.
-#   federation-tests  builds hic-commons and runs scripts/test-federation.sh
+#   federation-tests  checks formatting and lints, runs `cargo test`, then
+#                     builds hic-commons and runs scripts/test-federation.sh
 #   mac-preview       builds the desktop app for Apple Silicon and attaches the
 #                     unsigned .dmg to this workflow run (Actions -> the run ->
 #                     Artifacts), so reviewers can try a PR without a Rust setup.
@@ -27,8 +28,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: commons
+      - name: Formatting
+        run: cargo fmt --manifest-path commons/Cargo.toml --check
+      - name: Lints
+        run: cargo clippy --manifest-path commons/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Unit and HTTP tests
+        run: cargo test --manifest-path commons/Cargo.toml --locked
       - name: Build hic-commons
-        run: cargo build --release --manifest-path commons/Cargo.toml
+        run: cargo build --release --manifest-path commons/Cargo.toml --locked
       - name: Federation tests
         run: ./scripts/test-federation.sh
 
@@ -49,6 +56,10 @@ jobs:
           cargo build --release --manifest-path commons/Cargo.toml
           mkdir -p src-tauri/binaries
           cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
+      - name: Desktop app tests
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          cargo test --manifest-path src-tauri/Cargo.toml --locked
       - name: Build the desktop app (no release)
         # With no tagName/releaseId, tauri-action only builds.
         uses: tauri-apps/tauri-action@v0
