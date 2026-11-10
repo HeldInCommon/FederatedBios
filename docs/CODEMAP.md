@@ -1,8 +1,8 @@
 # Code map
 
 Where everything lives, and the path a request takes through it. Read this
-before changing code; read [ARCHITECTURE.md](ARCHITECTURE.md) for why the system
-is shaped this way.
+before changing code; read [ARCHITECTURE.md](ARCHITECTURE.md) for how the system
+fits together, and [adr/](adr/README.md) for why each major decision was made.
 
 ## The two programs
 
