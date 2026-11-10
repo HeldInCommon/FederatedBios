@@ -310,3 +310,15 @@ async fn a_networked_node_refuses_to_share_to_its_own_machine() {
         assert!(r.text.contains("inside its own network"), "{target} should be refused");
     }
 }
+
+#[tokio::test]
+async fn inbox_is_rate_limited() {
+    let dir = std::env::temp_dir().join(format!("hic-http-rate-{}", hic_commons::sessions::random_hex(6)));
+    let mut state = AppState::new(Config::from_lookup(|_| None), Role::Commons, Store::open(&dir).unwrap());
+    state.inbox_limit = hic_commons::ratelimit::RateLimiter::new(2, 60);
+    let app = router(Arc::new(state));
+    let junk = serde_json::json!({"type": "nothing"});
+    assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::TOO_MANY_REQUESTS);
+}

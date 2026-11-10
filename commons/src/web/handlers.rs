@@ -5,9 +5,12 @@
 //! read a record, change it and save it back happen while holding
 //! [`AppState::write`], so two requests can't interleave.
 
-use axum::extract::{Path, State};
+use std::net::SocketAddr;
+
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
 
 use crate::app::{AppState, Shared};
 use crate::envelope::Signed;
@@ -473,7 +476,16 @@ pub(crate) fn store_failed(e: &dyn std::fmt::Display) -> Response {
 
 /// `POST /inbox` — receive a share, a withdrawal, or an identity change
 /// (recovery key, key rotation) from another node.
-pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
+pub async fn inbox(
+    State(st): State<Shared>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    body: String,
+) -> Response {
+    // Checked before any parsing or signature work, so a flood costs little.
+    let sender = peer.map(|Extension(ConnectInfo(a))| a.ip().to_string()).unwrap_or_else(|| "unknown".into());
+    if !st.inbox_limit.allow(&sender, now()) {
+        return reply(StatusCode::TOO_MANY_REQUESTS, "too many requests from this address; try again in a minute");
+    }
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
         return reply(StatusCode::BAD_REQUEST, "invalid json");
     };
