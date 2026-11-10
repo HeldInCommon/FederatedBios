@@ -25,6 +25,7 @@
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
+//! | [`outbound`] | which addresses this server may contact for a member | DNS lookup in one wrapper |
 //! | [`store`] | reading and writing the data folder | filesystem |
 //! | [`sessions`] | signed-in sessions and their cookies | in-memory state |
 //! | [`form`] | parsing form posts | none |
@@ -46,6 +47,7 @@ pub mod governance;
 pub mod handle;
 pub mod keys;
 pub mod model;
+pub mod outbound;
 pub mod passphrase;
 pub mod role;
 pub mod sessions;

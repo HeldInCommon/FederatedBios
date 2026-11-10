@@ -294,3 +294,18 @@ async fn backup_restores_the_same_identity_on_another_node() {
     let again = send(&b, post_form("/restore", &format!("backup={encoded}&passphrase=supersecret1"), None)).await;
     assert_eq!(again.status, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn a_networked_node_refuses_to_share_to_its_own_machine() {
+    let dir = std::env::temp_dir().join(format!("hic-http-ssrf-{}", hic_commons::sessions::random_hex(6)));
+    let store = Store::open(&dir).unwrap();
+    let config = Config::from_lookup(|k| (k == "HIC_BIND").then(|| "0.0.0.0".to_string()));
+    let app = router(Arc::new(AppState::new(config, Role::Node, store)));
+    let sid = join_and_publish(&app, "tega", "public").await;
+    let csrf = csrf_in(&send(&app, get("/@tega", Some(&sid))).await.text);
+    for target in ["http://127.0.0.1:9", "http://169.254.169.254", "http://192.168.1.1", "http://[::1]:9"] {
+        let body = format!("handle=tega&csrf={csrf}&commons_url={target}");
+        let r = send(&app, post_form("/share", &body, Some(&sid))).await;
+        assert!(r.text.contains("inside its own network"), "{target} should be refused");
+    }
+}

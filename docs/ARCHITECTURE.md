@@ -161,6 +161,7 @@ ciphertext lives on the node and **never federates**.
 |---|---|---|
 | `PORT` | `8080` | Listen port |
 | `HIC_BIND` | node: `127.0.0.1`, commons: `0.0.0.0` | Address to listen on. A node listens only on this computer unless set; Docker images set `0.0.0.0` |
+| `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1` lets a node reachable from the network share to local-network addresses (see ADR 0012) |
 | `HIC_DATA` | `./data` | Data directory |
 | `HIC_INSTANCE` | `My node` | Human label |
 | `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `instance.json` on first start; must match it afterwards or the server refuses to start |
