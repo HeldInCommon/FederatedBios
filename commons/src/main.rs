@@ -7,7 +7,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use hic_commons::{app, config::Config, now, role, store::Store};
+use hic_commons::{app, config::Config, now, role, store::Store, vouching};
 
 #[tokio::main]
 async fn main() {
@@ -21,10 +21,35 @@ async fn main() {
 async fn run(config: Config) -> Result<(), String> {
     let store = Store::open(&config.data_dir)
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;
-    let role = role::resolve(store.root(), config.role_env.as_deref(), &config.instance, now())?;
+    // Decide the folder's role: read what's there, apply the rule, then save
+    // the decision for a new folder.
+    let on_disk = role::inspect(store.root());
+    let facts = role::Facts {
+        saved: on_disk.saved,
+        env: config.role_env.as_deref(),
+        instance_label: &config.instance,
+        has_members: on_disk.has_members,
+    };
+    let decision = role::decide(&facts, &store.root().display().to_string())?;
+    if decision.guessed {
+        eprintln!(
+            "warning: guessing role \"commons\" from HIC_INSTANCE. This guess is deprecated; set HIC_ROLE=commons."
+        );
+    }
+    if decision.save {
+        role::save(store.root(), decision.role, now())?;
+    }
+    let role = decision.role;
     println!("hic-commons role: {}", role.as_str());
     if role == role::Role::Commons && !config.open_commons {
-        announce_founding_invite(&store)?;
+        // A brand-new commons makes a one-time founding invite for its first
+        // member (decision record 0011), saved in the data folder.
+        if vouching::needs_founding_invite(store.has_founding_record(), !store.remotes().is_empty()) {
+            store.save_founding_code(&vouching::new_founding_code()).map_err(|e| e.to_string())?;
+        }
+        if let Some(code) = store.founding_code().map_err(|e| e.to_string())? {
+            println!("hic-commons founding invite (one use, for the first member): {code}");
+        }
     }
 
     let addr = SocketAddr::new(config.bind_addr(role), config.port);
@@ -36,20 +61,6 @@ async fn run(config: Config) -> Result<(), String> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))
-}
-
-/// A new commons makes a one-time founding invite for its first member
-/// (decision record 0011). It is printed here and kept in the data folder;
-/// the commons page also shows it, but only to someone at this computer.
-fn announce_founding_invite(store: &Store) -> Result<(), String> {
-    use hic_commons::vouching;
-    if !store.has_founding_record() && store.remotes().is_empty() {
-        store.save_founding_code(&vouching::new_founding_code()).map_err(|e| e.to_string())?;
-    }
-    if let Some(code) = store.founding_code().map_err(|e| e.to_string())? {
-        println!("hic-commons founding invite (one use, for the first member): {code}");
-    }
-    Ok(())
 }
 
 /// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` and the desktop app

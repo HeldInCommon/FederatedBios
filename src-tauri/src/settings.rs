@@ -14,8 +14,8 @@
 //! so someone with several machines can tell them apart. Earlier versions used
 //! the computer's account name instead, which shared it with every commons.
 //!
-//! Pure rules are separate from the two functions that touch the disk
-//! ([`load`], [`save`]).
+//! Pure rules are separate from the two functions that touch the disk:
+//! [`load`] only reads, and [`save`] only writes.
 
 use std::path::{Path, PathBuf};
 
@@ -80,9 +80,10 @@ pub fn instance_label(override_: Option<&str>, name: Option<&str>, role: &str) -
     override_.or(name).map(str::to_string).unwrap_or_else(|| format!("A Held in Common {role}"))
 }
 
-/// Read `app.json` (migrating installs from before the chooser, which have
-/// node members but no file).
-pub fn load(base: &Path) -> Saved {
+/// Read `app.json`. Returns the settings and whether they differ from the
+/// file (an install from before the chooser, or a name that needed tidying),
+/// in which case the caller should [`save`] them. Reads only.
+pub fn load(base: &Path) -> (Saved, bool) {
     let file: Saved = std::fs::read_to_string(base.join("app.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -90,14 +91,12 @@ pub fn load(base: &Path) -> Saved {
     let has_members = std::fs::read_dir(base.join("node-data").join("handles"))
         .map(|mut d| d.any(|e| e.map(|e| e.path().extension().is_some_and(|x| x == "json")).unwrap_or(false)))
         .unwrap_or(false);
-    let role = decide_role(file.role.clone(), has_members);
-    let name = file.name.as_deref().and_then(|n| clean_name(n).ok());
-    let saved = Saved { role, name };
-    if saved != file {
-        // Save the migrated or tidied settings so they're never asked again.
-        let _ = save(base, &saved);
-    }
-    saved
+    let saved = Saved {
+        role: decide_role(file.role.clone(), has_members),
+        name: file.name.as_deref().and_then(|n| clean_name(n).ok()),
+    };
+    let changed = saved != file;
+    (saved, changed)
 }
 
 /// Write `app.json`.

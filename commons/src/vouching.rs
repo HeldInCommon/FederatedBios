@@ -165,6 +165,13 @@ pub fn founding_matches(given: &str, stored: Option<&str>) -> bool {
     stored.is_some_and(|s| ct_eq(given.trim(), s))
 }
 
+/// Should a commons make a founding invite now? Only a commons that has
+/// never had one and lists nobody yet (an existing commons' members can
+/// invite instead).
+pub fn needs_founding_invite(ever_had_one: bool, lists_anyone: bool) -> bool {
+    !ever_had_one && !lists_anyone
+}
+
 /// A fresh founding invite.
 pub fn new_founding_code() -> String {
     format!("{FOUNDING_PREFIX}{}", crate::sessions::random_hex(12))
@@ -234,6 +241,13 @@ mod tests {
         assert!(check_vouch(&v, "other", &newcomer.ed_pub, &ctx(&members, &[], &[], 100)).is_err());
         let own = make_vouch(&m.ed_pub, &m.ed_priv, URL, "me", &m.ed_pub, 100).unwrap();
         assert!(check_vouch(&own, "me", &m.ed_pub, &ctx(&members, &[], &[], 100)).unwrap_err().contains("yourself"));
+    }
+
+    #[test]
+    fn founding_invite_only_for_a_brand_new_commons() {
+        assert!(needs_founding_invite(false, false));
+        assert!(!needs_founding_invite(true, false));
+        assert!(!needs_founding_invite(false, true));
     }
 
     #[test]

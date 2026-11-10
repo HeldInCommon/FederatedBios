@@ -268,6 +268,40 @@ pub fn handle_taken(handle: &str, except_key: Option<&str>, h: &Holders) -> bool
         || h.withdrawn.iter().any(|t| t.handle == handle && other(&t.ed_pub))
 }
 
+/// Everything a commons writes when it lists a share (see
+/// [`crate::store::Store::apply_listing`]).
+#[derive(Debug, Clone)]
+pub struct Listing {
+    /// The profile to list.
+    pub remote: RemoteEntry,
+    /// Who holds the handle, with the recovery key if the share declared one.
+    pub identity: crate::identity::Identity,
+    /// How they joined, for a newcomer.
+    pub intro: Option<crate::vouching::Intro>,
+}
+
+/// Work out what listing `entry` means: the identity record (new, or the
+/// `existing` one), plus the recovery key if the share carries a valid
+/// declaration and none is recorded yet. Pure; nothing is written.
+pub fn plan_listing(
+    entry: &RemoteEntry,
+    message: &Value,
+    existing: Option<crate::identity::Identity>,
+    intro: Option<crate::vouching::Intro>,
+    now: u64,
+) -> Listing {
+    let mut id =
+        existing.unwrap_or_else(|| crate::identity::Identity::new(&entry.handle, &entry.ed_pub, &entry.box_pub));
+    if id.recovery_key.is_none() {
+        let decl =
+            message.get("recovery").and_then(|d| serde_json::from_value::<crate::envelope::Signed>(d.clone()).ok());
+        if let Some(next) = decl.and_then(|d| crate::identity::apply(&id, &d, now).ok()) {
+            id = next;
+        }
+    }
+    Listing { remote: entry.clone(), identity: id, intro }
+}
+
 // ---------------------------------------------------------------------------
 // Withdrawal
 // ---------------------------------------------------------------------------
@@ -566,5 +600,25 @@ mod tests {
     fn old_format_still_accepted() {
         let (a, _) = signed_share("tega", 10, "hi");
         assert!(verify_any_share(&a, 0).unwrap().signed.is_none());
+    }
+
+    #[test]
+    fn plan_listing_records_a_declared_recovery_key_once() {
+        let (rec, v) = published("tega", "");
+        let mut rec = rec;
+        let (rp, _) = keys::generate_signing();
+        rec.recovery_decl = Some(crate::identity::declare_recovery("tega", &rec.ed_pub, &rec.ed_priv, &rp, 5).unwrap());
+        let msg = build_share_v1(&Sender { base_url: "http://n", instance: "n" }, &rec, &v).unwrap();
+        let entry = verify_any_share(&msg, 9).unwrap();
+        let plan = plan_listing(&entry, &msg, None, None, 10);
+        assert_eq!(plan.identity.recovery_key.as_deref(), Some(rp.as_str()));
+        assert_eq!(plan.identity.key, rec.ed_pub);
+        // An identity that already has a recovery key keeps it.
+        let mut existing = plan.identity.clone();
+        existing.recovery_key = Some("earlier".into());
+        assert_eq!(
+            plan_listing(&entry, &msg, Some(existing), None, 10).identity.recovery_key.as_deref(),
+            Some("earlier")
+        );
     }
 }

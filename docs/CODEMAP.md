@@ -17,9 +17,10 @@ tag `legacy-onboarding`, not on `main`.
 
 ## The server (`commons/src/`)
 
-The rule: **decisions are pure functions; effects live at the edges.** A pure
-function takes data and returns data. It doesn't read files, the clock,
-randomness or the network, so it can be tested with a one-line assertion.
+The rule: **no hidden effects** ([decision record 0016](adr/0016-no-hidden-effects.md)).
+Decisions are pure functions that take data and return data (the new value, or
+a plan of what to write), so they can be tested with a one-line assertion.
+Writes happen in clearly named places that say what they change.
 
 | File | One job | Pure? |
 |---|---|---|
@@ -35,6 +36,7 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `vouching.rs` | Who may join a commons: invites, vouches, the founding invite, the weekly limit. | yes |
 | `ratelimit.rs` | At most N requests per minute per sender (the inbox). | in-memory state |
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
+| `member.rs` | Pure changes to a member's record (moving to new keys). | yes |
 | `publishing.rs` | Sign a profile version (used by publish and by key rotation). | yes, except members-only encryption |
 | `outbound.rs` | Which addresses this server may contact for a member (ADR 0012). | yes, except the DNS lookup |
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |

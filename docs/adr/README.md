@@ -29,5 +29,6 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0013](0013-google-fonts.md) | Pages keep loading Google Fonts | Accepted | 2026-11-10 |
 | [0014](0014-automatic-updates.md) | Automatic app updates | Deferred (on the to-do list) | 2026-11-10 |
 | [0015](0015-macos-signing.md) | macOS builds are signed with a personal Developer ID | Accepted | 2026-11-09 |
+| [0016](0016-no-hidden-effects.md) | No hidden effects | Accepted | 2026-11-10 |
 
 Background for the 2026 decisions: [the November 2026 code review](../REVIEW-2026-11.md).

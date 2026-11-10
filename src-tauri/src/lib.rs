@@ -103,7 +103,13 @@ pub fn run() {
             let base = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
             std::fs::create_dir_all(&base).ok();
             let cfg = app_config(base.clone());
-            let saved = settings::load(&base);
+            let (saved, changed) = settings::load(&base);
+            if changed {
+                // An install from before the chooser (or an untidy name): record the result.
+                if let Err(e) = settings::save(&base, &saved) {
+                    log::warn!("couldn't update app.json: {e}");
+                }
+            }
             let proc_ = Sidecar::default();
             // A returning user starts straight away. A new one sees the chooser;
             // one from before names existed is asked for a name first.

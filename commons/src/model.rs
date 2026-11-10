@@ -117,6 +117,29 @@ impl HandleRec {
     }
 }
 
+impl HandleRec {
+    /// This record with `commons` in its list of commons shared to.
+    pub fn with_shared_to(mut self, commons: &str) -> HandleRec {
+        if !self.shared_to.iter().any(|c| c == commons) {
+            self.shared_to.push(commons.to_string());
+        }
+        self
+    }
+
+    /// This record without `commons` in its list of commons shared to.
+    pub fn without_shared_to(mut self, commons: &str) -> HandleRec {
+        self.shared_to.retain(|c| c != commons);
+        self
+    }
+
+    /// This record with a new passphrase hash (`(salt, hash)`, as from
+    /// [`crate::passphrase::hash`]).
+    pub fn with_passphrase_hash(mut self, (salt, hash): (String, String)) -> HandleRec {
+        (self.secret_salt, self.secret_hash) = (salt, hash);
+        self
+    }
+}
+
 /// A key change in progress on a node.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PendingRotation {
