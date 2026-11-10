@@ -26,6 +26,7 @@
 //! | [`backup`] | encrypted identity backups | randomness only when sealing |
 //! | [`identity`] | who holds a handle on a commons; recovery keys and key rotation | none |
 //! | [`publishing`] | signing a profile version | randomness only for members-only encryption |
+//! | [`vouching`] | invites, vouches and the founding invite: who may join a commons | none |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
@@ -62,6 +63,7 @@ pub mod ratelimit;
 pub mod role;
 pub mod sessions;
 pub mod store;
+pub mod vouching;
 pub mod web;
 
 /// Seconds since the Unix epoch. The one place the server reads the clock, so

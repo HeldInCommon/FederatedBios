@@ -25,6 +25,8 @@ fn server(role: Role) -> (Router, Store) {
     let config = Config::from_lookup(|k| match k {
         "HIC_DATA" => Some(dir.display().to_string()),
         "HIC_INSTANCE" => Some("Test".into()),
+        // Most tests exercise other features; vouching has its own tests below.
+        "HIC_OPEN_COMMONS" => Some("1".into()),
         _ => None,
     });
     let state = Arc::new(AppState::new(config, role, store.clone()));
@@ -321,4 +323,151 @@ async fn inbox_is_rate_limited() {
     assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(send(&app, post_json("/inbox", &junk)).await.status, StatusCode::TOO_MANY_REQUESTS);
+}
+
+// ---------------------------------------------------------------------------
+// Vouching (decision record 0011)
+// ---------------------------------------------------------------------------
+
+/// A commons that requires vouching, with `limit` people per member per week.
+fn closed_commons(limit: u32) -> (Router, Store) {
+    let dir = std::env::temp_dir().join(format!("hic-http-vouch-{}", hic_commons::sessions::random_hex(6)));
+    let store = Store::open(&dir).unwrap();
+    let lim = limit.to_string();
+    let config = Config::from_lookup(move |k| (k == "HIC_VOUCH_LIMIT").then(|| lim.clone()));
+    (router(Arc::new(AppState::new(config, Role::Commons, store.clone()))), store)
+}
+
+/// A member identity with a published profile, and its hic/v1 share
+/// (optionally carrying an invite code).
+fn person(h: &str) -> hic_commons::model::HandleRec {
+    hic_commons::model::HandleRec::new(h, h, 0, hic_commons::keys::generate(), String::new(), String::new())
+}
+
+fn share_of(rec: &hic_commons::model::HandleRec, invite: Option<&str>) -> serde_json::Value {
+    use hic_commons::{federation, model, publishing};
+    let draft = publishing::Draft {
+        profile: model::Profile { name: rec.handle.clone(), ..Default::default() },
+        reach: model::Reach::Public,
+        license: "cc-by".into(),
+        signals: vec![],
+        created_at: hic_commons::now(),
+    };
+    let v = publishing::sign_version(rec, draft, &[]).unwrap();
+    let mut m =
+        federation::build_share_v1(&federation::Sender { base_url: "http://node", instance: "node" }, rec, &v).unwrap();
+    if let Some(code) = invite {
+        m["invite"] = serde_json::json!(code);
+    }
+    m
+}
+
+/// The test commons' own address (the default base URL).
+const COMMONS_URL: &str = "http://localhost:8080";
+
+#[tokio::test]
+async fn without_a_vouch_a_newcomer_waits() {
+    let (commons, _) = closed_commons(5);
+    let r = send(&commons, post_json("/inbox", &share_of(&person("newbie"), None))).await;
+    assert_eq!(r.status, StatusCode::ACCEPTED);
+    assert!(r.text.starts_with("pending"));
+    let dir = send(&commons, get("/", None)).await.text;
+    assert!(dir.contains("Waiting for a vouch") && !dir.contains("dir-card"), "listed only as waiting");
+    assert!(send(&commons, get("/api/pending", None)).await.text.contains("newbie"));
+}
+
+#[tokio::test]
+async fn founding_invite_admits_the_first_person_once() {
+    let (commons, store) = closed_commons(5);
+    store.save_founding_code("hic-founding-abc123").unwrap();
+    let first = send(&commons, post_json("/inbox", &share_of(&person("steward"), Some("hic-founding-abc123")))).await;
+    assert_eq!(first.text, "accepted");
+    let again = send(&commons, post_json("/inbox", &share_of(&person("other"), Some("hic-founding-abc123")))).await;
+    assert_eq!(again.status, StatusCode::FORBIDDEN);
+    assert_eq!(store.intros()[0].route, "founding");
+}
+
+#[tokio::test]
+async fn a_members_invite_admits_once_and_is_recorded() {
+    let (commons, store) = closed_commons(5);
+    store.save_founding_code("hic-founding-x1").unwrap();
+    let m = person("member");
+    send(&commons, post_json("/inbox", &share_of(&m, Some("hic-founding-x1")))).await;
+
+    let inv = hic_commons::vouching::make_invite(&m.ed_pub, &m.ed_priv, COMMONS_URL, hic_commons::now()).unwrap();
+    let code = hic_commons::vouching::invite_to_code(&inv);
+    let r = send(&commons, post_json("/inbox", &share_of(&person("friend"), Some(&code)))).await;
+    assert_eq!(r.text, "accepted");
+    let reused = send(&commons, post_json("/inbox", &share_of(&person("third"), Some(&code)))).await;
+    assert_eq!(reused.status, StatusCode::FORBIDDEN);
+    assert!(reused.text.contains("already been used"));
+    let friend = store.intros().into_iter().find(|i| i.handle == "friend").unwrap();
+    assert_eq!(friend.voucher.as_deref(), Some(m.ed_pub.as_str()));
+}
+
+#[tokio::test]
+async fn a_vouch_lists_someone_waiting() {
+    let (commons, store) = closed_commons(5);
+    store.save_founding_code("hic-founding-x2").unwrap();
+    let m = person("member");
+    send(&commons, post_json("/inbox", &share_of(&m, Some("hic-founding-x2")))).await;
+    let newbie = person("newbie");
+    send(&commons, post_json("/inbox", &share_of(&newbie, None))).await;
+
+    let stranger = person("stranger");
+    let bad = hic_commons::vouching::make_vouch(
+        &stranger.ed_pub,
+        &stranger.ed_priv,
+        COMMONS_URL,
+        "newbie",
+        &newbie.ed_pub,
+        hic_commons::now(),
+    )
+    .unwrap();
+    assert_eq!(
+        send(&commons, post_json("/inbox", &serde_json::to_value(&bad).unwrap())).await.status,
+        StatusCode::FORBIDDEN
+    );
+
+    let v = hic_commons::vouching::make_vouch(
+        &m.ed_pub,
+        &m.ed_priv,
+        COMMONS_URL,
+        "newbie",
+        &newbie.ed_pub,
+        hic_commons::now(),
+    )
+    .unwrap();
+    let r = send(&commons, post_json("/inbox", &serde_json::to_value(&v).unwrap())).await;
+    assert_eq!(r.text, "accepted");
+    assert!(store.pending().is_empty());
+    assert!(send(&commons, get("/", None)).await.text.contains("@newbie"));
+}
+
+#[tokio::test]
+async fn the_steward_sets_the_weekly_limit() {
+    let (commons, store) = closed_commons(1);
+    store.save_founding_code("hic-founding-x3").unwrap();
+    let m = person("member");
+    send(&commons, post_json("/inbox", &share_of(&m, Some("hic-founding-x3")))).await;
+    let code = |_: u8| {
+        hic_commons::vouching::invite_to_code(
+            &hic_commons::vouching::make_invite(&m.ed_pub, &m.ed_priv, COMMONS_URL, hic_commons::now()).unwrap(),
+        )
+    };
+    assert_eq!(send(&commons, post_json("/inbox", &share_of(&person("one"), Some(&code(1))))).await.text, "accepted");
+    let r = send(&commons, post_json("/inbox", &share_of(&person("two"), Some(&code(2))))).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    assert!(r.text.contains("as many people"));
+}
+
+#[tokio::test]
+async fn people_already_listed_stay_and_reshare_freely() {
+    let (commons, store) = closed_commons(5);
+    store.save_founding_code("hic-founding-x4").unwrap();
+    let m = person("member");
+    send(&commons, post_json("/inbox", &share_of(&m, Some("hic-founding-x4")))).await;
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let r = send(&commons, post_json("/inbox", &share_of(&m, None))).await;
+    assert_eq!(r.text, "accepted", "a returning member needs no new vouch");
 }

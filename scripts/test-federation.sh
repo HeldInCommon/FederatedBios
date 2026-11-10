@@ -17,6 +17,10 @@ cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} 2>/dev/n
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
+# A new commons makes a one-time founding invite for its first member (ADR 0011).
+FOUND1=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons/founding-invite.json" 2>/dev/null)
+[ -n "$FOUND1" ] && ok "commons made a founding invite" || no "no founding invite"
+curl -s http://localhost:8091/ | grep -q "hic-founding-" && ok "founding invite shown at the commons' own computer" || no "founding invite not shown locally"
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8090/health >/dev/null && ok "node up" || no "node failed to start"
 
 SIGNUP=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" | tr -d '\r')
@@ -31,7 +35,7 @@ CSRF=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID" | grep -o
 PUB=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Artist and researcher working on environmental data." --data-urlencode "visibility=public" --data-urlencode "license=cc-by" --data-urlencode "signals=credit")
 [ "$PUB" = "303" ] && ok "published public profile" || no "publish returned $PUB"
 
-curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "federated to" && ok "node federated a signed copy" || no "share failed"
+curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "invite=$FOUND1" | grep -qi "federated to" && ok "node federated a signed copy (with the founding invite)" || no "share failed"
 grep -rq 'tega' "$T/commons/remote/" 2>/dev/null && ok "commons stored verified remote @tega" || no "no remote entry on commons"
 grep -rq '"schema": "hic/v1"' "$T/commons/remote/" 2>/dev/null && ok "share arrived in format hic/v1 (every field signed)" || no "share not in hic/v1"
 curl -s http://localhost:8091/ | grep -qi "tega" && ok "@tega in commons directory" || no "@tega not in directory"
@@ -86,7 +90,8 @@ curl -s -X POST http://localhost:8093/join --data-urlencode "handle=tega" --data
 mkdir -p "$T/commons2"
 HIC_DATA="$T/commons2" PORT=8094 HIC_ROLE=commons HIC_INSTANCE="Second commons" HIC_BASE_URL=http://localhost:8094 "$BIN" >"$T/commons2.log" 2>&1 & C2PID=$!
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8094/health >/dev/null || no "second commons failed to start"
-curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8094" | grep -qi "federated to" && ok "other @tega accepted on a different commons" || no "per-commons uniqueness wrongly global"
+FOUND2=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons2/founding-invite.json" 2>/dev/null)
+curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8094" --data-urlencode "invite=$FOUND2" | grep -qi "federated to" && ok "other @tega accepted on a different commons" || no "per-commons uniqueness wrongly global"
 # The origin is shown with the card: node address + key fingerprint.
 curl -s http://localhost:8091/ | grep -q 'from localhost:8090' && ok "commons card shows origin address" || no "card missing origin address"
 curl -s http://localhost:8091/ | grep -q 'class="dir-key"' && ok "commons card shows key fingerprint" || no "card missing key fingerprint"
@@ -117,6 +122,18 @@ CSRF2=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID2" | grep 
 curl -s -o /dev/null -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "name=Mo Secret" --data-urlencode "bio=Private." --data-urlencode "visibility=members" --data-urlencode "license=cc-by"
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "never shared\|stay on your node" && ok "members-only share blocked on node" || no "members-only not blocked"
 curl -s http://localhost:8091/ | grep -qi 'Mo Secret\|@mo' && no "members handle leaked to commons" || ok "members handle never reached commons"
+
+# Vouching (ADR 0011): a newcomer without an invite waits; a member vouches for
+# them from their own node; then they are listed.
+NSID=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=newbie" --data-urlencode "display_name=New Person" --data-urlencode "passphrase=supersecret5" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+NCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$NSID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
+curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_session=$NSID" --data-urlencode "handle=newbie" --data-urlencode "csrf=$NCSRF" --data-urlencode "name=New Person" --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
+curl -s -X POST http://localhost:8093/share -H "Cookie: hic_session=$NSID" --data-urlencode "handle=newbie" --data-urlencode "csrf=$NCSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Waiting for a vouch" && ok "newcomer without an invite waits for a vouch" || no "newcomer not put on the pending list"
+grep -rq '"newbie"' "$T/commons/remote/" 2>/dev/null && no "newcomer listed without a vouch" || ok "newcomer not listed yet"
+NKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"key":"[0-9a-f]{12}' | head -1 | cut -d'"' -f4)
+curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=newbie" --data-urlencode "key=$NKEY" | grep -q "Vouched" && ok "member vouched for the newcomer from their node" || no "vouch failed"
+grep -rq '"newbie"' "$T/commons/remote/" 2>/dev/null && ok "newcomer listed after the vouch" || no "newcomer still not listed"
+curl -s -X POST http://localhost:8090/invite -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Invite code" && ok "member can make an invite code" || no "invite code page failed"
 
 # Key rotation (decision record 0010): tega replaces their key; every commons
 # moves @tega to the new key, and the old key stops working there.

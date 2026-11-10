@@ -119,6 +119,18 @@ pub async fn handle_available(State(st): State<Shared>, Path(h): Path<String>) -
     Json(json!({ "handle": h, "valid": valid, "available": valid && !taken }))
 }
 
+/// `GET /api/pending` — shares waiting for a vouch on this commons: handle,
+/// full key (a vouch must name it), and where it came from. No profile content.
+pub async fn pending(State(st): State<Shared>) -> Json<Value> {
+    let list: Vec<Value> = st
+        .store
+        .pending()
+        .into_iter()
+        .map(|p| json!({ "handle": p.entry.handle, "key": p.entry.ed_pub, "origin": p.entry.origin, "received_at": p.entry.received_at }))
+        .collect();
+    Json(json!(list))
+}
+
 /// The query for WebFinger.
 #[derive(Deserialize)]
 pub struct WebfingerQ {

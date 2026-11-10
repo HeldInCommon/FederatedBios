@@ -8,6 +8,10 @@
 //!   remote/<keyid>.json      profiles shared in from other nodes (commons)
 //!   tombstones/<keyid>.json  what remains after a withdrawal (commons)
 //!   identities/<handle>.json who holds each handle, recovery key, rotation history (commons)
+//!   intros/<keyid>.json      how each person joined, and who vouched (commons)
+//!   pending/<keyid>.json     shares waiting for a vouch (commons)
+//!   used-invites/<id>.json   invite codes already used (commons)
+//!   founding-invite.json     the one-time invite for the first member (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -28,7 +32,8 @@ use crate::canonical::is_cid;
 use crate::handle;
 use crate::identity::Identity;
 use crate::keys::{is_keyid, keyid};
-use crate::model::{HandleRec, RemoteEntry, Tombstone, Version};
+use crate::model::{HandleRec, PendingShare, RemoteEntry, Tombstone, Version};
+use crate::vouching::Intro;
 
 /// A failure reading or writing the data folder.
 #[derive(Debug)]
@@ -79,7 +84,7 @@ impl Store {
     /// Use `root` as the data folder, creating its sub-folders.
     pub fn open(root: impl Into<PathBuf>) -> std::io::Result<Store> {
         let root = root.into();
-        for sub in ["handles", "versions", "remote", "tombstones", "identities"] {
+        for sub in ["handles", "versions", "remote", "tombstones", "identities", "intros", "pending", "used-invites"] {
             std::fs::create_dir_all(root.join(sub))?;
         }
         Ok(Store { root })
@@ -269,6 +274,82 @@ impl Store {
             return Err(StoreError::Io(self.identity_path("invalid"), std::io::Error::other("invalid handle")));
         }
         Self::write(&self.identity_path(&id.handle), id)
+    }
+
+    // ---- vouching (commons) ------------------------------------------------
+
+    fn remove_if_present(p: PathBuf) -> Result<(), StoreError> {
+        match std::fs::remove_file(&p) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(StoreError::Io(p, e)),
+        }
+    }
+
+    /// Record how someone joined.
+    pub fn save_intro(&self, i: &Intro) -> Result<(), StoreError> {
+        Self::write(&self.root.join("intros").join(format!("{}.json", keyid(&i.key))), i)
+    }
+
+    /// Every recorded admission.
+    pub fn intros(&self) -> Vec<Intro> {
+        self.read_all("intros")
+    }
+
+    /// Put a share on the pending list (replacing that key's earlier one).
+    pub fn save_pending(&self, p: &PendingShare) -> Result<(), StoreError> {
+        Self::write(&self.root.join("pending").join(format!("{}.json", keyid(&p.entry.ed_pub))), p)
+    }
+
+    /// Every share on the pending list, oldest first.
+    pub fn pending(&self) -> Vec<PendingShare> {
+        let mut out: Vec<PendingShare> = self.read_all("pending");
+        out.sort_by_key(|p| p.entry.received_at);
+        out
+    }
+
+    /// Take a share off the pending list.
+    pub fn delete_pending(&self, ed_pub: &str) -> Result<(), StoreError> {
+        Self::remove_if_present(self.root.join("pending").join(format!("{}.json", keyid(ed_pub))))
+    }
+
+    /// Invite codes already used.
+    pub fn used_codes(&self) -> Vec<String> {
+        self.read_all::<serde_json::Value>("used-invites")
+            .into_iter()
+            .filter_map(|v| v.get("code_id").and_then(|c| c.as_str()).map(String::from))
+            .collect()
+    }
+
+    /// Mark an invite code as used.
+    pub fn mark_code_used(&self, code_id: &str, at: u64) -> Result<(), StoreError> {
+        if code_id.is_empty() || !code_id.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(StoreError::Io(self.root.join("used-invites"), std::io::Error::other("invalid code id")));
+        }
+        let rec = serde_json::json!({ "code_id": code_id, "used_at": at });
+        Self::write(&self.root.join("used-invites").join(format!("{code_id}.json")), &rec)
+    }
+
+    /// The founding invite, if one exists and hasn't been used.
+    pub fn founding_code(&self) -> Result<Option<String>, StoreError> {
+        let v: Option<serde_json::Value> = Self::read(&self.root.join("founding-invite.json"))?;
+        Ok(v.filter(|v| v.get("used") != Some(&serde_json::Value::Bool(true)))
+            .and_then(|v| v.get("code").and_then(|c| c.as_str()).map(String::from)))
+    }
+
+    /// True when a founding invite has ever been made for this commons.
+    pub fn has_founding_record(&self) -> bool {
+        self.root.join("founding-invite.json").exists()
+    }
+
+    /// Store a new founding invite.
+    pub fn save_founding_code(&self, code: &str) -> Result<(), StoreError> {
+        Self::write(&self.root.join("founding-invite.json"), &serde_json::json!({ "code": code, "used": false }))
+    }
+
+    /// Mark the founding invite as used.
+    pub fn use_founding_code(&self) -> Result<(), StoreError> {
+        Self::write(&self.root.join("founding-invite.json"), &serde_json::json!({ "used": true }))
     }
 
     /// Move everything this server holds for `old_key` to `new_key` (after a

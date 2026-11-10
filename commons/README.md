@@ -42,3 +42,15 @@ share" page instead of minting an identity. Profiles appear only as signed copie
 posted to `/inbox` by people's own nodes. Keys never live on the commons. Set
 `HIC_BASE_URL` to the public https address so federation and the `Secure` session
 cookie work correctly.
+
+### Who can join a commons
+
+A commons lists a new person only when someone already there vouches for
+them (decision record `docs/adr/0011-joining-needs-a-vouch.md`). When a new
+commons starts it prints a one-time **founding invite** in its log (also in
+`founding-invite.json` in the data folder, and on the commons' page when
+opened from the same computer). Give it to the first member; after that,
+members bring people in with invite codes or vouches from their own nodes.
+
+- `HIC_VOUCH_LIMIT=5`: how many people one member may bring in per week.
+- `HIC_OPEN_COMMONS=1`: no vouching (for example a test commons).

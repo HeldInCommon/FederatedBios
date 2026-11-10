@@ -3,11 +3,13 @@
 //! - [`layout`]: the page frame and shared pieces (pure);
 //! - [`pages`]: the body of each page (pure);
 //! - [`handlers`]: the request handlers that load data and render pages;
-//! - [`account`]: handlers for a member's keys (recovery key, replacing a key, recovering).
+//! - [`account`]: handlers for a member's keys (recovery key, replacing a key, recovering);
+//! - [`membership`]: handlers for bringing people into a commons (invites, vouches).
 
 pub mod account;
 pub mod handlers;
 pub mod layout;
+pub mod membership;
 pub mod pages;
 
 /// The stylesheet, compiled into the binary.

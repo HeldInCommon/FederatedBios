@@ -23,6 +23,9 @@ async fn run(config: Config) -> Result<(), String> {
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;
     let role = role::resolve(store.root(), config.role_env.as_deref(), &config.instance, now())?;
     println!("hic-commons role: {}", role.as_str());
+    if role == role::Role::Commons && !config.open_commons {
+        announce_founding_invite(&store)?;
+    }
 
     let addr = SocketAddr::new(config.bind_addr(role), config.port);
     let state = Arc::new(app::AppState::new(config, role, store));
@@ -33,6 +36,20 @@ async fn run(config: Config) -> Result<(), String> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))
+}
+
+/// A new commons makes a one-time founding invite for its first member
+/// (decision record 0011). It is printed here and kept in the data folder;
+/// the commons page also shows it, but only to someone at this computer.
+fn announce_founding_invite(store: &Store) -> Result<(), String> {
+    use hic_commons::vouching;
+    if !store.has_founding_record() && store.remotes().is_empty() {
+        store.save_founding_code(&vouching::new_founding_code()).map_err(|e| e.to_string())?;
+    }
+    if let Some(code) = store.founding_code().map_err(|e| e.to_string())? {
+        println!("hic-commons founding invite (one use, for the first member): {code}");
+    }
+    Ok(())
 }
 
 /// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` and the desktop app

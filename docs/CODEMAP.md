@@ -32,6 +32,8 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `canonical.rs` | The content address (`cid`) of a profile version (format version 0). **Its bytes are a contract.** | yes |
 | `jcs.rs` | Canonical JSON (RFC 8785) for format `hic/v1`. | yes |
 | `envelope.rs` | Signed `hic/v1` objects: build, sign, cosign, verify. See `docs/spec/`. | yes |
+| `vouching.rs` | Who may join a commons: invites, vouches, the founding invite, the weekly limit. | yes |
+| `ratelimit.rs` | At most N requests per minute per sender (the inbox). | in-memory state |
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
 | `publishing.rs` | Sign a profile version (used by publish and by key rotation). | yes, except members-only encryption |
 | `outbound.rs` | Which addresses this server may contact for a member (ADR 0012). | yes, except the DNS lookup |
@@ -47,6 +49,7 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
 | `web/pages.rs` | The body of each page. | yes |
 | `web/handlers.rs` | Request handlers: load → decide (pure) → render. | no |
+| `web/membership.rs` | Handlers for bringing people in: invite codes and vouches. | no |
 | `web/account.rs` | Handlers for a member's keys: recovery key, replacing a key, recovering. | no |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css` and `avatar.js`, compiled into the binary. | — |
