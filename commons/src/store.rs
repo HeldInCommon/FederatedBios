@@ -352,6 +352,18 @@ impl Store {
         Self::write(&self.root.join("founding-invite.json"), &serde_json::json!({ "used": true }))
     }
 
+    /// Apply a [`crate::federation::Listing`]. **Writes four things:** the
+    /// shared profile, the handle's identity record, the admission record (if
+    /// any), and removes the key's pending share (if any).
+    pub fn apply_listing(&self, l: &crate::federation::Listing) -> Result<(), StoreError> {
+        self.save_remote(&l.remote)?;
+        self.save_identity(&l.identity)?;
+        if let Some(i) = &l.intro {
+            self.save_intro(i)?;
+        }
+        self.delete_pending(&l.remote.ed_pub)
+    }
+
     /// Move everything this server holds for `old_key` to `new_key` (after a
     /// key rotation): the shared profile and any withdrawal record.
     pub fn rekey(&self, old_key: &str, new_key: &str, new_box_key: &str) -> Result<(), StoreError> {

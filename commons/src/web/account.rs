@@ -15,11 +15,10 @@ use crate::app::{AppState, Shared};
 use crate::form::Form;
 use crate::identity::{self, RECOVERY_ROTATION};
 use crate::model::{HandleRec, PendingRotation};
-use crate::publishing::{self, Draft};
 use crate::web::handlers::{authorised_as, post_to_commons, readable_profile, send_share};
 use crate::web::layout::{error_page, render, server_error, Page};
 use crate::web::pages;
-use crate::{handle, keys, now};
+use crate::{handle, keys, member, now};
 
 /// Load the signed-in member's record, or the response to send instead.
 fn member(st: &AppState, headers: &HeaderMap, f: &Form, action: &str) -> Result<HandleRec, Box<Response>> {
@@ -162,42 +161,24 @@ async fn finish_key_change(st: &AppState, h: &str, mut pending: PendingRotation)
     render(&st.site, Page::new("Key replaced", Some(h), body))
 }
 
-/// Switch the member's record to the pending keys, re-declare the recovery
-/// key with the new key, and re-sign the current profile. Returns the new
-/// recovery code to show, if this was a recovery.
+/// Switch the member to the pending keys: read what [`member::rekey`] needs
+/// (with the old keys, while they can still decrypt), let it work out the new
+/// record and re-signed profile, then **save both**. Returns the new recovery
+/// code to show, if this was a recovery.
 fn switch_keys(st: &AppState, h: &str, pending: &PendingRotation) -> Result<Option<String>, String> {
     let _g = st.write.lock().unwrap();
-    let mut rec = st.store.handle(h).map_err(|e| e.to_string())?.ok_or("unknown handle")?;
-    // Read the current profile while the old keys can still decrypt it.
+    let rec = st.store.handle(h).map_err(|e| e.to_string())?.ok_or("unknown handle")?;
     let current = st.store.current_version(&rec).map_err(|e| e.to_string())?;
     let readable = current.as_ref().and_then(|v| readable_profile(st, v, Some(h)));
+    let members: Vec<(String, String)> = st.store.handles().into_iter().map(|m| (m.handle, m.box_pub)).collect();
 
-    let k = &pending.keys;
-    (rec.ed_pub, rec.ed_priv, rec.box_pub, rec.box_priv) =
-        (k.ed_pub.clone(), k.ed_priv.clone(), k.box_pub.clone(), k.box_priv.clone());
-    let mut new_code = None;
-    if let Some((next_pub, next_priv)) = &pending.next_recovery {
-        rec.recovery_pub = Some(next_pub.clone());
-        new_code = Some(keys::recovery_code(next_priv));
+    let out = member::rekey(rec, pending, current.zip(readable), &members, now())?;
+
+    if let Some(v) = &out.version {
+        st.store.save_version(v).map_err(|e| e.to_string())?;
     }
-    if let Some(rp) = &rec.recovery_pub {
-        rec.recovery_decl = Some(identity::declare_recovery(h, &rec.ed_pub, &rec.ed_priv, rp, now())?);
-    }
-    if let (Some(v), Some(profile)) = (current, readable) {
-        let recipients: Vec<(String, String)> = st
-            .store
-            .handles()
-            .into_iter()
-            .map(|m| if m.handle == h { (m.handle, rec.box_pub.clone()) } else { (m.handle, m.box_pub) })
-            .collect();
-        let draft = Draft { profile, reach: v.reach(), license: v.license, signals: v.signals, created_at: now() };
-        let version = publishing::sign_version(&rec, draft, &recipients)?;
-        st.store.save_version(&version).map_err(|e| e.to_string())?;
-        rec.current_cid = Some(version.cid);
-    }
-    rec.pending_rotation = None;
-    st.store.save_handle(&rec).map_err(|e| e.to_string())?;
-    Ok(new_code)
+    st.store.save_handle(&out.record).map_err(|e| e.to_string())?;
+    Ok(out.new_recovery_code)
 }
 
 /// Share the (re-signed) current version to every commons again, so each

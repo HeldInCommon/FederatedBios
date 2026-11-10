@@ -5,7 +5,9 @@
 //! keys and a commons' folder holds other people's shared copies, so one must
 //! never quietly become the other.
 //!
-//! [`decide`] is the pure rule; [`resolve`] reads and writes the file around it.
+//! [`inspect`] reads the folder, [`decide`] is the pure rule, and [`save`]
+//! writes `instance.json`. `main.rs` calls them in that order, so each effect
+//! is visible where it happens.
 
 use std::path::Path;
 
@@ -121,8 +123,16 @@ pub fn decide(f: &Facts, folder: &str) -> Result<Decision, String> {
     Ok(Decision { role, save: true, guessed })
 }
 
-/// Read the folder, [`decide`], and save `instance.json` for a new folder.
-pub fn resolve(data_dir: &Path, env: Option<&str>, instance_label: &str, now: u64) -> Result<Role, String> {
+/// What is on disk about a data folder's role. Reads only.
+pub struct OnDisk {
+    /// See [`Facts::saved`].
+    pub saved: Option<Option<Role>>,
+    /// See [`Facts::has_members`].
+    pub has_members: bool,
+}
+
+/// Read `instance.json` and check for member identities. Reads only.
+pub fn inspect(data_dir: &Path) -> OnDisk {
     let path = data_dir.join("instance.json");
     let saved = path.exists().then(|| {
         std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<InstanceFile>(&s).ok()).map(|f| f.role)
@@ -130,20 +140,14 @@ pub fn resolve(data_dir: &Path, env: Option<&str>, instance_label: &str, now: u6
     let has_members = std::fs::read_dir(data_dir.join("handles"))
         .map(|mut d| d.any(|e| e.map(|e| e.path().extension().is_some_and(|x| x == "json")).unwrap_or(false)))
         .unwrap_or(false);
-    let facts = Facts { saved, env, instance_label, has_members };
-    let d = decide(&facts, &data_dir.display().to_string())?;
-    if d.guessed {
-        eprintln!(
-            "warning: guessing role \"commons\" from HIC_INSTANCE. This guess is deprecated; set HIC_ROLE=commons."
-        );
-    }
-    if d.save {
-        let json =
-            serde_json::to_string_pretty(&InstanceFile { role: d.role, created_at: now }).map_err(|e| e.to_string())?;
-        crate::store::write_atomic(&path, json.as_bytes())
-            .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-    }
-    Ok(d.role)
+    OnDisk { saved, has_members }
+}
+
+/// Write `instance.json` for a folder's newly decided role. Writes only.
+pub fn save(data_dir: &Path, role: Role, now: u64) -> Result<(), String> {
+    let path = data_dir.join("instance.json");
+    let json = serde_json::to_string_pretty(&InstanceFile { role, created_at: now }).map_err(|e| e.to_string())?;
+    crate::store::write_atomic(&path, json.as_bytes()).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 #[cfg(test)]

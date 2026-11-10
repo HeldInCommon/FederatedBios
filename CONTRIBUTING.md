@@ -38,9 +38,12 @@ file, and the path a request takes.
 
 ## 5. Make a change
 
-- **Keep decisions pure.** Put logic in a function that takes data and returns
-  data, and test it with a unit test in the same file. Handlers and
-  `store.rs` do the I/O.
+- **No hidden effects** (decision record 0016). Anyone reading a function's
+  name and signature should be able to tell what it changes. Work out a change
+  in a pure function that returns the new value or a plan, and apply it in one
+  clearly named place that says what it writes. A function named like a read
+  (`load`, `check`) only reads. Functions that write return a `Result`. Test
+  the pure part with a unit test in the same file.
 - **Comment the why.** Every module starts with a `//!` comment saying what it
   is for; every public function has a `///` comment. Explain decisions that
   aren't obvious from the code.

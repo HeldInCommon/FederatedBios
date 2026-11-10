@@ -340,24 +340,18 @@ pub async fn login_submit(State(st): State<Shared>, body: String) -> Response {
             st.attempts.failed(&h, t);
             return error_page(&st.site, WRONG);
         }
-        Check::Upgrade => upgrade_passphrase_hash(&st, &h, &pass),
+        Check::Upgrade => {
+            // Replace the old-format hash now that we know the passphrase.
+            // A failure only delays the upgrade, so sign-in still succeeds.
+            if let Err(e) = update_member(&st, &h, |r| r.with_passphrase_hash(passphrase::hash(&pass))) {
+                eprintln!("warning: couldn't upgrade the passphrase hash for @{h}: {e}");
+            }
+        }
         Check::Ok => {}
     }
     st.attempts.succeeded(&h);
     let token = st.sessions.start(&h, t);
     redirect_with(&format!("/@{h}"), Some(sessions::set_cookie(&token, st.config.secure_cookie())))
-}
-
-/// Replace an old-format passphrase hash with Argon2id after a correct
-/// sign-in. A failure is logged and the sign-in still succeeds.
-fn upgrade_passphrase_hash(st: &AppState, h: &str, pass: &str) {
-    let _g = st.write.lock().unwrap();
-    if let Ok(Some(mut rec)) = st.store.handle(h) {
-        (rec.secret_salt, rec.secret_hash) = passphrase::hash(pass);
-        if let Err(e) = st.store.save_handle(&rec) {
-            eprintln!("warning: couldn't upgrade the passphrase hash for @{h}: {e}");
-        }
-    }
 }
 
 /// `POST /logout` — end the session.
@@ -397,7 +391,9 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
-            remember_shared_to(&st, &h, &commons);
+            if let Err(e) = update_member(&st, &h, |r| r.with_shared_to(&commons)) {
+                eprintln!("warning: shared, but couldn't remember it for @{h}: {e}");
+            }
             let pending = r.text().await.unwrap_or_default().starts_with("pending");
             let body =
                 if pending { pages::shared_pending(&h, &commons, &rec.ed_pub) } else { pages::shared(&h, &commons) };
@@ -426,6 +422,15 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
         ),
         Err(e) => error_page(&st.site, &e),
     }
+}
+
+/// Load member `h`, apply the pure `change` to their record, and save the
+/// result, all under the write lock. **Writes the member's file.** Returns
+/// why it couldn't, for the caller to handle.
+pub(crate) fn update_member(st: &AppState, h: &str, change: impl FnOnce(HandleRec) -> HandleRec) -> Result<(), String> {
+    let _g = st.write.lock().unwrap();
+    let rec = st.store.handle(h).map_err(|e| e.to_string())?.ok_or("no such member")?;
+    st.store.save_handle(&change(rec)).map_err(|e| e.to_string())
 }
 
 /// POST `body` to a commons' `/inbox`, checking first that this server may
@@ -476,19 +481,6 @@ pub(crate) async fn send_share(
     Ok(r)
 }
 
-/// Add `commons` to the member's list of commons shared to.
-fn remember_shared_to(st: &AppState, h: &str, commons: &str) {
-    let _g = st.write.lock().unwrap();
-    if let Ok(Some(mut rec)) = st.store.handle(h) {
-        if !rec.shared_to.iter().any(|c| c == commons) {
-            rec.shared_to.push(commons.to_string());
-            if let Err(e) = st.store.save_handle(&rec) {
-                eprintln!("warning: {e}");
-            }
-        }
-    }
-}
-
 /// Plain-text reply for server-to-server endpoints.
 pub(crate) fn reply(status: StatusCode, msg: &str) -> Response {
     (status, msg.to_string()).into_response()
@@ -509,7 +501,7 @@ pub async fn inbox(
 ) -> Response {
     // Checked before any parsing or signature work, so a flood costs little.
     let sender = peer.map(|Extension(ConnectInfo(a))| a.ip().to_string()).unwrap_or_else(|| "unknown".into());
-    if !st.inbox_limit.allow(&sender, now()) {
+    if !st.inbox_limit.record_if_under_limit(&sender, now()) {
         return reply(StatusCode::TOO_MANY_REQUESTS, "too many requests from this address; try again in a minute");
     }
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
@@ -637,8 +629,8 @@ fn vouch_ctx<'a>(
     }
 }
 
-/// List a share: save it, record who holds the handle (and the recovery key
-/// if one came along), record how they joined, and clear any pending copy.
+/// List a share: plan it (pure), then write it with
+/// [`crate::store::Store::apply_listing`], and answer the sender.
 fn list_entry(
     st: &AppState,
     entry: &RemoteEntry,
@@ -646,21 +638,8 @@ fn list_entry(
     existing: Option<Identity>,
     intro: Option<Intro>,
 ) -> Response {
-    let mut id = existing.unwrap_or_else(|| Identity::new(&entry.handle, &entry.ed_pub, &entry.box_pub));
-    if id.recovery_key.is_none() {
-        if let Some(decl) = message.get("recovery").and_then(|d| serde_json::from_value::<Signed>(d.clone()).ok()) {
-            if let Ok(next) = identity::apply(&id, &decl, now()) {
-                id = next;
-            }
-        }
-    }
-    let saved = st
-        .store
-        .save_remote(entry)
-        .and_then(|_| st.store.save_identity(&id))
-        .and_then(|_| intro.as_ref().map_or(Ok(()), |i| st.store.save_intro(i)))
-        .and_then(|_| st.store.delete_pending(&entry.ed_pub));
-    match saved {
+    let plan = federation::plan_listing(entry, message, existing, intro, now());
+    match st.store.apply_listing(&plan) {
         Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
         Err(e) => store_failed(&e),
     }
@@ -782,7 +761,9 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
-            forget_shared_to(&st, &h, &commons);
+            if let Err(e) = update_member(&st, &h, |r| r.without_shared_to(&commons)) {
+                eprintln!("warning: withdrawn, but couldn't update the list for @{h}: {e}");
+            }
             render(&st.site, Page::new("Withdrawn", Some(&h), pages::withdrawn(&h, &label)))
         }
         Ok(r) => {
@@ -790,17 +771,6 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
             error_page(&st.site, &format!("{label} didn't accept the withdrawal: {why}"))
         }
         Err(e) => error_page(&st.site, &e),
-    }
-}
-
-/// Remove `commons` from the member's list of commons shared to.
-fn forget_shared_to(st: &AppState, h: &str, commons: &str) {
-    let _g = st.write.lock().unwrap();
-    if let Ok(Some(mut rec)) = st.store.handle(h) {
-        rec.shared_to.retain(|c| c != commons);
-        if let Err(e) = st.store.save_handle(&rec) {
-            eprintln!("warning: {e}");
-        }
     }
 }
 

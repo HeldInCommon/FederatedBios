@@ -26,8 +26,10 @@ impl RateLimiter {
         RateLimiter { max, window, map: Mutex::new(HashMap::new()) }
     }
 
-    /// Record an event for `key` at time `now`; false when over the limit.
-    pub fn allow(&self, key: &str, now: u64) -> bool {
+    /// Count an event for `key` at time `now`, if it is under the limit.
+    /// Returns false (and counts nothing) when the limit is reached. This
+    /// changes the limiter's counts, as the name says.
+    pub fn record_if_under_limit(&self, key: &str, now: u64) -> bool {
         let mut map = self.map.lock().unwrap();
         // Forget windows that have ended, so the map can't grow without bound.
         if map.len() > 10_000 {
@@ -53,9 +55,9 @@ mod tests {
     #[test]
     fn allows_up_to_the_limit_then_refuses_until_the_window_ends() {
         let l = RateLimiter::new(3, 60);
-        assert!((0..3).all(|_| l.allow("a", 100)));
-        assert!(!l.allow("a", 120));
-        assert!(l.allow("b", 120), "other keys are counted separately");
-        assert!(l.allow("a", 160), "a new window starts");
+        assert!((0..3).all(|_| l.record_if_under_limit("a", 100)));
+        assert!(!l.record_if_under_limit("a", 120));
+        assert!(l.record_if_under_limit("b", 120), "other keys are counted separately");
+        assert!(l.record_if_under_limit("a", 160), "a new window starts");
     }
 }

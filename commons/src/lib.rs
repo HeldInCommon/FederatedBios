@@ -25,6 +25,7 @@
 //! | [`passphrase`] | hashing and checking passphrases | randomness only when hashing |
 //! | [`backup`] | encrypted identity backups | randomness only when sealing |
 //! | [`identity`] | who holds a handle on a commons; recovery keys and key rotation | none |
+//! | [`member`] | pure changes to a member's record (moving to new keys) | none |
 //! | [`publishing`] | signing a profile version | randomness only for members-only encryption |
 //! | [`vouching`] | invites, vouches and the founding invite: who may join a commons | none |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
@@ -55,6 +56,7 @@ pub mod handle;
 pub mod identity;
 pub mod jcs;
 pub mod keys;
+pub mod member;
 pub mod model;
 pub mod outbound;
 pub mod passphrase;
