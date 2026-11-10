@@ -4,7 +4,9 @@
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
 //   setup_state  -> { role, name, lan_url }   chosen and named yet?
 //   choose_role  (role, name)           save the choice and name, start the server
-//   set_name     (name)                 name (or rename) this computer's node
+//   set_name     (name)                 name (or rename) this computer's node;
+//                                       the menu's Node → Rename… opens this page in a small window
+//   close_rename                        close that window (its Back button)
 //   node_up      -> bool                is *our* server answering yet?
 //   restart_node                        start (or restart) the server
 // When opened in an ordinary browser (no Tauri), it just waits for the server.
@@ -65,27 +67,44 @@ function showLoading(role){
   poll();
 }
 
-// ---- first launch: choose node or commons, then name it ---------------
-// `naming` is { role, firstLaunch }: firstLaunch means the role isn't saved yet.
+// ---- choose node or commons, then name it --------------------------------
+// `naming` is { role, mode } where mode is:
+//   'first'   first launch: the role isn't saved yet (choose_role saves both)
+//   'migrate' installed before names existed: name it once (set_name)
+//   'rename'  opened from the Node → Rename… menu (set_name)
 let naming = null;
+
+const NAMING_TEXT = {
+  first:   { eyebrow: 'Held in Common · first launch', note: '', go: 'Start' },
+  migrate: { eyebrow: 'Held in Common · one new step', go: 'Start',
+             note: "Earlier versions used this computer's account name. From now on they'll use the name you choose here." },
+  rename:  { eyebrow: 'Held in Common · rename', go: 'Save name',
+             note: 'Commons that already have your profile show the new name the next time you share to them.' },
+};
 
 function choose(role){
   $('choose-err').textContent = '';
-  showNaming(role, true);
+  showNaming(role, 'first', '');
 }
 
-function showNaming(role, firstLaunch){
-  naming = { role, firstLaunch };
+function showNaming(role, mode, current){
+  naming = { role, mode };
+  const t = NAMING_TEXT[mode];
   $('naming-role').textContent = role === 'commons' ? 'commons' : 'node';
-  $('naming-eyebrow').textContent = firstLaunch ? 'Held in Common · first launch' : 'Held in Common · one new step';
-  $('naming-why').hidden = firstLaunch;
-  $('name-back').hidden = !firstLaunch;
+  $('naming-eyebrow').textContent = t.eyebrow;
+  $('naming-why').textContent = t.note;
+  $('naming-why').hidden = !t.note;
+  $('name-go').textContent = t.go;
+  $('name-back').hidden = mode === 'migrate';
+  $('node-name').value = current || '';
   $('chooser').hidden = true;
   $('naming').hidden = false;
   $('node-name').focus();
+  $('node-name').select();
 }
 
 $('name-back').addEventListener('click', () => {
+  if (naming && naming.mode === 'rename'){ invoke('close_rename'); return; }
   $('naming').hidden = true;
   $('chooser').hidden = false;
 });
@@ -97,8 +116,9 @@ $('name-form').addEventListener('submit', async e => {
   $('name-err').textContent = '';
   $('name-go').disabled = true;
   try {
-    if (naming.firstLaunch) await invoke('choose_role', { role: naming.role, name });
+    if (naming.mode === 'first') await invoke('choose_role', { role: naming.role, name });
     else await invoke('set_name', { name });
+    if (naming.mode === 'rename') return;   // the app closes this window and reopens the node
     $('naming').hidden = true;
     showLoading(naming.role);
   } catch(err){
@@ -136,8 +156,9 @@ async function init(){
   if (!invoke){ showLoading('node'); return; }
   let st = null;
   try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node', name: 'node' }; }
-  if (st.role && st.name) showLoading(st.role);
-  else if (st.role) showNaming(st.role, false);   // installed before names existed
+  if (st.renaming && st.role) showNaming(st.role, 'rename', st.name);   // the Node → Rename… window
+  else if (st.role && st.name) showLoading(st.role);
+  else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed
   else showChooser(st.lan_url);
 }
 init();

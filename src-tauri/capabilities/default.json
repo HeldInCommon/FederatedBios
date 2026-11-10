@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "What the app's own screens may call. Only Tauri's core APIs: the server is started from Rust (src/sidecar.rs), so the page needs no shell permission.",
   "windows": [
-    "main"
+    "main",
+    "rename"
   ],
   "permissions": [
     "core:default"
