@@ -101,7 +101,6 @@ button { font: inherit; cursor: pointer; }
 
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 
-@media (prefers-reduced-motion: reduce) { .spinner::after { animation: none; border-top-color: var(--line); } }
 @media (max-width: 640px) {
   .check-row { flex-wrap: wrap; }
   .stepper li + li::before { width: 16px; margin-right: 4px; }

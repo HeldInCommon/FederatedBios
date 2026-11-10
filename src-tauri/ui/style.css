@@ -60,11 +60,8 @@ h1{font-family:var(--mono);font-weight:700;font-size:34px;letter-spacing:-.02em;
 .btn.violet{background:var(--violet);box-shadow:0 2px 12px rgba(139,63,217,.35)} .btn.violet:hover{background:#7432b8}
 .link{all:unset;cursor:pointer;font:700 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gray);border-bottom:1px solid currentColor}
 .note{font-size:13.5px;color:var(--gray);margin:18px 0 0}
-/* With macOS "Reduce Motion" on, nothing moves or grows: the rings rest at
-   fixed sizes and the whole loader fades gently in and out instead, so it's
-   still clear the app is working. */
-@media(prefers-reduced-motion:reduce){ .loader .ring{animation:none} .loader .ring:nth-child(3){opacity:.5;transform:scale(3)} .loader .ring:nth-child(2){opacity:.7;transform:scale(2)} .loader .ring:nth-child(1){opacity:.85} .loader .core{animation:none} .loader{animation:glow 2.4s ease-in-out infinite} .choice{transition:none} }
-@keyframes glow{0%,100%{opacity:1}50%{opacity:.35}}
+/* The loader always animates, including with macOS "Reduce Motion" on
+   (Phoenix's decision, 10 Nov 2026). */
 
 /* naming step */
 .name-form{display:grid;gap:10px;max-width:420px;margin-top:8px}
