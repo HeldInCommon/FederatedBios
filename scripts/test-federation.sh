@@ -113,5 +113,12 @@ curl -s -o /dev/null -X POST http://localhost:8090/publish -H "Cookie: hic_sessi
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "never shared\|stay on your node" && ok "members-only share blocked on node" || no "members-only not blocked"
 curl -s http://localhost:8091/ | grep -qi 'Mo Secret\|@mo' && no "members handle leaked to commons" || ok "members handle never reached commons"
 
+# Withdrawal: @tega asks the commons to remove its copy. The commons drops it,
+# keeps @tega reserved for tega's key, and refuses a replay of the old share.
+curl -s -X POST http://localhost:8090/withdraw -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Withdrawn" && ok "node withdrew @tega from the commons" || no "withdrawal failed"
+grep -rq '"tega"' "$T/commons/remote/" 2>/dev/null && no "withdrawn copy still stored" || ok "withdrawn copy removed from the commons"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/cap.json")" = "409" ] && ok "withdrawn version can't be replayed (409)" || no "withdrawn version was accepted again"
+curl -s http://localhost:8091/api/handle/tega | grep -q '"available":false' && ok "@tega stays reserved after withdrawal" || no "@tega freed by withdrawal"
+
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"
 exit $FAIL

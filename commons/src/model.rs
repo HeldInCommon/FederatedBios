@@ -158,6 +158,18 @@ pub struct RemoteEntry {
     pub received_at: u64,
 }
 
+/// What a commons keeps after someone withdraws their shared profile: just
+/// enough to keep the handle theirs and to refuse a replay of the withdrawn
+/// version. Lives in `tombstones/<keyid>.json`. Holds no profile content.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Tombstone {
+    pub ed_pub: String,
+    pub handle: String,
+    /// The withdrawal's own timestamp, as signed by the owner. Shares created
+    /// at or before this time are refused.
+    pub withdrawn_at: u64,
+}
+
 /// The name shown for a profile: the chosen name, or the handle if blank.
 pub fn display_name_or_handle(profile_name: &str, handle: &str) -> String {
     if profile_name.is_empty() {

@@ -11,7 +11,7 @@ use axum::response::{IntoResponse, Response};
 
 use crate::app::{AppState, Shared};
 use crate::canonical::{content_id, hash_body};
-use crate::federation::{self, Admission, Sender};
+use crate::federation::{self, Admission, Holders, Sender};
 use crate::form::Form;
 use crate::governance::{license_from_form, signals_from_form, DEFAULT_LICENSE};
 use crate::model::{HandleRec, Place, Profile, Reach, Version};
@@ -19,7 +19,7 @@ use crate::passphrase::{self, Check};
 use crate::sessions::{self, Session};
 use crate::web::layout::{error_page, not_found, redirect, redirect_with, render, server_error, Page};
 use crate::web::pages::{self, Card, OwnerPanel};
-use crate::{handle, keys, now};
+use crate::{backup, handle, keys, now};
 
 /// Largest accepted profile picture, as a data URI, in bytes.
 const AVATAR_MAX: usize = 600_000;
@@ -441,38 +441,205 @@ fn remember_shared_to(st: &AppState, h: &str, commons: &str) {
     }
 }
 
-/// `POST /inbox` — receive a share from another node.
+/// Plain-text reply for server-to-server endpoints.
+fn reply(status: StatusCode, msg: &str) -> Response {
+    (status, msg.to_string()).into_response()
+}
+
+/// Log a storage failure and answer 500.
+fn store_failed(e: &dyn std::fmt::Display) -> Response {
+    eprintln!("error: {e}");
+    reply(StatusCode::INTERNAL_SERVER_ERROR, "could not read or write the data folder")
+}
+
+/// `POST /inbox` — receive a share or a withdrawal from another node.
 pub async fn inbox(State(st): State<Shared>, body: String) -> Response {
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
-        return (StatusCode::BAD_REQUEST, "invalid json").into_response();
+        return reply(StatusCode::BAD_REQUEST, "invalid json");
     };
+    if activity.get("type").and_then(|t| t.as_str()) == Some("Withdraw") {
+        return receive_withdraw(&st, &activity);
+    }
     let entry = match federation::verify_share(&activity, now()) {
         Ok(e) => e,
-        Err(e) => return (StatusCode::BAD_REQUEST, format!("rejected: {e}")).into_response(),
+        Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };
     let _g = st.write.lock().unwrap();
-    let local_holder = match st.store.handle(&entry.handle) {
+    let local = match st.store.handle(&entry.handle) {
         Ok(r) => r.map(|r| r.ed_pub),
-        Err(e) => {
-            eprintln!("error: {e}");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "could not read").into_response();
-        }
+        Err(e) => return store_failed(&e),
     };
-    match federation::admit(&entry, local_holder.as_deref(), &st.store.remotes()) {
+    let (held, withdrawn) = (st.store.remotes(), st.store.tombstones());
+    let holders = Holders { local: local.as_deref(), held: &held, withdrawn: &withdrawn };
+    match federation::admit(&entry, &holders) {
         Admission::HandleTaken => {
-            (StatusCode::CONFLICT, "that handle is already used on this commons by a different key").into_response()
+            reply(StatusCode::CONFLICT, "that handle is already used on this commons by a different key")
         }
-        Admission::Stale => {
-            (StatusCode::CONFLICT, "this commons already holds a newer version from this key").into_response()
-        }
+        Admission::Stale => reply(
+            StatusCode::CONFLICT,
+            "this commons already holds a newer version from this key, or a later withdrawal",
+        ),
         Admission::Accept => match st.store.save_remote(&entry) {
-            Ok(()) => (StatusCode::ACCEPTED, "accepted").into_response(),
-            Err(e) => {
-                eprintln!("error: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "could not store").into_response()
-            }
+            Ok(()) => reply(StatusCode::ACCEPTED, "accepted"),
+            Err(e) => store_failed(&e),
         },
     }
+}
+
+/// Handle a signed withdrawal: remove the key's shared profile and record a
+/// tombstone (so the handle stays theirs and the old copy can't be replayed).
+fn receive_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
+    let w = match federation::verify_withdraw(activity, &st.config.base_url) {
+        Ok(w) => w,
+        Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
+    };
+    let _g = st.write.lock().unwrap();
+    let tomb = match federation::apply_withdraw(&w, &st.store.remotes()) {
+        Ok(t) => t,
+        Err(e) => return reply(StatusCode::CONFLICT, e),
+    };
+    if let Err(e) = st.store.save_tombstone(&tomb).and_then(|_| st.store.delete_remote(&keys::keyid(&w.ed_pub))) {
+        return store_failed(&e);
+    }
+    reply(StatusCode::OK, "withdrawn")
+}
+
+/// `POST /withdraw` — ask a commons to remove this member's shared copy.
+pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = Form::parse(&body);
+    let h = handle::normalise(&f.one("handle"));
+    if !authorised_as(&st, &headers, &f, &h) {
+        return error_page(&st.site, "Please sign in as this handle to withdraw.");
+    }
+    let commons = f.one("commons_url").trim_end_matches('/').to_string();
+    let rec = match st.store.handle(&h) {
+        Ok(Some(r)) => r,
+        Ok(None) => return error_page(&st.site, "Unknown handle."),
+        Err(e) => return server_error(&st.site, &e),
+    };
+    if !rec.shared_to.contains(&commons) {
+        return error_page(&st.site, "You haven't shared to that commons from here.");
+    }
+    let message = match federation::build_withdraw(&rec, &commons, now()) {
+        Ok(m) => m,
+        Err(e) => return server_error(&st.site, &format!("@{h}: {e}")),
+    };
+    let sent = st
+        .http
+        .post(format!("{commons}/inbox"))
+        .json(&message)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
+    let label = crate::web::layout::host_label(&commons);
+    match sent {
+        Ok(r) if r.status().is_success() => {
+            forget_shared_to(&st, &h, &commons);
+            render(&st.site, Page::new("Withdrawn", Some(&h), pages::withdrawn(&h, &label)))
+        }
+        Ok(r) => {
+            let why = r.text().await.unwrap_or_default();
+            error_page(&st.site, &format!("{label} didn't accept the withdrawal: {why}"))
+        }
+        Err(e) => error_page(&st.site, &format!("Could not reach that commons: {e}")),
+    }
+}
+
+/// Remove `commons` from the member's list of commons shared to.
+fn forget_shared_to(st: &AppState, h: &str, commons: &str) {
+    let _g = st.write.lock().unwrap();
+    if let Ok(Some(mut rec)) = st.store.handle(h) {
+        rec.shared_to.retain(|c| c != commons);
+        if let Err(e) = st.store.save_handle(&rec) {
+            eprintln!("warning: {e}");
+        }
+    }
+}
+
+/// `POST /backup` — download an encrypted backup of the signed-in member's
+/// identity. Asks for the passphrase again, which also encrypts the file.
+pub async fn backup(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = Form::parse(&body);
+    let h = handle::normalise(&f.one("handle"));
+    if !authorised_as(&st, &headers, &f, &h) {
+        return error_page(&st.site, "Please sign in as this handle to back it up.");
+    }
+    let pass = f.one("passphrase");
+    let rec = match st.store.handle(&h) {
+        Ok(Some(r)) => r,
+        Ok(None) => return error_page(&st.site, "Unknown handle."),
+        Err(e) => return server_error(&st.site, &e),
+    };
+    if passphrase::check(&rec.secret_salt, &rec.secret_hash, &pass) == Check::Wrong {
+        return error_page(
+            &st.site,
+            "That passphrase is wrong. The backup is locked with your passphrase, so it must match.",
+        );
+    }
+    let version = st.store.current_version(&rec).ok().flatten();
+    let file = match backup::seal(&rec, version.as_ref(), &pass) {
+        Ok(t) => t,
+        Err(e) => return server_error(&st.site, &e),
+    };
+    let disposition = format!("attachment; filename=\"held-in-common-{h}-backup.json\"");
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "application/json".to_string()),
+            (axum::http::header::CONTENT_DISPOSITION, disposition),
+            (axum::http::header::CACHE_CONTROL, "no-store".to_string()),
+        ],
+        file,
+    )
+        .into_response()
+}
+
+/// `GET /restore` — the form for restoring an identity from a backup.
+pub async fn restore_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
+    let me = session(&st, &headers).map(|s| s.handle);
+    let body = if st.site.is_commons() { pages::commons_gate(&st.site) } else { pages::restore_form() };
+    render(&st.site, Page::new("Restore", me.as_deref(), body))
+}
+
+/// `POST /restore` — bring an identity (and its current version) back from a
+/// backup, then sign in.
+pub async fn restore_submit(State(st): State<Shared>, body: String) -> Response {
+    if st.site.is_commons() {
+        return render(&st.site, Page::new("Shared commons", None, pages::commons_gate(&st.site)));
+    }
+    let f = Form::parse(&body);
+    let pass = f.one("passphrase");
+    let (mut rec, version) = match backup::open(&f.one("backup"), &pass) {
+        Ok(x) => x,
+        Err(e) => return error_page(&st.site, &e),
+    };
+    // Only bring back a version that really is this identity's, signed by its key.
+    let version = version.filter(|v| {
+        v.handle == rec.handle
+            && Some(&v.cid) == rec.current_cid.as_ref()
+            && keys::verify_cid(&rec.ed_pub, &v.cid, &v.signature).is_ok()
+    });
+    (rec.secret_salt, rec.secret_hash) = passphrase::hash(&pass);
+    if version.is_none() {
+        rec.current_cid = None;
+    }
+    {
+        let _g = st.write.lock().unwrap();
+        match st.store.handle(&rec.handle) {
+            Ok(None) => {}
+            Ok(Some(_)) => return error_page(&st.site, &format!("@{} already exists on this node.", rec.handle)),
+            Err(e) => return server_error(&st.site, &e),
+        }
+        if let Some(v) = &version {
+            if let Err(e) = st.store.save_version(v) {
+                return server_error(&st.site, &e);
+            }
+        }
+        if let Err(e) = st.store.save_handle(&rec) {
+            return server_error(&st.site, &e);
+        }
+    }
+    let token = st.sessions.start(&rec.handle, now());
+    redirect_with(&format!("/@{}", rec.handle), Some(sessions::set_cookie(&token, st.config.secure_cookie())))
 }
 
 /// `GET /federated/{keyid}` — a profile shared in from another node.

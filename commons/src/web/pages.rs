@@ -225,7 +225,84 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
                     }
                 }
             }
+            // Shown whatever the current reach: someone who narrows a profile
+            // to members-only may also want the shared copies gone.
+            @if !o.shared_to.is_empty() { (withdraw_panel(handle, o)) }
+            (backup_panel(handle, &o.csrf))
         }
+    }
+}
+
+/// One "Withdraw" button per commons this member has shared to.
+fn withdraw_panel(handle: &str, o: &OwnerPanel) -> Markup {
+    html! {
+        section class="share-panel withdraw-panel" {
+            h2 class="field-label" { "Withdraw from a commons" }
+            p class="hint" { "Asks that commons to remove your shared copy. It keeps only a note that @" (handle) " is yours, so nobody else can take the name there. Copies other people already downloaded stay with them." }
+            ul class="commons-list" {
+                @for c in &o.shared_to {
+                    li class="commons-item" {
+                        form method="post" action="/withdraw" class="commons-share" {
+                            input type="hidden" name="handle" value=(handle);
+                            input type="hidden" name="csrf" value=(o.csrf);
+                            input type="hidden" name="commons_url" value=(c);
+                            span class="commons-meta" { span class="commons-name" { (host_label(c)) } }
+                            button class="secondary" type="submit" { "Withdraw" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Download an encrypted backup of this identity.
+fn backup_panel(handle: &str, csrf: &str) -> Markup {
+    html! {
+        section class="share-panel backup-panel" {
+            h2 class="field-label" { "Back up your identity" }
+            p class="hint" { "Your keys live only on this computer, and each commons ties @" (handle) " to them. Download a backup, keep it somewhere safe, and you can restore @" (handle) " on a new computer. It's locked with your passphrase." }
+            form method="post" action="/backup" class="share-form" {
+                input type="hidden" name="handle" value=(handle);
+                input type="hidden" name="csrf" value=(csrf);
+                div class="share-row" {
+                    input name="passphrase" type="password" placeholder="Your passphrase" required;
+                    button class="secondary" type="submit" { "Download backup" }
+                }
+            }
+        }
+    }
+}
+
+/// Restore an identity from a backup file (nodes only).
+pub fn restore_form() -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Restore from a backup" }
+            p class="lede" { "Open your backup file in a text editor, copy everything in it, and paste it below with the passphrase you used." }
+        }
+        form method="post" action="/restore" class="stack-form" {
+            div class="field" {
+                label class="field-label" for="backup" { "Backup file contents" }
+                textarea id="backup" name="backup" rows="10" required placeholder="{ \"format\": \"hic-identity-backup/1\", … }" {}
+            }
+            div class="field" {
+                label class="field-label" for="passphrase" { "Passphrase" }
+                input id="passphrase" name="passphrase" type="password" maxlength="200" required;
+            }
+            div class="actions" { button class="primary" type="submit" { "Restore" } }
+        }
+    }
+}
+
+/// Confirmation after a withdrawal.
+pub fn withdrawn(handle: &str, commons_label: &str) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Withdrawn" }
+            p class="lede" { (commons_label) " has removed its copy of @" (handle) ". You can share again whenever you like." }
+        }
+        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
 }
 
@@ -257,6 +334,7 @@ pub fn join_form() -> Markup {
             }
             div class="actions" { button class="primary" type="submit" { "Create handle" } }
         }
+        p class="hint" { "Moving to a new computer? " a href="/restore" { "Restore from a backup" } "." }
     }
 }
 
@@ -427,7 +505,7 @@ fn reach_and_governance(sel: Reach, sel_license: &str, sel_sig: &[String]) -> Ma
         aside class="caution" {
             p {
                 strong { "Publishing cannot be fully undone." }
-                " Each version gets a permanent content address. Copies you share to a commons stay there: withdrawing a shared copy isn't available yet."
+                " Each version gets a permanent content address. You can withdraw copies you share to a commons, but anyone who already downloaded one keeps it."
             }
         }
     }
@@ -484,7 +562,7 @@ pub fn about() -> Markup {
             h2 class="section-h" { "Your node, your keys" }
             p { "You claim a human handle. The node mints a signing keypair and an encryption keypair for you and holds them — you never touch a private key." }
             h2 class="section-h" { "Content-addressed versions" }
-            p { "Every publish is hashed into a permanent content address and signed by your key. A copy you have shared, or that someone has fetched, stays with them; withdrawing shared copies is planned but not yet available." }
+            p { "Every publish is hashed into a permanent content address and signed by your key. You can withdraw a copy you shared to a commons, and it is removed there; a copy someone has already downloaded stays with them." }
             h2 class="section-h" { "Three reaches" }
             p { "Public is listed and indexable. Commons is listed but asks search engines not to index it. Members-only is encrypted to every member's public key — only signed-in members of this node can read it. The node itself holds those keys, so the encryption protects copies outside this node, not from whoever runs it." }
             h2 class="section-h" { "Govern the models" }
@@ -509,7 +587,7 @@ mod tests {
     #[test]
     fn caution_no_longer_promises_withdrawal() {
         let m = publish_form("tega", "x", &Profile::default(), Reach::Public, "cc-by", &[], true).into_string();
-        assert!(m.contains("isn't available yet"));
+        assert!(m.contains("anyone who already downloaded"));
         assert!(!m.contains("stops serving"));
     }
 }

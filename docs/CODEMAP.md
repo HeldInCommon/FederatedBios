@@ -32,7 +32,8 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `canonical.rs` | The content address (`cid`) of a version. **Its bytes are a contract.** | yes |
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |
-| `federation.rs` | Build a share, verify a received share, `admit()` it or not. | yes |
+| `backup.rs` | Encrypted identity backups (seal and open). | yes, except salt/nonce generation |
+| `federation.rs` | Build and verify shares and withdrawals; `admit()` a share or not; `apply_withdraw()`. | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
@@ -59,6 +60,14 @@ randomness or the network, so it can be tested with a one-line assertion.
    older than the one already held.
 7. `store.rs::save_remote` — writes `remote/<keyid>.json` atomically.
 8. `web/handlers.rs::directory` → `web/pages.rs::directory` lists it.
+
+### Following a request: someone withdraws
+
+`handlers::withdraw` (node) → `federation::build_withdraw` (signed, addressed
+to that commons) → `POST <commons>/inbox` → `handlers::inbox` sees
+`"type": "Withdraw"` → `federation::verify_withdraw` → `apply_withdraw`
+(refuses if a newer version was shared after it) → `store.save_tombstone` and
+`store.delete_remote`. Later, `federation::admit` consults the tombstones.
 
 ### Following a request: someone publishes
 

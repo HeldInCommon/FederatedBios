@@ -6,6 +6,7 @@
 //!   handles/<handle>.json    a member's identity and current version (nodes)
 //!   versions/<cid>.json      immutable, content-addressed versions (nodes)
 //!   remote/<keyid>.json      profiles shared in from other nodes (commons)
+//!   tombstones/<keyid>.json  what remains after a withdrawal (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -25,7 +26,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::canonical::is_cid;
 use crate::handle;
 use crate::keys::{is_keyid, keyid};
-use crate::model::{HandleRec, RemoteEntry, Version};
+use crate::model::{HandleRec, RemoteEntry, Tombstone, Version};
 
 /// A failure reading or writing the data folder.
 #[derive(Debug)]
@@ -76,7 +77,7 @@ impl Store {
     /// Use `root` as the data folder, creating its sub-folders.
     pub fn open(root: impl Into<PathBuf>) -> std::io::Result<Store> {
         let root = root.into();
-        for sub in ["handles", "versions", "remote"] {
+        for sub in ["handles", "versions", "remote", "tombstones"] {
             std::fs::create_dir_all(root.join(sub))?;
         }
         Ok(Store { root })
@@ -204,6 +205,32 @@ impl Store {
         out.sort_by_key(|r| std::cmp::Reverse(r.received_at));
         out
     }
+
+    /// Remove a shared profile (after a withdrawal). Removing one that isn't
+    /// there is not an error.
+    pub fn delete_remote(&self, kid: &str) -> Result<(), StoreError> {
+        if !is_keyid(kid) {
+            return Ok(());
+        }
+        let p = self.remote_path(kid);
+        match std::fs::remove_file(&p) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(StoreError::Io(p, e)),
+        }
+    }
+
+    // ---- tombstones (withdrawals on a commons) ------------------------------
+
+    /// Save the record of a withdrawal.
+    pub fn save_tombstone(&self, t: &Tombstone) -> Result<(), StoreError> {
+        Self::write(&self.root.join("tombstones").join(format!("{}.json", keyid(&t.ed_pub))), t)
+    }
+
+    /// Every withdrawal recorded here.
+    pub fn tombstones(&self) -> Vec<Tombstone> {
+        self.read_all("tombstones")
+    }
 }
 
 #[cfg(test)]
@@ -272,6 +299,15 @@ mod tests {
     }
 
     #[test]
+    fn delete_remote_and_tombstones() {
+        let s = temp_store();
+        s.delete_remote(&keyid("nothing-here")).unwrap();
+        let t = Tombstone { ed_pub: "abc".into(), handle: "tega".into(), withdrawn_at: 5 };
+        s.save_tombstone(&t).unwrap();
+        assert_eq!(s.tombstones(), vec![t]);
+    }
+
+    #[test]
     fn remote_round_trip() {
         let s = temp_store();
         let r = RemoteEntry {
@@ -293,5 +329,7 @@ mod tests {
         s.save_remote(&r).unwrap();
         assert_eq!(s.remote(&keyid("abc")).unwrap().unwrap().handle, "tega");
         assert_eq!(s.remotes().len(), 1);
+        s.delete_remote(&keyid("abc")).unwrap();
+        assert!(s.remotes().is_empty());
     }
 }

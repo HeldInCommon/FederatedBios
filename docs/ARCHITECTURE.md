@@ -123,6 +123,8 @@ ciphertext lives on the node and **never federates**.
 - **Federation trust** — TOFU key pinning per handle: the first key to federate a handle owns it on that instance, and a different key is refused (409). Handles are **unique per commons, not globally**: the same @handle can live on several commons, but on each one it belongs to one key. A node checks its default commons (`HIC_SHARE_DEFAULT`) through `GET /api/handle/<h>` at sign-up and refuses a handle that is already taken there; if the commons is unreachable, sign-up goes ahead and the commons still refuses a clash at share time. Federated cards show the sending node's address and a short key fingerprint next to the name, so lookalike display names can be told apart. Origin is not part of the pin because the sender asserts it. *P2: reachable-origin verification by fetching `<origin>/ap/@handle`, after which the pin can widen to a verified `handle@origin` so two people on different nodes can share a handle.*
 - **Auth** — passphrase stored as an **Argon2id** hash (no recovery; older SHA-256 hashes are upgraded at the next sign-in), five wrong tries per handle then a 15-minute wait → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` on https) that expires after 24 hours, + a per-session **CSRF** token guarding `publish`/`share`.
 - **Network exposure** — a node listens only on `127.0.0.1` (this computer); a commons listens on all interfaces. Override with `HIC_BIND`.
+- **Withdrawal** — a member can withdraw a shared copy. The node sends a signed `Withdraw` addressed to that commons (so it can't be replayed elsewhere); the commons deletes the copy and keeps a tombstone (`tombstones/<keyid>.json`: key, handle, time). The handle stays reserved for that key, and the withdrawn version can't be replayed. An older withdrawal can't remove a later re-share.
+- **Identity backup** — a member can download their record (keys included) and current version, encrypted with XChaCha20-Poly1305 under a key derived from their passphrase with Argon2id, and restore it on another node. See `commons/src/backup.rs`.
 - **Rollback protection** — a commons refuses a share older than the version it already holds for that key (409), so an old signed copy can't be replayed over a newer one.
 - **Crash safety** — every file is written to a temporary file, flushed and renamed; a damaged file is reported, never treated as missing.
 - **Confidentiality** — members-only ciphertext at rest; the content key is never stored unwrapped.
@@ -140,7 +142,10 @@ ciphertext lives on the node and **never federates**.
 | GET | `/new` | Publish / edit form (auth) |
 | POST | `/publish` | Create a signed version (auth + CSRF) |
 | POST | `/share` | Federate a signed copy to a commons (auth + CSRF) |
-| POST | `/inbox` | Receive + verify a federated share (the only way onto a commons) |
+| POST | `/inbox` | Receive + verify a federated share (the only way onto a commons), or a signed withdrawal |
+| POST | `/withdraw` | Ask a commons to remove this member's shared copy (auth + CSRF) |
+| POST | `/backup` | Download an encrypted identity backup (auth + CSRF + passphrase) |
+| GET/POST | `/restore` | Restore an identity from a backup on a new node (node only) |
 | GET | `/federated/{keyid}` | View a federated-in profile |
 | GET/POST | `/login`, POST `/logout` | Session. `/login` is **node only** — gated the same way on a commons |
 | GET | `/@{handle}` | Profile page |

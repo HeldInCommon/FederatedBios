@@ -235,3 +235,62 @@ async fn health_echoes_the_launch_token_only_when_set() {
     let app = router(Arc::new(AppState::new(config, Role::Node, store)));
     assert!(send(&app, get("/health", None)).await.text.contains("\"launch\":\"abc123\""));
 }
+
+#[tokio::test]
+async fn withdrawal_removes_the_copy_and_keeps_the_handle() {
+    // A node's member and their signed share.
+    let (node, nstore) = server(Role::Node);
+    join_and_publish(&node, "tega", "public").await;
+    let rec = nstore.handle("tega").unwrap().unwrap();
+    let v = nstore.current_version(&rec).unwrap().unwrap();
+    let sender = hic_commons::federation::Sender { base_url: "http://node", instance: "node" };
+    let share = hic_commons::federation::build_share(&sender, &rec, &v);
+
+    // The test commons' own address is http://localhost:8080 (the default).
+    let (commons, cstore) = server(Role::Commons);
+    assert_eq!(send(&commons, post_json("/inbox", &share)).await.status, StatusCode::ACCEPTED);
+
+    let to_other =
+        hic_commons::federation::build_withdraw(&rec, "https://elsewhere.example", v.created_at + 1).unwrap();
+    assert_eq!(send(&commons, post_json("/inbox", &to_other)).await.status, StatusCode::BAD_REQUEST);
+
+    let w = hic_commons::federation::build_withdraw(&rec, "http://localhost:8080", v.created_at + 1).unwrap();
+    assert_eq!(send(&commons, post_json("/inbox", &w)).await.status, StatusCode::OK);
+    assert!(cstore.remotes().is_empty());
+    assert!(!send(&commons, get("/", None)).await.text.contains("@tega"));
+
+    // The withdrawn version can't be replayed, and the handle stays theirs.
+    assert_eq!(send(&commons, post_json("/inbox", &share)).await.status, StatusCode::CONFLICT);
+    assert!(send(&commons, get("/api/handle/tega", None)).await.text.contains("\"available\":false"));
+}
+
+#[tokio::test]
+async fn backup_restores_the_same_identity_on_another_node() {
+    let (a, astore) = server(Role::Node);
+    let sid = join_and_publish(&a, "tega", "public").await;
+    let csrf = csrf_in(&send(&a, get("/@tega", Some(&sid))).await.text);
+
+    let wrong =
+        send(&a, post_form("/backup", &format!("handle=tega&csrf={csrf}&passphrase=nopenope"), Some(&sid))).await;
+    assert_eq!(wrong.status, StatusCode::BAD_REQUEST);
+    let file =
+        send(&a, post_form("/backup", &format!("handle=tega&csrf={csrf}&passphrase=supersecret1"), Some(&sid))).await;
+    assert_eq!(file.status, StatusCode::OK);
+    assert!(file.headers.get(header::CONTENT_DISPOSITION).unwrap().to_str().unwrap().contains("attachment"));
+    let original = astore.handle("tega").unwrap().unwrap();
+    assert!(!file.text.contains(&original.ed_priv), "keys are encrypted in the file");
+
+    let (b, bstore) = server(Role::Node);
+    let encoded: String = form_urlencoded::byte_serialize(file.text.as_bytes()).collect();
+    let r = send(&b, post_form("/restore", &format!("backup={encoded}&passphrase=supersecret1"), None)).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER);
+    assert!(session_from(&r).is_some(), "signed in after restoring");
+    let restored = bstore.handle("tega").unwrap().unwrap();
+    assert_eq!(restored.ed_pub, original.ed_pub);
+    assert!(bstore.current_version(&restored).unwrap().is_some(), "profile came back too");
+    assert!(send(&b, get("/@tega", None)).await.text.contains("Tega"));
+
+    // Restoring again on the same node is refused rather than overwriting.
+    let again = send(&b, post_form("/restore", &format!("backup={encoded}&passphrase=supersecret1"), None)).await;
+    assert_eq!(again.status, StatusCode::BAD_REQUEST);
+}
