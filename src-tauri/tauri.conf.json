@@ -10,13 +10,13 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Held in Common \u2014 Node",
+        "title": "Held in Common — Node",
         "width": 1100,
         "height": 820
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {

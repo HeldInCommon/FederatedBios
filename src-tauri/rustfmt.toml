@@ -1,0 +1,3 @@
+# Formatting rules for `cargo fmt`. CI checks them (pr-checks.yml).
+max_width = 120
+use_small_heuristics = "Max"
