@@ -58,11 +58,20 @@ pub fn spawn(app: &tauri::AppHandle, cfg: &AppConfig, role: &str) -> Result<Comm
     }
 
     let (mut rx, child) = cmd.spawn().map_err(|e| format!("could not start the {role}: {e}"))?;
+    log::info!("started the {role} server (data in {})", data_dir.display());
     let tag = role.to_string();
+    // Everything the server prints goes to the app's log file (see lib.rs),
+    // including how it stopped, so a crash leaves a trace.
     tauri::async_runtime::spawn(async move {
         while let Some(ev) = rx.recv().await {
-            if let CommandEvent::Stdout(l) | CommandEvent::Stderr(l) = ev {
-                eprintln!("[{tag}] {}", String::from_utf8_lossy(&l));
+            match ev {
+                CommandEvent::Stdout(l) => log::info!("[{tag}] {}", String::from_utf8_lossy(&l).trim_end()),
+                CommandEvent::Stderr(l) => log::warn!("[{tag}] {}", String::from_utf8_lossy(&l).trim_end()),
+                CommandEvent::Error(e) => log::error!("[{tag}] {e}"),
+                CommandEvent::Terminated(t) => {
+                    log::warn!("[{tag}] server stopped (exit code {:?}, signal {:?})", t.code, t.signal)
+                }
+                _ => {}
             }
         }
     });

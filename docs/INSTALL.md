@@ -89,6 +89,7 @@ survives restarts).
 - **macOS "disk is damaged — move to Trash" (the `.dmg` won't open at all)** — the download is fine; macOS is quarantining an app that isn't notarized. One-paste install + launch (clears quarantine, copies to Applications, opens it): `D=~/Downloads/Held-In-Common-macOS-AppleSilicon.dmg; xattr -c "$D" && M=$(hdiutil attach "$D" -nobrowse | grep -o '/Volumes/.*') && cp -R "$M/Held In Common.app" /Applications/ && hdiutil detach "$M" && xattr -cr "/Applications/Held In Common.app" && open "/Applications/Held In Common.app"`
 - **Linux AppImage won't run** — make sure it's executable (`chmod +x`), and install `libfuse2` on distros that need it.
 - **Forgot your passphrase** — there's no recovery (we store only a salted hash); create a new handle.
+- **Something went wrong and you want to report it** — the app keeps a log file. On a Mac it's `~/Library/Logs/org.heldincommon.node/held-in-common.log` (in Finder: **Go → Go to Folder…** and paste `~/Library/Logs/org.heldincommon.node`). Send that file with a short description of what happened. It contains no passphrases or keys.
 
 ## How it all fits together (slides)
 
