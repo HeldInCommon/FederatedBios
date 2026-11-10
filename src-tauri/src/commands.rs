@@ -3,10 +3,14 @@
 use std::sync::Mutex;
 
 use serde::Serialize;
+use tauri::Manager;
 
 use crate::network::{self, Probe};
 use crate::settings::{self, clean_name, valid_role, Saved};
 use crate::sidecar::{self, AppConfig, Sidecar};
+
+/// The label of the small window the Node → Rename… menu opens.
+pub const RENAME_WINDOW: &str = "rename";
 
 /// What this computer runs and what it's called, as far as known.
 pub struct Chosen(pub Mutex<Saved>);
@@ -32,14 +36,24 @@ pub struct SetupState {
     name: Option<String>,
     /// Where nodes in the same room would reach a commons on this computer.
     lan_url: Option<String>,
+    /// True in the rename window: show the naming screen in rename mode.
+    renaming: bool,
 }
 
 /// Has a role been chosen and a name given, and what would a room commons'
 /// address be?
 #[tauri::command]
-pub fn setup_state(chosen: tauri::State<'_, Chosen>) -> SetupState {
+pub fn setup_state(window: tauri::WebviewWindow, chosen: tauri::State<'_, Chosen>) -> SetupState {
     let s = chosen.0.lock().unwrap().clone();
-    SetupState { role: s.role, name: s.name, lan_url: network::lan_url() }
+    SetupState { role: s.role, name: s.name, lan_url: network::lan_url(), renaming: window.label() == RENAME_WINDOW }
+}
+
+/// Close the rename window without changing anything (its Back button).
+#[tauri::command]
+pub fn close_rename(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window(RENAME_WINDOW) {
+        let _ = w.close();
+    }
 }
 
 /// First launch: save the role and name, and start the server. The role is
@@ -98,6 +112,11 @@ pub fn set_name(
     }
     sidecar::start(&app, &cfg, &proc_, &role, &name)?;
     *current = next;
+    // Renamed from the menu: close that window; the main window reopens the
+    // node once the server is back (sidecar::open_when_up).
+    if let Some(w) = app.get_webview_window(RENAME_WINDOW) {
+        let _ = w.close();
+    }
     Ok(())
 }
 

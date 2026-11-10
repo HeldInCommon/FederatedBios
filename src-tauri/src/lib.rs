@@ -46,6 +46,35 @@ const BACK_BUTTON_JS: &str = r#"(function(){
   document.body.appendChild(b);
 })();"#;
 
+/// The app's menu: the platform's standard menus plus **Node → Rename…**,
+/// which opens the naming screen in rename mode.
+fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{Menu, MenuItem, Submenu};
+    let menu = Menu::default(app)?;
+    let rename = MenuItem::with_id(app, "rename", "Rename…", true, None::<&str>)?;
+    menu.append(&Submenu::with_items(app, "Node", true, &[&rename])?)?;
+    Ok(menu)
+}
+
+/// Open the naming screen in rename mode, in its own small window (or bring
+/// that window forward if it's already open). It closes itself once the new
+/// name is saved; see `commands::set_name`.
+fn open_rename<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(win) = app.get_webview_window(commands::RENAME_WINDOW) {
+        let _ = win.set_focus();
+        return;
+    }
+    let built =
+        tauri::WebviewWindowBuilder::new(app, commands::RENAME_WINDOW, tauri::WebviewUrl::App("index.html".into()))
+            .title("Rename this node")
+            .inner_size(620.0, 560.0)
+            .resizable(false)
+            .build();
+    if let Err(e) = built {
+        log::warn!("couldn't open the rename window: {e}");
+    }
+}
+
 /// True for pages served over http(s) by a server, as opposed to the app's
 /// own screens (served from `tauri.localhost`).
 fn is_server_page(url: &str) -> bool {
@@ -92,11 +121,18 @@ pub fn run() {
             commands::setup_state,
             commands::choose_role,
             commands::set_name,
+            commands::close_rename,
             commands::restart_node
         ])
         .on_page_load(|window, payload| {
             if is_server_page(payload.url().as_str()) {
                 let _ = window.eval(BACK_BUTTON_JS);
+            }
+        })
+        .menu(build_menu)
+        .on_menu_event(|app, event| {
+            if event.id() == "rename" {
+                open_rename(app);
             }
         })
         .setup(|app| {

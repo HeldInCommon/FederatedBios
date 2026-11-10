@@ -54,6 +54,8 @@ than one computer, give each its own name. The app remembers both choices, so
 you only see these screens once. (If you installed an earlier version, the app
 asks for a name once, the next time you open it.)
 
+To change the name later, use the menu bar: **Node → Rename…**.
+
 ### 4. You're up and running when…
 
 The app opens your browser to **http://localhost:8080** and you see the Held in

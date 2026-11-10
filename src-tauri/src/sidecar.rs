@@ -92,7 +92,7 @@ pub fn open_when_up(app: tauri::AppHandle, token: String) {
         for _ in 0..600 {
             if network::probe(&token) == Probe::Ours {
                 std::thread::sleep(std::time::Duration::from_millis(300));
-                if let Some((_, win)) = app.webview_windows().iter().next() {
+                if let Some(win) = app.get_webview_window("main") {
                     let _ = win.eval(format!("location.replace('{LOCAL_URL}')"));
                 }
                 return;

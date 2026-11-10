@@ -277,27 +277,29 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
     }
 }
 
-/// One "Withdraw" button per commons this member has shared to.
+/// The commons this member is on, each with "Invite someone" and "Withdraw".
 fn withdraw_panel(handle: &str, o: &OwnerPanel) -> Markup {
     html! {
         section class="share-panel withdraw-panel" {
-            h2 class="field-label" { "Withdraw from a commons" }
-            p class="hint" { "Asks that commons to remove your shared copy. It keeps only a note that @" (handle) " is yours, so nobody else can take the name there. Copies other people already downloaded stay with them." }
+            h2 class="field-label" { "Your commons" }
+            p class="hint" { strong { "Invite someone" } " makes a one-time code that lets a person you know join that commons. " strong { "Withdraw" } " asks it to remove your shared copy; it keeps only a note that @" (handle) " is yours, so nobody else can take the name there. Copies other people already downloaded stay with them." }
             ul class="commons-list" {
                 @for c in &o.shared_to {
-                    li class="commons-item" {
-                        form method="post" action="/withdraw" class="commons-share" {
-                            input type="hidden" name="handle" value=(handle);
-                            input type="hidden" name="csrf" value=(o.csrf);
-                            input type="hidden" name="commons_url" value=(c);
-                            span class="commons-meta" { span class="commons-name" { (host_label(c)) } }
-                            button class="secondary" type="submit" { "Withdraw" }
-                        }
-                        form method="post" action="/invite" class="commons-share" {
-                            input type="hidden" name="handle" value=(handle);
-                            input type="hidden" name="csrf" value=(o.csrf);
-                            input type="hidden" name="commons_url" value=(c);
-                            button class="secondary" type="submit" { "Invite someone" }
+                    li class="commons-item commons-row" {
+                        span class="commons-meta" { span class="commons-name" { (host_label(c)) } }
+                        span class="commons-actions" {
+                            form method="post" action="/invite" {
+                                input type="hidden" name="handle" value=(handle);
+                                input type="hidden" name="csrf" value=(o.csrf);
+                                input type="hidden" name="commons_url" value=(c);
+                                button class="secondary" type="submit" { "Invite someone" }
+                            }
+                            form method="post" action="/withdraw" {
+                                input type="hidden" name="handle" value=(handle);
+                                input type="hidden" name="csrf" value=(o.csrf);
+                                input type="hidden" name="commons_url" value=(c);
+                                button class="secondary" type="submit" { "Withdraw" }
+                            }
                         }
                     }
                 }
@@ -312,15 +314,24 @@ fn vouch_panel(handle: &str, o: &OwnerPanel) -> Markup {
         section class="share-panel vouch-panel" {
             h2 class="field-label" { "Vouch for someone" }
             p class="hint" { "Someone you know is waiting to be listed on a commons? Its page shows them under " strong { "Waiting for a vouch" } ". Enter their handle and the key shown there. Only vouch for people you actually know." }
-            form method="post" action="/vouch" class="share-form" {
+            form method="post" action="/vouch" class="share-form vouch-form" {
                 input type="hidden" name="handle" value=(handle);
                 input type="hidden" name="csrf" value=(o.csrf);
-                div class="share-row" {
-                    select name="commons_url" { @for c in &o.shared_to { option value=(c) { (host_label(c)) } } }
-                    input name="who" type="text" placeholder="their handle" required;
-                    input name="key" type="text" placeholder="their key (first 12 characters)" required autocomplete="off";
-                    button class="secondary" type="submit" { "Vouch" }
+                div class="field" {
+                    label class="field-label" for="vouch-commons" { "Commons" }
+                    select id="vouch-commons" name="commons_url" { @for c in &o.shared_to { option value=(c) { (host_label(c)) } } }
                 }
+                div class="field-row vouch-row" {
+                    div class="field" {
+                        label class="field-label" for="vouch-who" { "Their handle" }
+                        div class="handle-input" { span class="at" { "@" } input id="vouch-who" name="who" type="text" maxlength="30" placeholder="theirhandle" required autocomplete="off"; }
+                    }
+                    div class="field" {
+                        label class="field-label" for="vouch-key" { "Their key" }
+                        input id="vouch-key" name="key" type="text" class="mono-input" placeholder="e.g. 3f9a0c21b7de" required autocomplete="off" spellcheck="false";
+                    }
+                }
+                div class="actions" { button class="secondary" type="submit" { "Vouch" } }
             }
         }
     }

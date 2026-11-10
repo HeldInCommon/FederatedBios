@@ -395,3 +395,15 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .pending { margin-top: 36px; }
 .pending-list { padding-left: 18px; }
 .pending-list li { margin: 4px 0; }
+
+/* Vouch form: labelled fields that stack, so each box is wide enough to type in. */
+.vouch-form .field { margin-top: 14px; }
+.vouch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .vouch-row { grid-template-columns: 1fr; } }
+.mono-input { font-family: var(--mono); letter-spacing: .03em; }
+.vouch-form .actions { margin-top: 16px; }
+
+/* A commons the member is on: its name, then its actions on the same row. */
+.commons-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.commons-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.commons-actions form { margin: 0; }
