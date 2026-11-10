@@ -10,7 +10,7 @@ docker run -d --name hic-node -p 8080:8080 -v hic-node:/data \
   ghcr.io/<owner>/hic-node:latest
 ```
 
-Then open http://localhost:8080 — you're a node. Publish locally, then
+Then open http://localhost:8080 — you're a node. (The image sets `HIC_BIND=0.0.0.0` so Docker's port mapping can reach it.) Publish locally, then
 "Share to a commons" to federate. Your data lives in the `hic-node` volume.
 
 Build it yourself instead:

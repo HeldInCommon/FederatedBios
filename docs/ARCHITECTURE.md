@@ -35,13 +35,11 @@ directory. There is no central server and no landlord.
 commons/       hic-commons — the node + commons server (Rust / axum). One binary.
 src-tauri/     the native desktop app: a Tauri shell that runs hic-commons as a sidecar.
 docs/          this doc, the workshop INSTALL guide, the reveal.js architecture slides.
-node/ , src/   legacy Leptos onboarding prototype (Docker-based, :4321). Superseded;
-               kept for reference only. The current product is commons/ + src-tauri/.
 scripts/       test-federation.sh — the end-to-end federation test.
 ```
 
 ### 2.1 `hic-commons` (the server)
-A single self-contained [axum](https://docs.rs/axum) service. Responsibilities:
+A single self-contained [axum](https://docs.rs/axum) service, split into one module per job (see [CODEMAP.md](CODEMAP.md)). Responsibilities:
 identity + auth, content-addressed signed publishing, the three visibility tiers
 (incl. members-only encryption), CC governance metadata, the directory + profile
 pages (server-rendered with [maud](https://docs.rs/maud)), a small JSON API, and
@@ -54,7 +52,8 @@ it; "this room" over the local network is available today). The choice is saved 
 `<app data>/app.json`, and each role gets its own data folder (`node-data/`,
 `commons-data/`). Installs that already have a node skip the question. The app then
 starts the bundled `hic-commons` binary as a **sidecar** (`tauri-plugin-shell`) in
-that role, shows an on-brand loading screen, polls `http://localhost:8080/health`,
+that role, shows an on-brand loading screen, polls `http://127.0.0.1:8080/health`
+until it answers with the launch token the app gave its server (so it never shows another program on that port),
 then hands off to the server's own web UI. No Docker, no terminal. The
 sidecar binary (`binaries/hic-commons-<target-triple>`) is gitignored and built
 + copied by CI (and by the from-source steps in the README).
@@ -122,7 +121,10 @@ ciphertext lives on the node and **never federates**.
 - **Keys** — each handle gets an Ed25519 signing keypair and an X25519 encryption keypair, minted and held by the node; users never touch a private key.
 - **Integrity / authenticity** — content-addressing (sha256) + Ed25519 signatures. A single changed character breaks the `cid` and the signature → rejected at `/inbox`.
 - **Federation trust** — TOFU key pinning per handle: the first key to federate a handle owns it on that instance, and a different key is refused (409). Handles are **unique per commons, not globally**: the same @handle can live on several commons, but on each one it belongs to one key. A node checks its default commons (`HIC_SHARE_DEFAULT`) through `GET /api/handle/<h>` at sign-up and refuses a handle that is already taken there; if the commons is unreachable, sign-up goes ahead and the commons still refuses a clash at share time. Federated cards show the sending node's address and a short key fingerprint next to the name, so lookalike display names can be told apart. Origin is not part of the pin because the sender asserts it. *P2: reachable-origin verification by fetching `<origin>/ap/@handle`, after which the pin can widen to a verified `handle@origin` so two people on different nodes can share a handle.*
-- **Auth** — passphrase (stored only as a salted hash; no recovery) → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure`) + a per-session **CSRF** token guarding `publish`/`share`.
+- **Auth** — passphrase stored as an **Argon2id** hash (no recovery; older SHA-256 hashes are upgraded at the next sign-in), five wrong tries per handle then a 15-minute wait → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` on https) that expires after 24 hours, + a per-session **CSRF** token guarding `publish`/`share`.
+- **Network exposure** — a node listens only on `127.0.0.1` (this computer); a commons listens on all interfaces. Override with `HIC_BIND`.
+- **Rollback protection** — a commons refuses a share older than the version it already holds for that key (409), so an old signed copy can't be replayed over a newer one.
+- **Crash safety** — every file is written to a temporary file, flushed and renamed; a damaged file is reported, never treated as missing.
 - **Confidentiality** — members-only ciphertext at rest; the content key is never stored unwrapped.
 - **Input hardening** — handles validated (`[a-z0-9_]{2,30}`) and path-traversal-guarded before becoming filenames.
 
@@ -142,15 +144,18 @@ ciphertext lives on the node and **never federates**.
 | GET | `/federated/{keyid}` | View a federated-in profile |
 | GET/POST | `/login`, POST `/logout` | Session. `/login` is **node only** — gated the same way on a commons |
 | GET | `/@{handle}` | Profile page |
-| GET | `/health` | Liveness (used by the desktop app) |
+| GET | `/health` | Liveness, version, and the desktop app's launch token |
+| GET | `/api/handle/{handle}` | Is this handle free here? |
+| GET | `/robots.txt` | Keeps the forms out of search engines |
 | GET | `/api/directory`, `/api/@{handle}` | JSON |
-| GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityPub discovery |
+| GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityStreams-shaped discovery (not yet full ActivityPub) |
 
 ### Configuration (env)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PORT` | `8080` | Listen port (binds `0.0.0.0`) |
+| `PORT` | `8080` | Listen port |
+| `HIC_BIND` | node: `127.0.0.1`, commons: `0.0.0.0` | Address to listen on. A node listens only on this computer unless set; Docker images set `0.0.0.0` |
 | `HIC_DATA` | `./data` | Data directory |
 | `HIC_INSTANCE` | `My node` | Human label |
 | `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `instance.json` on first start; must match it afterwards or the server refuses to start |
@@ -172,7 +177,11 @@ renders HTML; the desktop shell is a thin loader).
 
 ```
 # run a node / commons
-cargo run --manifest-path commons/Cargo.toml          # → http://localhost:8080
+cargo run --manifest-path commons/Cargo.toml          # → http://127.0.0.1:8080
+
+# unit and in-process HTTP tests (fast)
+cargo test --manifest-path commons/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 
 # desktop app from source (see README for the sidecar copy step)
 cargo tauri build

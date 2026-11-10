@@ -4,9 +4,15 @@ version = "0.3.6"
 edition = "2021"
 description = "Held in Common — the commons server (directory, identity, content-addressed publishing, ActivityPub-ready)"
 
+# The library (src/lib.rs) holds all behaviour; the binary (src/main.rs) only
+# starts it. Integration tests in tests/ use the library directly.
+[lib]
+name = "hic_commons"
+path = "src/lib.rs"
+
 [[bin]]
 name = "hic-commons"
-path = "main.rs"
+path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
@@ -24,6 +30,11 @@ hex = "0.4"
 base64 = "0.22"
 form_urlencoded = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+argon2 = { version = "0.5", features = ["std"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [profile.release]
 opt-level = 2

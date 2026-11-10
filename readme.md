@@ -49,11 +49,12 @@ A self-contained axum server — this one binary is both a node and a commons.
 cargo run --manifest-path commons/Cargo.toml
 ```
 
-Open **http://localhost:8080**. Configure with env vars:
+Open **http://127.0.0.1:8080**. Run the tests with `cargo test --manifest-path commons/Cargo.toml`. Configure with env vars:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `8080` | Port to listen on |
+| `HIC_BIND` | node: `127.0.0.1`, commons: `0.0.0.0` | Address to listen on. A node listens only on this computer unless set; Docker images set `0.0.0.0` |
 | `HIC_DATA` | `./data` | Directory for this node's data |
 | `HIC_INSTANCE` | `My node` | Human label for this instance |
 | `HIC_ROLE` | saved / `node` | `node` or `commons`. Saved to `$HIC_DATA/instance.json` on first start and fixed for that folder (a mismatch refuses to start). A `commons` gates `/join` + `/login` (federation-only); a `node` allows full sign-up. The old guess from `HIC_INSTANCE` still works but is deprecated |
@@ -102,8 +103,10 @@ commons/       the node + commons server (Rust / axum) — identity, content-add
                JSON API, ActivityPub + /inbox federation. Dockerfile here.
 src-tauri/     the native desktop app that runs the server as a sidecar
 docs/          INSTALL.md (workshop guide) + architecture.html (reveal.js slides)
-node/, src/    legacy Leptos onboarding prototype (Docker-based, port 4321) — kept
-               for reference; the current product is commons/ + src-tauri/
+scripts/       test-federation.sh, the end-to-end federation test
+
+(An earlier Leptos onboarding prototype lived in the repository root until
+November 2026; it is kept at the git tag `legacy-onboarding`.)
 ```
 
 ## License / governance model

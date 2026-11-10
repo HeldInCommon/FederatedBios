@@ -27,9 +27,9 @@ cargo build --manifest-path commons/Cargo.toml     # server builds
 ```
 
 **Give these a close read** (security-sensitive):
-- `commons/main.rs` → `inbox` / `verify_inbound` (cid recompute + Ed25519 verify + TOFU key pinning).
-- `commons/main.rs` → `encrypt_to_members` / `decrypt_for` (members-only, Option B: ChaChaBox/X25519).
-- Auth: passphrase (salted hash, no recovery) + `Secure` session cookie + per-session CSRF on `publish`/`share`.
+- `commons/src/federation.rs` → `verify_share` / `admit` (cid recompute + Ed25519 verify + handle pinning + rollback refusal).
+- `commons/src/keys.rs` → `seal_for_members` / `open_for` (members-only, ChaChaBox/X25519).
+- `commons/src/passphrase.rs` and `commons/src/sessions.rs`: Argon2id hashes, sign-in limits, expiring sessions, per-session CSRF on `publish`/`share`.
 
 ---
 

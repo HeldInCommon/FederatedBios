@@ -38,3 +38,6 @@ src-tauri/binaries/*
 *.key
 *.p8
 *.mobileprovision
+
+# macOS folder metadata
+.DS_Store
