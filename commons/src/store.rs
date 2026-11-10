@@ -14,6 +14,7 @@
 //!   founding-invite.json     the one-time invite for the first member (commons)
 //!   steward.json             the steward key in the steward link (commons)
 //!   commons-invites/<id>.json invite codes made by the steward (commons)
+//!   notices.json             things members should hear about (nodes)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -35,7 +36,7 @@ use crate::canonical::is_cid;
 use crate::handle;
 use crate::identity::Identity;
 use crate::keys::{is_keyid, keyid};
-use crate::model::{HandleRec, PendingShare, RemoteEntry, Tombstone, Version};
+use crate::model::{HandleRec, Notice, PendingShare, RemoteEntry, Tombstone, Version};
 use crate::vouching::Intro;
 
 /// A failure reading or writing the data folder.
@@ -381,6 +382,46 @@ impl Store {
         Self::write(&self.root.join("founding-invite.json"), &serde_json::json!({ "code": code, "used": false }))
     }
 
+    // ---- notices (nodes) ---------------------------------------------------
+
+    fn notices_path(&self) -> PathBuf {
+        self.root.join("notices.json")
+    }
+
+    /// Every notice, oldest first.
+    pub fn notices(&self) -> Result<Vec<Notice>, StoreError> {
+        Ok(Self::read(&self.notices_path())?.unwrap_or_default())
+    }
+
+    /// Add a notice. **Writes `notices.json`.**
+    pub fn add_notice(&self, n: Notice) -> Result<(), StoreError> {
+        let mut all = self.notices()?;
+        all.push(n);
+        Self::write(&self.notices_path(), &all)
+    }
+
+    /// Mark all of `handle`'s notices as seen. **Writes `notices.json`.**
+    pub fn mark_notices_seen(&self, handle: &str) -> Result<(), StoreError> {
+        let all: Vec<Notice> = self
+            .notices()?
+            .into_iter()
+            .map(|n| if n.handle == handle { Notice { seen: true, ..n } } else { n })
+            .collect();
+        Self::write(&self.notices_path(), &all)
+    }
+
+    /// Return the notices not yet shown as system notifications, and mark
+    /// them as shown. **Writes `notices.json`.**
+    pub fn claim_unpushed_notices(&self) -> Result<Vec<Notice>, StoreError> {
+        let all = self.notices()?;
+        let fresh: Vec<Notice> = all.iter().filter(|n| !n.pushed).cloned().collect();
+        if !fresh.is_empty() {
+            let marked: Vec<Notice> = all.into_iter().map(|n| Notice { pushed: true, ..n }).collect();
+            Self::write(&self.notices_path(), &marked)?;
+        }
+        Ok(fresh)
+    }
+
     /// The steward key, if one has been made.
     pub fn steward_key(&self) -> Result<Option<String>, StoreError> {
         let v: Option<serde_json::Value> = Self::read(&self.root.join("steward.json"))?;
@@ -482,6 +523,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            waiting_on: vec![],
         }
     }
 

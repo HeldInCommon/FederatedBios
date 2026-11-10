@@ -131,6 +131,45 @@ pub async fn pending(State(st): State<Shared>) -> Json<Value> {
     Json(json!(list))
 }
 
+/// The query for `GET /api/status`.
+#[derive(Deserialize)]
+pub struct StatusQ {
+    pub handle: String,
+    pub key: String,
+}
+
+/// `GET /api/status?handle=…&key=…` — is this handle, with this key, listed
+/// here, waiting for a vouch, or neither? Nodes ask this to follow up on a
+/// waiting share (see [`crate::waiting`]).
+pub async fn share_status(State(st): State<Shared>, Query(q): Query<StatusQ>) -> Json<Value> {
+    let listed = st.store.remotes().iter().any(|r| r.handle == q.handle && r.ed_pub == q.key);
+    let waiting = st.store.pending().iter().any(|p| p.entry.handle == q.handle && p.entry.ed_pub == q.key);
+    let status = if listed {
+        "listed"
+    } else if waiting {
+        "waiting"
+    } else {
+        "not_listed"
+    };
+    Json(json!({ "handle": q.handle, "status": status }))
+}
+
+/// `POST /api/notices/claim` — for the desktop app: the notices it hasn't yet
+/// shown as system notifications, which are then marked as shown. Only
+/// answers a request carrying this server's launch token
+/// (`X-HIC-Launch`), so a web page can't read or clear them.
+pub async fn claim_notices(State(st): State<Shared>, headers: axum::http::HeaderMap) -> Response {
+    let given = headers.get("x-hic-launch").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let ok = st.config.launch_token.as_deref().is_some_and(|t| !given.is_empty() && crate::keys::ct_eq(t, given));
+    if !ok {
+        return json_error(StatusCode::FORBIDDEN, "only the desktop app can collect notices");
+    }
+    match st.store.claim_unpushed_notices() {
+        Ok(list) => Json(json!(list)).into_response(),
+        Err(e) => json_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
 /// The query for WebFinger.
 #[derive(Deserialize)]
 pub struct WebfingerQ {

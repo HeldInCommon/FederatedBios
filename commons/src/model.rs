@@ -86,6 +86,10 @@ pub struct HandleRec {
     /// same new keys so no commons is left on a different key.
     #[serde(default)]
     pub pending_rotation: Option<PendingRotation>,
+    /// Commons where this member's share is waiting for a vouch or approval.
+    /// The node checks them and records a [`Notice`] when that changes.
+    #[serde(default)]
+    pub waiting_on: Vec<String>,
 }
 
 impl HandleRec {
@@ -113,6 +117,7 @@ impl HandleRec {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            waiting_on: Vec::new(),
         }
     }
 }
@@ -129,6 +134,20 @@ impl HandleRec {
     /// This record without `commons` in its list of commons shared to.
     pub fn without_shared_to(mut self, commons: &str) -> HandleRec {
         self.shared_to.retain(|c| c != commons);
+        self
+    }
+
+    /// This record noting that its share to `commons` is waiting.
+    pub fn with_waiting_on(mut self, commons: &str) -> HandleRec {
+        if !self.waiting_on.iter().any(|c| c == commons) {
+            self.waiting_on.push(commons.to_string());
+        }
+        self
+    }
+
+    /// This record no longer waiting on `commons`.
+    pub fn without_waiting_on(mut self, commons: &str) -> HandleRec {
+        self.waiting_on.retain(|c| c != commons);
         self
     }
 
@@ -253,6 +272,21 @@ pub struct Tombstone {
     /// The withdrawal's own timestamp, as signed by the owner. Shares created
     /// at or before this time are refused.
     pub withdrawn_at: u64,
+}
+
+/// Something a member should hear about, e.g. that a commons listed them.
+/// Lives in the node's `notices.json`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Notice {
+    pub handle: String,
+    pub text: String,
+    pub at: u64,
+    /// The member has dismissed it on the page.
+    #[serde(default)]
+    pub seen: bool,
+    /// The desktop app has shown it as a system notification.
+    #[serde(default)]
+    pub pushed: bool,
 }
 
 /// A share waiting on a commons' pending list for a member to vouch for it.

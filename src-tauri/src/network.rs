@@ -69,6 +69,37 @@ pub fn probe(token: &str) -> Probe {
     classify_health(ok, body, token)
 }
 
+/// The texts in the node's answer to `POST /api/notices/claim` (a JSON list
+/// of notices). Anything unreadable gives none.
+pub fn parse_notices(body: &str) -> Vec<String> {
+    serde_json::from_str::<Vec<serde_json::Value>>(body)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|n| n.get("text").and_then(|t| t.as_str()).map(String::from))
+        .collect()
+}
+
+/// Collect the node's news that hasn't been shown as a notification yet (the
+/// node marks it as shown). Proves it's the app with the launch token. Only
+/// talks to this computer.
+pub fn claim_notices(token: &str) -> Vec<String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
+    let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else { return Vec::new() };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    let req = format!(
+        "POST /api/notices/claim HTTP/1.0\r\nHost: 127.0.0.1\r\nX-HIC-Launch: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    if s.write_all(req.as_bytes()).is_err() {
+        return Vec::new();
+    }
+    let mut raw = String::new();
+    let _ = s.take(256 * 1024).read_to_string(&mut raw);
+    match split_http(&raw) {
+        (true, body) => parse_notices(body),
+        _ => Vec::new(),
+    }
+}
+
 /// This computer's address on the local network, for a commons other people
 /// in the room share to. Connecting a UDP socket sends nothing; it only asks
 /// the operating system which interface it would use.
@@ -122,6 +153,13 @@ mod tests {
         assert_eq!(body, "{\"a\":1}");
         assert!(!split_http("HTTP/1.1 404 Not Found\r\n\r\n").0);
         assert!(!split_http("").0);
+    }
+
+    #[test]
+    fn notice_texts_are_read_from_the_list() {
+        let body = r#"[{"handle":"ada","text":"@ada is now listed on c:8081.","at":1}]"#;
+        assert_eq!(parse_notices(body), vec!["@ada is now listed on c:8081.".to_string()]);
+        assert!(parse_notices("not json").is_empty());
     }
 
     #[test]

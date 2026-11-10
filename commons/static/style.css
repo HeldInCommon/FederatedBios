@@ -421,3 +421,9 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
   width: 34px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--gray); cursor: pointer; }
 .pw-toggle:hover, .pw-toggle[aria-pressed="true"] { color: var(--ink); }
 .pw-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* News for the member (e.g. "now listed on …") */
+.notice-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin: 18px 0 8px; padding: 14px 18px; border: 2px solid var(--jade, #0a7a54); background: #effaf5; }
+.notice-bar p { margin: 2px 0; font-size: 16px; }
+.notice-bar form { margin: 0; }

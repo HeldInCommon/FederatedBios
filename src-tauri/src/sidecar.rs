@@ -145,6 +145,25 @@ fn restart_after_crash(app: &tauri::AppHandle, role: &str, name: &str, generatio
     });
 }
 
+/// After a node starts it asks the commons it's waiting on whether it has
+/// been listed (once). Collect any resulting news from the node a few times
+/// over the first minute and show each as a system notification. Only talks
+/// to this computer; nothing is polled after that.
+fn notify_news(app: tauri::AppHandle, token: String) {
+    std::thread::spawn(move || {
+        for wait in [10, 20, 30] {
+            std::thread::sleep(std::time::Duration::from_secs(wait));
+            for text in network::claim_notices(&token) {
+                use tauri_plugin_notification::NotificationExt;
+                if let Err(e) = app.notification().builder().title("Held in Common").body(&text).show() {
+                    log::warn!("couldn't show a notification: {e}");
+                }
+                log::info!("news: {text}");
+            }
+        }
+    });
+}
+
 /// Set the window title to say which role is running.
 pub fn set_title(app: &tauri::AppHandle, role: &str) {
     if let Some(win) = app.get_webview_window("main") {
@@ -188,6 +207,9 @@ pub fn start(app: &tauri::AppHandle, cfg: &AppConfig, sidecar: &Sidecar, role: &
     set_title(app, role);
     // A commons opens in the steward view (approve people, make invites).
     open_when_up(app.clone(), cfg.launch_token.clone(), start_page(role));
+    if role == "node" {
+        notify_news(app.clone(), cfg.launch_token.clone());
+    }
     Ok(())
 }
 
