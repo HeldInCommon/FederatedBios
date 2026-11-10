@@ -1,0 +1,10 @@
+{
+  "name": "hic-css-lint",
+  "private": true,
+  "description": "Pinned CSS formatter and linter for Held in Common. Run ../../scripts/lint-css.sh.",
+  "devDependencies": {
+    "prettier": "3.3.3",
+    "stylelint": "16.10.0",
+    "stylelint-config-standard": "36.0.1"
+  }
+}

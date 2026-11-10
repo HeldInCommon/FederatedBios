@@ -50,31 +50,33 @@ Writes happen in clearly named places that say what they change.
 | `sessions.rs` | Sessions (expire after 24 h) and the sign-in attempt limit. | cookie helpers yes |
 | `store.rs` | **The only module that touches files.** Atomic writes; "missing" vs "damaged"; the member and shared-profile lists cached in memory, cleared by every write. | no |
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
-| `web/pages.rs` | The body of each page. | yes |
-| `web/handlers.rs` | Request handlers: load → decide (pure) → render. | no |
-| `web/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
+| `web/pages/` | The body of each page, one file per page (`directory.rs`, `profile.rs`, `owner.rs`, `publish.rs`, `signin.rs`, …); `mod.rs` lists them. | yes |
+| `web/handlers/` | Request handlers, one file per page or flow: load → decide (pure) → render. `mod.rs` lists each file's routes and holds the shared helpers (session, CSRF check, `update_member`). | no |
+| `web/handlers/inbox.rs` | What a commons receives from nodes: shares, vouches, withdrawals, identity changes. | no |
+| `web/handlers/share.rs` | Sharing to and withdrawing from a commons; sending to a commons' inbox. | no |
+| `web/handlers/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
+| `web/handlers/membership.rs` | Bringing people in: invite codes and vouches. | no |
+| `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
-| `web/membership.rs` | Handlers for bringing people in: invite codes and vouches. | no |
-| `web/account.rs` | Handlers for a member's keys: recovery key, replacing a key, recovering. | no |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
-| `../static/` | `style.css` and `avatar.js`, compiled into the binary. | — |
-| `../tests/http.rs` | In-process HTTP tests of the whole router. | — |
+| `../static/` | `style.css`, `avatar.js` and `password.js`, compiled into the binary. | — |
+| `../tests/http/` | In-process HTTP tests of the whole router, one file per behaviour (`sharing.rs`, `vouching.rs`, `steward.rs`, …); helpers in `common.rs`. | — |
 | `../tests/spec_vectors.rs` | Checks `docs/spec/vectors/` against this implementation. | — |
 
 ### Following a request: someone shares a profile to a commons
 
-1. **Node**, `web/handlers.rs::share` — checks the session and CSRF token, loads
+1. **Node**, `web/handlers/share.rs::share` — checks the session and CSRF token, loads
    the member (`store.rs`) and their current version.
 2. `federation.rs::build_share` — turns the version into the signed message.
 3. The node posts it to `https://<commons>/inbox`.
-4. **Commons**, `web/handlers.rs::inbox` — parses the JSON.
+4. **Commons**, `web/handlers/inbox.rs::inbox` — parses the JSON.
 5. `federation.rs::verify_share` — recomputes the `cid` with
    `canonical.rs::content_id` and checks the signature with
    `keys.rs::verify_cid`.
 6. `federation.rs::admit` — refuses a handle held by another key, or a version
    older than the one already held.
 7. `store.rs::save_remote` — writes `remote/<keyid>.json` atomically.
-8. `web/handlers.rs::directory` → `web/pages.rs::directory` lists it.
+8. `web/handlers/directory.rs` → `web/pages/directory.rs` lists it.
 
 ### Following a request: someone withdraws
 
@@ -109,10 +111,11 @@ interleave) → redirect to the profile.
 
 | Command | What it covers | Time |
 |---|---|---|
-| `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http.rs` (the whole router in-process). | ~5 s |
+| `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http/` (the whole router in-process; `cargo test --test http vouching` runs one area). | ~5 s |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | The app's pure rules (role migration, health check, labels). | ~1 s once built |
 | `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching, steward approval, Check now, withdrawal, key rotation and recovery. | ~25 s |
 | `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
 All four run on every pull request (`.github/workflows/pr-checks.yml`), with
-`cargo fmt --check` and `cargo clippy -D warnings`.
+`cargo fmt --check`, `cargo clippy -D warnings`, and `./scripts/lint-css.sh`
+(the stylesheets' layout and rules; needs Node).

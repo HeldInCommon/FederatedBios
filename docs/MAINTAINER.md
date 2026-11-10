@@ -14,6 +14,8 @@ when the checks pass. App identity: `org.heldincommon.node`, product name
 - formatting (`cargo fmt --check`) and lints (`cargo clippy -D warnings`);
 - the server's unit, HTTP and format-vector tests (`cargo test`);
 - the independent Python check of the format vectors;
+- the stylesheets' layout and lint rules (`scripts/lint-css.sh`, pinned tools in
+  `tools/css-lint/`);
 - the end-to-end test (`scripts/test-federation.sh`): real nodes and commons,
   sharing, tampering, impostors, vouching and steward approval, withdrawal, key
   replacement and recovery;
@@ -22,7 +24,7 @@ when the checks pass. App identity: `org.heldincommon.node`, product name
 
 Security-sensitive code needs a second reviewer: `federation.rs`, `identity.rs`,
 `keys.rs`, `passphrase.rs`, `sessions.rs`, `store.rs`, `vouching.rs`,
-`outbound.rs`, `web/steward.rs`.
+`outbound.rs`, `web/handlers/steward.rs`.
 
 ---
 

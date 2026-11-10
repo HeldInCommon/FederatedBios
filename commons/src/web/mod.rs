@@ -1,20 +1,20 @@
 //! The HTML side of the server.
 //!
 //! - [`layout`]: the page frame and shared pieces (pure);
-//! - [`pages`]: the body of each page (pure);
-//! - [`handlers`]: the request handlers that load data and render pages;
-//! - [`account`]: handlers for a member's keys (recovery key, replacing a key, recovering);
-//! - [`membership`]: handlers for bringing people into a commons (invites, vouches);
-//! - [`steward`]: the steward view of a commons (approve, decline, make invites);
+//! - [`pages`]: the body of each page, one file per page (pure);
+//! - [`handlers`]: the request handlers that load data and render pages, one
+//!   file per page or flow (including the steward view, invites and vouches,
+//!   and a member's keys);
 //! - [`email`]: ready-written invitation emails as `mailto:` links (pure).
+//!
+//! To add a page: write its body in `pages/<name>.rs`, its handler in
+//! `handlers/<name>.rs`, re-export both from their `mod.rs`, and add the route
+//! in [`crate::app`].
 
-pub mod account;
 pub mod email;
 pub mod handlers;
 pub mod layout;
-pub mod membership;
 pub mod pages;
-pub mod steward;
 
 /// The stylesheet, compiled into the binary.
 pub const STYLE_CSS: &str = include_str!("../../static/style.css");

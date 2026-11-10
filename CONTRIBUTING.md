@@ -51,8 +51,17 @@ file, and the path a request takes.
   that every existing signature depends on. Its golden test must never change.
   A new format needs a new schema version (see the review, M1).
 - **Add stored fields with `#[serde(default)]`** so older data files still load.
+- **New page?** Its body goes in `commons/src/web/pages/<name>.rs`, its handler
+  in `commons/src/web/handlers/<name>.rs`; re-export both from their `mod.rs`
+  and add the route in `app.rs`. Tests go in `commons/tests/http/<area>.rs`.
+- **Styles** live in `commons/static/style.css` (the site) and
+  `src-tauri/ui/style.css` (the app's own screens). Colours, fonts, sizes and
+  spacing are tokens at the top of each file: change a token, not a rule,
+  to restyle everywhere. Use a token rather than a raw value in rules, and
+  reuse the shared patterns (the mono label, buttons, panels) before adding
+  a class. `./scripts/lint-css.sh --fix` lays the files out.
 - **Before pushing:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`,
-  and the tests above. CI runs the same checks.
+  `./scripts/lint-css.sh`, and the tests above. CI runs the same checks.
 
 ## 6. Open a pull request
 
@@ -60,4 +69,4 @@ Branch from `main` in `HeldInCommon/FederatedBios` (not a fork), describe what
 changed and how you tested it, and wait for the checks. Security-sensitive
 areas need a second reviewer: `federation.rs`, `identity.rs`, `keys.rs`,
 `passphrase.rs`, `sessions.rs`, `store.rs`, `vouching.rs`, `outbound.rs` and
-`web/steward.rs`.
+`web/handlers/steward.rs`.

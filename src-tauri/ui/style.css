@@ -1,70 +1,462 @@
-/* Styles for the desktop app's own screens: the first-launch chooser and the
-   loading screen. (The node and commons pages are styled by the server.) */
-:root{--pink:#ff2d9b;--blue:#1f5cff;--jade:#0a7a54;--violet:#8b3fd9;--ink:#111;--gray:#6f6f6f;--bg:#f2f1ed;--card:#fff;
-      --line:rgba(17,17,17,.18);--mono:ui-monospace,"SF Mono",Menlo,monospace;--e:cubic-bezier(.22,1,.36,1)}
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
-     font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-[hidden]{display:none!important}
-/* brand bar */
-.bars{position:fixed;top:0;left:0;right:0;height:8px;display:flex}
-.bars i{height:100%} .bars .p{flex:0 0 62%;background:var(--pink)} .bars .b{flex:1;background:var(--blue)}
-.box{text-align:center;padding:0 24px}
-/* pulsing ripple loader */
-.loader{position:relative;width:140px;height:140px;margin:0 auto 38px}
-.loader .ring{position:absolute;inset:0;margin:auto;width:30px;height:30px;border:2px solid var(--pink);
-     border-radius:50%;opacity:0;animation:ripple 2.1s var(--e) infinite}
-.loader .ring:nth-child(2){animation-delay:.7s}
-.loader .ring:nth-child(3){animation-delay:1.4s}
-.loader .core{position:absolute;inset:0;margin:auto;width:13px;height:13px;background:var(--pink);
-     border-radius:50%;animation:breathe 2.1s var(--e) infinite}
-@keyframes ripple{0%{transform:scale(1);opacity:.85}70%{opacity:.1}100%{transform:scale(4.4);opacity:0}}
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
-h1{font-family:var(--mono);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0;text-wrap:balance}
-.dot{color:var(--pink)}
-.sub{color:var(--gray);margin-top:12px;font-size:17px;min-height:1.2em;transition:opacity .3s}
-/* manual start — hidden until auto-start stalls */
-.actions{margin-top:26px;opacity:0;transform:translateY(6px);transition:opacity .4s,transform .4s;pointer-events:none}
-.actions.show{opacity:1;transform:none;pointer-events:auto}
-.btn{cursor:pointer;border:0;padding:13px 22px;font:700 13px/1 var(--mono);
-     letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--blue);
-     box-shadow:0 2px 12px rgba(31,92,255,.35);transition:background .2s,transform .06s}
-.btn:hover{background:#1748d6} .btn:active{transform:translateY(1px)}
-.btn[disabled]{opacity:.55;cursor:default;box-shadow:none}
-.btn:focus-visible,.choice:focus-visible,.link:focus-visible,.reach input:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
-.fallback{margin-top:16px;font-size:14px;color:#8a8a8a}
-.fallback a{color:var(--blue);text-decoration:none;font-family:var(--mono);border-bottom:1px solid var(--blue)}
-.err{margin:14px auto 0;font-size:13.5px;color:#b00052;min-height:1.1em;max-width:30em}
+/* Styles for the desktop app's own screens: the loading screen, the
+ * first-launch chooser and the naming step. (The node and commons pages are
+ * styled by the server: commons/static/style.css.)
+ *
+ * Organised like the server's stylesheet: tokens first (change a colour or
+ * size there and every screen follows), then base, shared patterns, screens.
+ * The loader always animates, including with macOS "Reduce Motion" on
+ * (Phoenix's decision, 10 Nov 2026).
+ */
 
-/* first launch: choose a role */
-.choose{width:min(760px,100%);padding:48px 24px;text-align:left}
-.eyebrow{font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gray);margin:0 0 10px}
-.choose .sub{margin:12px 0 28px;max-width:34em}
-.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-.choice{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:8px;align-content:start;padding:22px 22px 24px;
-        background:var(--card);border:1px solid var(--ink);transition:transform .12s,box-shadow .12s}
-.choice:hover{transform:translateY(-2px);box-shadow:4px 4px 0 var(--ink)}
-.choice[aria-pressed="true"]{box-shadow:4px 4px 0 var(--violet);border-color:var(--violet)}
-.choice .tag{font:700 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase}
-.choice.node .tag{color:var(--jade)} .choice.commons .tag{color:var(--violet)}
-.choice strong{font:700 22px/1.2 var(--mono);letter-spacing:-.01em}
-.choice span.d{color:var(--gray);font-size:15px}
-.reach{margin-top:30px;border-top:1px solid var(--ink);padding-top:22px;display:grid;gap:12px}
-.reach h2{font:700 15px var(--mono);margin:0 0 4px}
-.reach label{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:14px 16px;background:var(--card);border:1px solid var(--line);cursor:pointer}
-.reach label.off{cursor:default;opacity:.55}
-.reach input{margin:4px 0 0;accent-color:var(--violet)}
-.reach b{font-weight:700} .reach small{grid-column:2;color:var(--gray);font-size:14px}
-.reach code{font:700 13px var(--mono);background:var(--bg);padding:2px 6px;user-select:all}
-.row{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;margin-top:8px}
-.btn.violet{background:var(--violet);box-shadow:0 2px 12px rgba(139,63,217,.35)} .btn.violet:hover{background:#7432b8}
-.link{all:unset;cursor:pointer;font:700 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gray);border-bottom:1px solid currentColor}
-.note{font-size:13.5px;color:var(--gray);margin:18px 0 0}
-/* The loader always animates, including with macOS "Reduce Motion" on
-   (Phoenix's decision, 10 Nov 2026). */
+/* 1. Design tokens --------------------------------------------------------- */
 
-/* naming step */
-.name-form{display:grid;gap:10px;max-width:420px;margin-top:8px}
-.name-label{font:700 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gray)}
-.name-form input{font:18px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:12px 14px;border:1px solid var(--ink);background:var(--card)}
-.name-form input:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+:root {
+  /* Brand colours (the same as the server's) */
+  --pink: #ff2d9b;
+  --blue: #1f5cff;
+  --blue-deep: #1748d6;
+  --jade-ink: #0a7a54;
+  --violet: #8b3fd9;
+  --violet-deep: #7432b8;
+  --blue-glow: rgb(31 92 255 / 35%);
+  --violet-glow: rgb(139 63 217 / 35%);
+  --error: #b00052;
+
+  /* Neutrals */
+  --ink: #111;
+  --gray: #6f6f6f;
+  --white: #fff;
+  --canvas: #f2f1ed;
+  --line: rgb(17 17 17 / 18%);
+
+  /* Fonts: the app uses the system's own, so it works offline */
+  --font-text: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type sizes */
+  --text-2xs: 0.6875rem; /* 11px: eyebrows, tags */
+  --text-xs: 0.75rem; /* 12px: link buttons */
+  --text-sm: 0.875rem; /* 14px: fine print, notes */
+  --text-hint: 0.9375rem; /* 15px */
+  --text-md: 1rem; /* 16px: body */
+  --text-lg: 1.0625rem; /* 17px: subtitles */
+  --text-xl: 1.375rem; /* 22px: choice titles */
+  --text-display: 2.125rem; /* 34px: headings */
+  --track: 0.08em;
+  --track-wide: 0.14em;
+
+  /* Space (a 4px scale) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+
+  /* Lines and motion */
+  --rule: 1px solid var(--ink);
+  --rule-soft: 1px solid var(--line);
+  --focus: 2px solid var(--pink);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pulse: 2.1s; /* one beat of the loader */
+}
+
+/* 2. Base ------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-md) / 1.5 var(--font-text);
+}
+
+/* Screens are shown and hidden with the `hidden` attribute (app.js). */
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: var(--focus);
+  outline-offset: 3px;
+}
+
+h1 {
+  margin: 0;
+  font: 700 var(--text-display) var(--font-mono);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* 3. Shared patterns ------------------------------------------------------- */
+
+/* The mono label: small, bold, upper-case monospace. */
+.eyebrow,
+.name-label,
+.choice .tag {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+}
+
+.dot {
+  color: var(--pink);
+}
+
+.sub {
+  min-height: 1.2em;
+  margin-top: var(--space-3);
+  font-size: var(--text-lg);
+  color: var(--gray);
+  transition: opacity 0.3s;
+}
+
+.note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm);
+  color: var(--gray);
+}
+
+.err {
+  min-height: 1.1em;
+  max-width: 30em;
+  margin: var(--space-3) auto 0;
+  font-size: var(--text-sm);
+  color: var(--error);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin-top: var(--space-2);
+}
+
+/* Buttons take their colour from --tone (blue unless .violet). */
+.btn {
+  --tone: var(--blue);
+  --tone-hover: var(--blue-deep);
+  --tone-glow: var(--blue-glow);
+
+  padding: 13px 22px;
+  border: 0;
+  font: 700 0.8125rem / 1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: var(--tone);
+  box-shadow: 0 2px 12px var(--tone-glow);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.06s;
+}
+
+.btn.violet {
+  --tone: var(--violet);
+  --tone-hover: var(--violet-deep);
+  --tone-glow: var(--violet-glow);
+}
+
+.btn:hover {
+  background: var(--tone-hover);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn[disabled] {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* A button that looks like a link. */
+.link {
+  all: unset;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  color: var(--gray);
+  border-bottom: 1px solid currentcolor;
+  cursor: pointer;
+}
+
+/* `all: unset` above also removes the focus ring, so put it back. */
+.link:focus-visible,
+.choice:focus-visible {
+  outline: var(--focus);
+  outline-offset: 3px;
+}
+
+/* 4. Screens --------------------------------------------------------------- */
+
+/* The brand bar across the top of every screen */
+.bars {
+  position: fixed;
+  inset: 0 0 auto;
+  display: flex;
+  height: 8px;
+}
+
+.bars .p {
+  flex: 0 0 62%;
+  background: var(--pink);
+}
+
+.bars .b {
+  flex: 1;
+  background: var(--blue);
+}
+
+/* Loading: a pulsing ripple while the server starts */
+.box {
+  padding: 0 var(--space-5);
+  text-align: center;
+}
+
+.loader {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto var(--space-7);
+}
+
+.loader .ring,
+.loader .core {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 50%;
+}
+
+.loader .ring {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--pink);
+  opacity: 0;
+  animation: ripple var(--pulse) var(--ease) infinite;
+}
+
+.loader .ring:nth-child(2) {
+  animation-delay: calc(var(--pulse) / 3);
+}
+
+.loader .ring:nth-child(3) {
+  animation-delay: calc(var(--pulse) * 2 / 3);
+}
+
+.loader .core {
+  width: 13px;
+  height: 13px;
+  background: var(--pink);
+  animation: breathe var(--pulse) var(--ease) infinite;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+
+  70% {
+    opacity: 0.1;
+  }
+
+  100% {
+    transform: scale(4.4);
+    opacity: 0;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+/* The Start button, shown only if starting automatically stalls */
+.actions {
+  margin-top: var(--space-5);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+}
+
+.actions.show {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.fallback {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--gray);
+}
+
+.fallback a {
+  font-family: var(--font-mono);
+  color: var(--blue);
+  text-decoration: none;
+  border-bottom: 1px solid currentcolor;
+}
+
+/* First launch: choose a node or a commons */
+.choose {
+  width: min(760px, 100%);
+  padding: 48px var(--space-5);
+  text-align: left;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--gray);
+}
+
+.choose .sub {
+  max-width: 34em;
+  margin: var(--space-3) 0 28px;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.choice {
+  all: unset;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  padding: 22px;
+  background: var(--white);
+  border: var(--rule);
+  cursor: pointer;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+
+.choice:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--violet);
+  box-shadow: 4px 4px 0 var(--violet);
+}
+
+.choice.node .tag {
+  color: var(--jade-ink);
+}
+
+.choice.commons .tag {
+  color: var(--violet);
+}
+
+.choice strong {
+  font: 700 var(--text-xl) / 1.2 var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
+.choice .d {
+  font-size: var(--text-hint);
+  color: var(--gray);
+}
+
+/* A commons: who can reach it (this room, or the internet) */
+.reach {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: var(--rule);
+}
+
+.reach h2 {
+  margin: 0 0 var(--space-1);
+  font: 700 var(--text-hint) var(--font-mono);
+}
+
+.reach label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  padding: 14px var(--space-4);
+  background: var(--white);
+  border: var(--rule-soft);
+  cursor: pointer;
+}
+
+.reach label.off {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.reach input {
+  margin: var(--space-1) 0 0;
+  accent-color: var(--violet);
+}
+
+.reach small {
+  grid-column: 2;
+  font-size: var(--text-sm);
+  color: var(--gray);
+}
+
+.reach code {
+  padding: 2px 6px;
+  font: 700 0.8125rem var(--font-mono);
+  background: var(--canvas);
+  user-select: all;
+}
+
+/* Naming the node or commons */
+.name-form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 420px;
+  margin-top: var(--space-2);
+}
+
+.name-label {
+  color: var(--gray);
+}
+
+.name-form input {
+  padding: var(--space-3) 14px;
+  font: 1.125rem / 1.3 var(--font-text);
+  background: var(--white);
+  border: var(--rule);
+}
+
+.name-form input:focus-visible {
+  outline-offset: 2px;
+}
