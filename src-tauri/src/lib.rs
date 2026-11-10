@@ -56,6 +56,29 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
     Ok(menu)
 }
 
+/// The main window. Created here rather than in `tauri.conf.json` so it can
+/// hand `mailto:` links ("Email this invite") to the person's own mail app:
+/// a web view can't open them itself.
+fn main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), String> {
+    let handle = app.clone();
+    tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+        .title("Held in Common")
+        .inner_size(1100.0, 820.0)
+        .on_navigation(move |url| {
+            if url.scheme() != "mailto" {
+                return true;
+            }
+            use tauri_plugin_opener::OpenerExt;
+            if let Err(e) = handle.opener().open_url(url.as_str(), None::<&str>) {
+                log::warn!("couldn't open the mail app: {e}");
+            }
+            false
+        })
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// Open the naming screen in rename mode, in its own small window (or bring
 /// that window forward if it's already open). It closes itself once the new
 /// name is saved; see `commands::set_name`.
@@ -116,6 +139,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(log_plugin())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::node_up,
             commands::setup_state,
@@ -136,6 +160,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            main_window(app.handle()).map_err(std::io::Error::other)?;
             let base = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
             std::fs::create_dir_all(&base).ok();
             let cfg = app_config(base.clone());

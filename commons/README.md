@@ -75,12 +75,21 @@ Docker Desktop running.
    ```
    For a commons where anyone can share without a vouch, add
    `-e HIC_OPEN_COMMONS=1` before the image name.
-3. **Get the founding invite** (a new commons only; one use):
+3. **Open the steward view** to approve people and make invites. The
+   commons prints a private steward link in its log:
+   ```
+   docker logs hic-test-commons | grep steward
+   ```
+   Open that link in your browser. Each person waiting has **Approve** and
+   **Decline**; **Make an invite** gives you a code you can email.
+
+   **Get the founding invite** (a new commons only; one use) from the log, or
+   see it in the steward view:
    ```
    docker logs hic-test-commons | grep founding
    ```
-   The commons page shows it only to someone at the commons' own computer,
-   and Docker doesn't count as that, so read it from the log.
+   Docker doesn't count as "the commons' own computer", so use the log or
+   the steward link.
 4. **Open the commons** at http://localhost:8081.
 5. **Share from your node:** open your profile, under **Share to a commons**
    open **Add a commons**, enter `http://localhost:8081`, paste the founding

@@ -51,6 +51,8 @@ Writes happen in clearly named places that say what they change.
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
 | `web/pages.rs` | The body of each page. | yes |
 | `web/handlers.rs` | Request handlers: load → decide (pure) → render. | no |
+| `web/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
+| `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
 | `web/membership.rs` | Handlers for bringing people in: invite codes and vouches. | no |
 | `web/account.rs` | Handlers for a member's keys: recovery key, replacing a key, recovering. | no |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |

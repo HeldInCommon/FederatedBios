@@ -12,6 +12,8 @@
 //!   pending/<keyid>.json     shares waiting for a vouch (commons)
 //!   used-invites/<id>.json   invite codes already used (commons)
 //!   founding-invite.json     the one-time invite for the first member (commons)
+//!   steward.json             the steward key in the steward link (commons)
+//!   commons-invites/<id>.json invite codes made by the steward (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -95,7 +97,17 @@ impl Store {
     /// Use `root` as the data folder, creating its sub-folders.
     pub fn open(root: impl Into<PathBuf>) -> std::io::Result<Store> {
         let root = root.into();
-        for sub in ["handles", "versions", "remote", "tombstones", "identities", "intros", "pending", "used-invites"] {
+        for sub in [
+            "handles",
+            "versions",
+            "remote",
+            "tombstones",
+            "identities",
+            "intros",
+            "pending",
+            "used-invites",
+            "commons-invites",
+        ] {
             std::fs::create_dir_all(root.join(sub))?;
         }
         Ok(Store { root, handles_cache: Arc::default(), remotes_cache: Arc::default() })
@@ -367,6 +379,42 @@ impl Store {
     /// Store a new founding invite.
     pub fn save_founding_code(&self, code: &str) -> Result<(), StoreError> {
         Self::write(&self.root.join("founding-invite.json"), &serde_json::json!({ "code": code, "used": false }))
+    }
+
+    /// The steward key, if one has been made.
+    pub fn steward_key(&self) -> Result<Option<String>, StoreError> {
+        let v: Option<serde_json::Value> = Self::read(&self.root.join("steward.json"))?;
+        Ok(v.and_then(|v| v.get("key").and_then(|k| k.as_str()).map(String::from)))
+    }
+
+    /// Save the steward key.
+    pub fn save_steward_key(&self, key: &str) -> Result<(), StoreError> {
+        Self::write(&self.root.join("steward.json"), &serde_json::json!({ "key": key }))
+    }
+
+    fn commons_invite_path(&self, code: &str) -> PathBuf {
+        self.root.join("commons-invites").join(format!("{}.json", keyid(code)))
+    }
+
+    /// Save a new steward-made invite code.
+    pub fn save_commons_invite(&self, code: &str, now: u64) -> Result<(), StoreError> {
+        let rec = serde_json::json!({ "code": code, "created_at": now, "used_at": null });
+        Self::write(&self.commons_invite_path(code), &rec)
+    }
+
+    /// True when `code` is a steward-made invite that hasn't been used.
+    pub fn commons_invite_unused(&self, code: &str) -> Result<bool, StoreError> {
+        let v: Option<serde_json::Value> = Self::read(&self.commons_invite_path(code))?;
+        Ok(v.is_some_and(|v| {
+            v.get("code").and_then(|c| c.as_str()).is_some_and(|c| crate::keys::ct_eq(c, code))
+                && v["used_at"].is_null()
+        }))
+    }
+
+    /// Mark a steward-made invite code as used.
+    pub fn use_commons_invite(&self, code: &str, now: u64) -> Result<(), StoreError> {
+        let rec = serde_json::json!({ "code": code, "used_at": now });
+        Self::write(&self.commons_invite_path(code), &rec)
     }
 
     /// Mark the founding invite as used.

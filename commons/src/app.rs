@@ -18,7 +18,7 @@ use crate::role::Role;
 use crate::sessions::{AttemptLimiter, Sessions};
 use crate::store::Store;
 use crate::web::layout::Site;
-use crate::web::{self, account, handlers, membership};
+use crate::web::{self, account, handlers, membership, steward};
 use crate::{api, web::ROBOTS_TXT};
 
 /// Everything a request handler can reach.
@@ -113,6 +113,10 @@ pub fn router(state: Shared) -> Router {
         .route("/recover", post(account::recover))
         .route("/invite", post(membership::invite))
         .route("/vouch", post(membership::vouch))
+        .route("/steward", get(steward::open))
+        .route("/steward/approve", post(steward::approve))
+        .route("/steward/decline", post(steward::decline))
+        .route("/steward/invite", post(steward::invite))
         .route("/backup", post(handlers::backup))
         .route("/restore", get(handlers::restore_form).post(handlers::restore_submit))
         .route("/@{handle}", get(handlers::profile))
@@ -130,6 +134,7 @@ pub fn router(state: Shared) -> Router {
         // Static files and health
         .route("/style.css", get(|| async { static_file("text/css", web::STYLE_CSS) }))
         .route("/avatar.js", get(|| async { static_file("application/javascript", web::AVATAR_JS) }))
+        .route("/password.js", get(|| async { static_file("application/javascript", web::PASSWORD_JS) }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))
         .route("/health", get(api::health))
         .layer(security)

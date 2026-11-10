@@ -43,7 +43,7 @@ pub async fn invite(State(st): State<Shared>, headers: HeaderMap, body: String) 
     match vouching::make_invite(&rec.ed_pub, &rec.ed_priv, &commons, now()) {
         Ok(inv) => {
             let code = vouching::invite_to_code(&inv);
-            let body = pages::invite_code(&rec.handle, &host_label(&commons), &code, vouching::INVITE_TTL / 86_400);
+            let body = pages::invite_code(&rec.handle, &commons, &code, vouching::INVITE_TTL / 86_400);
             render(&st.site, Page::new("Invite code", Some(&rec.handle), body))
         }
         Err(e) => server_error(&st.site, &e),

@@ -20,7 +20,14 @@ curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/he
 # A new commons makes a one-time founding invite for its first member (ADR 0011).
 FOUND1=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons/founding-invite.json" 2>/dev/null)
 [ -n "$FOUND1" ] && ok "commons made a founding invite" || no "no founding invite"
-curl -s http://localhost:8091/ | grep -q "hic-founding-" && ok "founding invite shown at the commons' own computer" || no "founding invite not shown locally"
+# The steward view (ADR 0017): opened at the commons' own computer, or with the
+# steward link the commons prints in its log.
+grep -q "steward link (keep private): http://localhost:8091/steward?key=" "$T/commons.log" && ok "commons printed a steward link" || no "no steward link in the log"
+curl -s http://localhost:8091/ | grep -q "Open the steward view" && ok "someone at the commons' computer is offered the steward view" || no "no steward view link locally"
+STEWARD=$(curl -s -i http://localhost:8091/steward | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+SPAGE=$(curl -s http://localhost:8091/ -H "Cookie: hic_session=$STEWARD")
+printf '%s' "$SPAGE" | grep -q "hic-founding-" && ok "steward view shows the founding invite" || no "steward view missing the founding invite"
+SCSRF=$(printf '%s' "$SPAGE" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8090/health >/dev/null && ok "node up" || no "node failed to start"
 
 SIGNUP=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" | tr -d '\r')
@@ -134,6 +141,14 @@ NKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"key":"[0-9a-f]{12}
 curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=newbie" --data-urlencode "key=$NKEY" | grep -q "Vouched" && ok "member vouched for the newcomer from their node" || no "vouch failed"
 grep -rq '"newbie"' "$T/commons/remote/" 2>/dev/null && ok "newcomer listed after the vouch" || no "newcomer still not listed"
 curl -s -X POST http://localhost:8090/invite -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Invite code" && ok "member can make an invite code" || no "invite code page failed"
+
+# The steward approves someone waiting (ADR 0017).
+R=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=walker" --data-urlencode "display_name=Walker" --data-urlencode "passphrase=supersecret6" | tr -d '\r'); WSID=$(printf '%s\n' "$R" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+WCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$WSID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
+curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "name=Walker" --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
+curl -s -o /dev/null -X POST http://localhost:8093/share -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091"
+WKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"handle":"walker","key":"[0-9a-f]{64}' | grep -oE '[0-9a-f]{64}')
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/steward/approve -H "Cookie: hic_session=$STEWARD" --data-urlencode "csrf=$SCSRF" --data-urlencode "key=$WKEY")" = "303" ] && grep -rq '"walker"' "$T/commons/remote/" && ok "steward approved someone waiting with one click" || no "steward approval failed"
 
 # Key rotation (decision record 0010): tega replaces their key; every commons
 # moves @tega to the new key, and the old key stops working there.

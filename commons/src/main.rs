@@ -50,6 +50,15 @@ async fn run(config: Config) -> Result<(), String> {
         if let Some(code) = store.founding_code().map_err(|e| e.to_string())? {
             println!("hic-commons founding invite (one use, for the first member): {code}");
         }
+        // The steward link: how whoever runs this commons opens the steward
+        // view from another computer (decision record 0017). Made once, kept
+        // in the data folder.
+        if store.steward_key().map_err(|e| e.to_string())?.is_none() {
+            store.save_steward_key(&vouching::new_steward_key()).map_err(|e| e.to_string())?;
+        }
+        if let Some(key) = store.steward_key().map_err(|e| e.to_string())? {
+            println!("hic-commons steward link (keep private): {}/steward?key={key}", config.base_url);
+        }
     }
 
     let addr = SocketAddr::new(config.bind_addr(role), config.port);
