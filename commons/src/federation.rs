@@ -406,6 +406,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            waiting_on: vec![],
         };
         let v = Version {
             cid,
@@ -503,6 +504,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            waiting_on: vec![],
         }
     }
 

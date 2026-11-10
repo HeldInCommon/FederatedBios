@@ -140,6 +140,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(log_plugin())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::node_up,
             commands::setup_state,

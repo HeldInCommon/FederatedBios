@@ -149,6 +149,9 @@ curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_sessi
 curl -s -o /dev/null -X POST http://localhost:8093/share -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091"
 WKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"handle":"walker","key":"[0-9a-f]{64}' | grep -oE '[0-9a-f]{64}')
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/steward/approve -H "Cookie: hic_session=$STEWARD" --data-urlencode "csrf=$SCSRF" --data-urlencode "key=$WKEY")" = "303" ] && grep -rq '"walker"' "$T/commons/remote/" && ok "steward approved someone waiting with one click" || no "steward approval failed"
+curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "Waiting to be listed" && ok "node shows it is waiting, with Check now" || no "no waiting panel"
+curl -s -o /dev/null -X POST http://localhost:8093/waiting/check -H "Cookie: hic_session=$WSID" --data-urlencode "csrf=$WCSRF"
+curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "@walker is now listed on localhost:8091" && ok "Check now tells the node it was approved" || no "no 'now listed' notice"
 
 # Key rotation (decision record 0010): tega replaces their key; every commons
 # moves @tega to the new key, and the old key stops working there.

@@ -33,6 +33,7 @@ Writes happen in clearly named places that say what they change.
 | `canonical.rs` | The content address (`cid`) of a profile version (format version 0). **Its bytes are a contract.** | yes |
 | `jcs.rs` | Canonical JSON (RFC 8785) for format `hic/v1`. | yes |
 | `envelope.rs` | Signed `hic/v1` objects: build, sign, cosign, verify. See `docs/spec/`. | yes |
+| `waiting.rs` | Following up on waiting shares (at start-up and on Check now) and recording news. | rule yes; asks and writes |
 | `vouching.rs` | Who may join a commons: invites, vouches, the founding invite, the weekly limit. | yes |
 | `ratelimit.rs` | At most N requests per minute per sender (the inbox). | in-memory state |
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |

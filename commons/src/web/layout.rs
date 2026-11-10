@@ -29,6 +29,13 @@ impl Site {
     }
 }
 
+/// News for the signed-in member, shown as a banner with a Dismiss button.
+pub struct NoticeBar {
+    pub texts: Vec<String>,
+    /// The session's CSRF token, for the Dismiss form.
+    pub csrf: String,
+}
+
 /// One HTML page to send.
 pub struct Page<'a> {
     pub title: &'a str,
@@ -38,17 +45,25 @@ pub struct Page<'a> {
     /// Ask search engines not to index this page (the `commons` reach).
     pub noindex: bool,
     pub status: StatusCode,
+    /// News for the signed-in member, if any.
+    pub notices: Option<NoticeBar>,
 }
 
 impl<'a> Page<'a> {
     /// A normal, indexable page with status 200.
     pub fn new(title: &'a str, me: Option<&'a str>, body: Markup) -> Page<'a> {
-        Page { title, me, body, noindex: false, status: StatusCode::OK }
+        Page { title, me, body, noindex: false, status: StatusCode::OK, notices: None }
     }
 
     /// Mark this page as not for search engines.
     pub fn noindex(mut self, yes: bool) -> Self {
         self.noindex = yes;
+        self
+    }
+
+    /// Show news for the signed-in member.
+    pub fn notices(mut self, n: Option<NoticeBar>) -> Self {
+        self.notices = n;
         self
     }
 
@@ -114,6 +129,15 @@ fn frame(site: &Site, page: &Page) -> Markup {
                             } @else {
                                 a href="/join" { "Add your profile" }
                                 a href="/login" { "Sign in" }
+                            }
+                        }
+                    }
+                    @if let Some(n) = &page.notices {
+                        section class="notice-bar" role="status" {
+                            @for t in &n.texts { p { (t) } }
+                            form method="post" action="/notices/dismiss" {
+                                input type="hidden" name="csrf" value=(n.csrf);
+                                button class="secondary" type="submit" { "Dismiss" }
                             }
                         }
                     }

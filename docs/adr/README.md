@@ -31,5 +31,6 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0015](0015-macos-signing.md) | macOS builds are signed with a personal Developer ID | Accepted | 2026-11-09 |
 | [0016](0016-no-hidden-effects.md) | No hidden effects | Accepted | 2026-11-10 |
 | [0017](0017-steward-approval.md) | The steward can approve people, and invites can be emailed | Accepted | 2026-11-10 |
+| [0018](0018-hearing-you-were-listed.md) | How a node hears it was listed | Accepted | 2026-11-10 |
 
 Background for the 2026 decisions: [the November 2026 code review](../REVIEW-2026-11.md).

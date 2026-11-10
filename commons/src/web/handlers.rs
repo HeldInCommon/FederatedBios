@@ -120,7 +120,8 @@ pub async fn directory(
         None => pages::Viewer::Visitor,
     };
     let body = pages::directory(&st.site, &cards, &remotes, &pending, &viewer);
-    render(&st.site, Page::new("Directory", me.as_deref(), body))
+    let notices = notices_for(&st, &headers);
+    render(&st.site, Page::new("Directory", me.as_deref(), body).notices(notices))
 }
 
 /// `GET /@{handle}` — a member's profile.
@@ -145,13 +146,47 @@ pub async fn profile(State(st): State<Shared>, Path(h): Path<String>, headers: H
             shared_to: rec.shared_to.clone(),
             has_recovery: rec.recovery_pub.is_some(),
             rotation_pending: rec.pending_rotation.is_some(),
+            waiting_on: rec.waiting_on.clone(),
         }),
         _ => None,
     };
     let noindex = version.as_ref().is_some_and(|v| v.reach() == Reach::Commons);
     let body = pages::profile(&rec, version.as_ref(), readable.as_ref(), owner.as_ref());
     let title = format!("@{}", rec.handle);
-    render(&st.site, Page::new(&title, me, body).noindex(noindex))
+    let notices = notices_for(&st, &headers);
+    render(&st.site, Page::new(&title, me, body).noindex(noindex).notices(notices))
+}
+
+/// The signed-in member's unseen notices, for the banner. Reads only.
+fn notices_for(st: &AppState, headers: &HeaderMap) -> Option<crate::web::layout::NoticeBar> {
+    let s = session(st, headers)?;
+    let texts: Vec<String> =
+        st.store.notices().ok()?.into_iter().filter(|n| n.handle == s.handle && !n.seen).map(|n| n.text).collect();
+    (!texts.is_empty()).then_some(crate::web::layout::NoticeBar { texts, csrf: s.csrf })
+}
+
+/// `POST /waiting/check` — ask the commons we're waiting on, now.
+pub async fn check_waiting(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = Form::parse(&body);
+    let Some(s) = session(&st, &headers) else { return redirect("/login") };
+    if !keys::ct_eq(&s.csrf, &f.one("csrf")) {
+        return error_page(&st.site, "Please try again.");
+    }
+    crate::waiting::check_once(&st).await;
+    redirect(&format!("/@{}", s.handle))
+}
+
+/// `POST /notices/dismiss` — mark the signed-in member's notices as seen.
+pub async fn dismiss_notices(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = Form::parse(&body);
+    let Some(s) = session(&st, &headers) else { return redirect("/login") };
+    if !keys::ct_eq(&s.csrf, &f.one("csrf")) {
+        return error_page(&st.site, "Please try again.");
+    }
+    if let Err(e) = st.store.mark_notices_seen(&s.handle) {
+        return server_error(&st.site, &e);
+    }
+    redirect(&format!("/@{}", s.handle))
 }
 
 /// The profile in `v` that `viewer` may read: the payload for public and
@@ -397,10 +432,20 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     let label = crate::web::layout::host_label(&commons);
     match sent {
         Ok(r) if r.status().is_success() => {
-            if let Err(e) = update_member(&st, &h, |r| r.with_shared_to(&commons)) {
+            let pending = r.text().await.unwrap_or_default().starts_with("pending");
+            // Remember the commons, and whether we're waiting to be listed
+            // there (the node follows up; see crate::waiting).
+            let remembered = update_member(&st, &h, |r| {
+                let r = r.with_shared_to(&commons);
+                if pending {
+                    r.with_waiting_on(&commons)
+                } else {
+                    r.without_waiting_on(&commons)
+                }
+            });
+            if let Err(e) = remembered {
                 eprintln!("warning: shared, but couldn't remember it for @{h}: {e}");
             }
-            let pending = r.text().await.unwrap_or_default().starts_with("pending");
             let body = if pending {
                 pages::shared_pending(&h, &commons, &rec.ed_pub, &f.one("csrf"))
             } else {

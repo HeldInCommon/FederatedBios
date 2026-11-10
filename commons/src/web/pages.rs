@@ -231,6 +231,8 @@ pub struct OwnerPanel {
     pub has_recovery: bool,
     /// Whether a key change is waiting to reach some commons.
     pub rotation_pending: bool,
+    /// Commons where this member's share is waiting for a vouch or approval.
+    pub waiting_on: Vec<String>,
 }
 
 /// A member's profile page. `readable` is the profile the viewer may read
@@ -298,6 +300,20 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
     html! {
         div class="owner-panel" {
             div class="actions owner-actions" { a class="primary" href="/new" { "Update your profile" } }
+            @if !o.waiting_on.is_empty() {
+                section class="share-panel waiting-panel" {
+                    h2 class="field-label" { "Waiting to be listed" }
+                    p class="hint" {
+                        "Your share is waiting for a member to vouch for you, or the steward to approve you, on: "
+                        @for (i, c) in o.waiting_on.iter().enumerate() { @if i > 0 { ", " } strong { (host_label(c)) } }
+                        ". Your node checks each time it starts; you can also check now."
+                    }
+                    form method="post" action="/waiting/check" class="share-form" {
+                        input type="hidden" name="csrf" value=(o.csrf);
+                        button class="secondary" type="submit" { "Check now" }
+                    }
+                }
+            }
             @if !o.shareable {
                 section class="share-panel" {
                     h2 class="field-label" { "Share to a commons" }

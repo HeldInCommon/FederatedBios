@@ -63,6 +63,14 @@ async fn run(config: Config) -> Result<(), String> {
 
     let addr = SocketAddr::new(config.bind_addr(role), config.port);
     let state = Arc::new(app::AppState::new(config, role, store));
+    if role == role::Role::Node {
+        // Once at start-up: ask each commons we're waiting on whether we've been
+        // listed (see waiting.rs; members can also press "Check now").
+        let st = state.clone();
+        tokio::spawn(async move {
+            hic_commons::waiting::check_once(&st).await;
+        });
+    }
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
     println!("hic-commons listening on {addr}");
     // With connection info, so handlers can see the sender's address (rate limits).
