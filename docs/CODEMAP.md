@@ -12,9 +12,8 @@ is shaped this way.
 | `src-tauri/` | The desktop app. Starts `hic-commons` as a "sidecar" and shows its pages. |
 
 Everything else: `scripts/test-federation.sh` (end-to-end test), `docs/`,
-`.github/workflows/` (CI). The root `Cargo.toml`, `src/`, `styles/`, `dist/`
-and `node/` are an **old prototype** that is no longer used; see
-[REVIEW-2026-11.md](REVIEW-2026-11.md) §3.
+`.github/workflows/` (CI). An older onboarding prototype is kept at the git
+tag `legacy-onboarding`, not on `main`.
 
 ## The server (`commons/src/`)
 

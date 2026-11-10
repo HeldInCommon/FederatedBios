@@ -35,8 +35,6 @@ directory. There is no central server and no landlord.
 commons/       hic-commons — the node + commons server (Rust / axum). One binary.
 src-tauri/     the native desktop app: a Tauri shell that runs hic-commons as a sidecar.
 docs/          this doc, the workshop INSTALL guide, the reveal.js architecture slides.
-node/ , src/   legacy Leptos onboarding prototype (Docker-based, :4321). Superseded;
-               kept for reference only. The current product is commons/ + src-tauri/.
 scripts/       test-federation.sh — the end-to-end federation test.
 ```
 

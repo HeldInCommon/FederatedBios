@@ -103,8 +103,10 @@ commons/       the node + commons server (Rust / axum) — identity, content-add
                JSON API, ActivityPub + /inbox federation. Dockerfile here.
 src-tauri/     the native desktop app that runs the server as a sidecar
 docs/          INSTALL.md (workshop guide) + architecture.html (reveal.js slides)
-node/, src/    legacy Leptos onboarding prototype (Docker-based, port 4321) — kept
-               for reference; the current product is commons/ + src-tauri/
+scripts/       test-federation.sh, the end-to-end federation test
+
+(An earlier Leptos onboarding prototype lived in the repository root until
+November 2026; it is kept at the git tag `legacy-onboarding`.)
 ```
 
 ## License / governance model
