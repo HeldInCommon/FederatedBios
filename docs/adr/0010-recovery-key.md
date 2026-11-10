@@ -1,6 +1,6 @@
 # 0010. A recovery key, made at sign-up and kept offline
 
-- **Status:** Accepted, to build
+- **Status:** Accepted (built)
 - **Date:** 2026-11-10
 
 ## Context

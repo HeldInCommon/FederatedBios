@@ -387,3 +387,7 @@ svg.photo line { stroke: var(--line); stroke-width: 1.2; }
 .role-address code { font: 700 12px var(--mono); background: rgba(255,255,255,.18); padding: 3px 6px; user-select: all; }
 .role-link { margin-left: auto; color: #fff; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.7); }
 .role-link:hover { border-bottom-color: #fff; }
+
+/* ===================== Recovery code ===================== */
+.recovery { margin: 18px 0 24px; padding: 18px 20px; border: 2px dashed var(--ink); max-width: 640px; }
+.recovery-code { font-family: var(--mono); font-size: 18px; letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; margin: 0 0 10px; }

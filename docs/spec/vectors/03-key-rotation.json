@@ -1,0 +1,45 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"handle\":\"tega\",\"new_box_key\":\"abababababababababababababababababababababababababababababababab\",\"new_key\":\"29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7\"},\"created_at\":1700000100,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"KeyRotation\"}",
+  "cid": "f1af610abc7beda07222d59e3cf759b53002f32b4aef31d0c88074c69f8ff1ab",
+  "description": "A KeyRotation signed by the old key (A) and cosigned by the new key (B).",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "handle": "tega",
+      "new_box_key": "abababababababababababababababababababababababababababababababab",
+      "new_key": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7"
+    },
+    "created_at": 1700000100,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "KeyRotation"
+  },
+  "name": "03-key-rotation.json",
+  "signed": {
+    "cid": "f1af610abc7beda07222d59e3cf759b53002f32b4aef31d0c88074c69f8ff1ab",
+    "cosigs": [
+      {
+        "key": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+        "sig": "4351c1dd3b4eb961e7ca30d53e75584711d2da8f22fa58f5fa57ce22305348435fed07d241b35eebb07ab4b9acf4d1769158afef1ef351fb3565748e384e2502"
+      }
+    ],
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "handle": "tega",
+        "new_box_key": "abababababababababababababababababababababababababababababababab",
+        "new_key": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7"
+      },
+      "created_at": 1700000100,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "KeyRotation"
+    },
+    "sig": "255a49b41fcfe36c514d84b571c9645bef5a4ecf92b846cfa653ef0989ce74a997b4b8cf975b43c63db041486bc193651b54174bfcdebe158934979a197faa08"
+  },
+  "signing_input": "hic/v1/KeyRotation\nf1af610abc7beda07222d59e3cf759b53002f32b4aef31d0c88074c69f8ff1ab",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

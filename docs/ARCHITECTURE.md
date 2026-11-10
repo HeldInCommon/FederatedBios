@@ -124,6 +124,8 @@ ciphertext lives on the node and **never federates**.
 - **Auth** — passphrase stored as an **Argon2id** hash (no recovery; older SHA-256 hashes are upgraded at the next sign-in), five wrong tries per handle then a 15-minute wait → session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` on https) that expires after 24 hours, + a per-session **CSRF** token guarding `publish`/`share`.
 - **Network exposure** — a node listens only on `127.0.0.1` (this computer); a commons listens on all interfaces. Override with `HIC_BIND`.
 - **Withdrawal** — a member can withdraw a shared copy. The node sends a signed `Withdraw` addressed to that commons (so it can't be replayed elsewhere); the commons deletes the copy and keeps a tombstone (`tombstones/<keyid>.json`: key, handle, time). The handle stays reserved for that key, and the withdrawn version can't be replayed. An older withdrawal can't remove a later re-share.
+- **Recovery key and key rotation** — sign-up makes a recovery key whose code is shown once, to keep offline. A member can replace their key; a commons moves the handle only on a rotation signed by the current key and cosigned by the new one, and a rotation signed by the recovery key overrides any other (so a thief who rotates first still loses). See ADR 0010 and `docs/spec/` §5.1.
+- **Signed formats** — written down in [spec/](spec/README.md), with test vectors checked by Rust and, independently, Python.
 - **Identity backup** — a member can download their record (keys included) and current version, encrypted with XChaCha20-Poly1305 under a key derived from their passphrase with Argon2id, and restore it on another node. See `commons/src/backup.rs`.
 - **Rollback protection** — a commons refuses a share older than the version it already holds for that key (409), so an old signed copy can't be replayed over a newer one.
 - **Crash safety** — every file is written to a temporary file, flushed and renamed; a damaged file is reported, never treated as missing.
@@ -144,6 +146,9 @@ ciphertext lives on the node and **never federates**.
 | POST | `/share` | Federate a signed copy to a commons (auth + CSRF) |
 | POST | `/inbox` | Receive + verify a federated share (the only way onto a commons), or a signed withdrawal |
 | POST | `/withdraw` | Ask a commons to remove this member's shared copy (auth + CSRF) |
+| POST | `/recovery/new` | Make a recovery key for a handle that has none; shows its code once (auth + CSRF) |
+| POST | `/rotate` | Replace the member's key on this node and every commons shared to (auth + CSRF) |
+| POST | `/recover` | Take the handle back with the recovery code (auth + CSRF) |
 | POST | `/backup` | Download an encrypted identity backup (auth + CSRF + passphrase) |
 | GET/POST | `/restore` | Restore an identity from a backup on a new node (node only) |
 | GET | `/federated/{keyid}` | View a federated-in profile |

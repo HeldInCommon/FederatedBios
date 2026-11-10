@@ -18,10 +18,14 @@
 //! | [`model`] | the data types that are stored and sent | none |
 //! | [`governance`] | the licence and signal vocabularies | none |
 //! | [`handle`] | rules for what a handle may be | none |
-//! | [`canonical`] | the content address (`cid`) of a version | none |
+//! | [`canonical`] | the content address (`cid`) of a profile version (format version 0) | none |
+//! | [`jcs`] | canonical JSON (RFC 8785) | none |
+//! | [`envelope`] | signed objects in format `hic/v1` | none |
 //! | [`keys`] | signing, verifying, encrypting to members | randomness only when generating keys |
 //! | [`passphrase`] | hashing and checking passphrases | randomness only when hashing |
 //! | [`backup`] | encrypted identity backups | randomness only when sealing |
+//! | [`identity`] | who holds a handle on a commons; recovery keys and key rotation | none |
+//! | [`publishing`] | signing a profile version | randomness only for members-only encryption |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
@@ -41,14 +45,18 @@ pub mod app;
 pub mod backup;
 pub mod canonical;
 pub mod config;
+pub mod envelope;
 pub mod federation;
 pub mod form;
 pub mod governance;
 pub mod handle;
+pub mod identity;
+pub mod jcs;
 pub mod keys;
 pub mod model;
 pub mod outbound;
 pub mod passphrase;
+pub mod publishing;
 pub mod role;
 pub mod sessions;
 pub mod store;

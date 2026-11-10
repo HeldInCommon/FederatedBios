@@ -6,6 +6,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::envelope::Signed;
+use crate::keys::NewKeys;
+
 /// Who can see a version. Stored and sent as the lowercase string.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -72,6 +75,60 @@ pub struct HandleRec {
     /// Commons this handle has shared to, so the owner can re-share in one click.
     #[serde(default)]
     pub shared_to: Vec<String>,
+    /// The public half of the recovery key (the private half is printed, never stored).
+    #[serde(default)]
+    pub recovery_pub: Option<String>,
+    /// The signed declaration of that recovery key, sent with each share so a
+    /// commons records it (see [`crate::identity`]).
+    #[serde(default)]
+    pub recovery_decl: Option<Signed>,
+    /// A key change sent to some commons but not yet all; retried with the
+    /// same new keys so no commons is left on a different key.
+    #[serde(default)]
+    pub pending_rotation: Option<PendingRotation>,
+}
+
+impl HandleRec {
+    /// A new member record with these keys and passphrase hash.
+    pub fn new(
+        handle: &str,
+        display_name: &str,
+        created_at: u64,
+        k: NewKeys,
+        secret_salt: String,
+        secret_hash: String,
+    ) -> HandleRec {
+        HandleRec {
+            handle: handle.into(),
+            display_name: display_name.into(),
+            created_at,
+            ed_pub: k.ed_pub,
+            ed_priv: k.ed_priv,
+            box_pub: k.box_pub,
+            box_priv: k.box_priv,
+            secret_salt,
+            secret_hash,
+            current_cid: None,
+            shared_to: Vec::new(),
+            recovery_pub: None,
+            recovery_decl: None,
+            pending_rotation: None,
+        }
+    }
+}
+
+/// A key change in progress on a node.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PendingRotation {
+    /// The keys the handle is moving to.
+    pub keys: NewKeys,
+    /// The signed `KeyRotation` or `RecoveryRotation`.
+    pub change: Signed,
+    /// For a recovery: the next recovery key `(public, private)`. The private
+    /// half is shown to the member once the change is complete, then dropped.
+    pub next_recovery: Option<(String, String)>,
+    /// Commons that have accepted the change.
+    pub done: Vec<String>,
 }
 
 /// The profile someone publishes.

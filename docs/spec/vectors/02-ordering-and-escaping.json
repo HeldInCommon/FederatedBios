@@ -1,0 +1,51 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"a\":[1,-2,true,null],\"z\":\"line\\nbreak, \\\"quoted\\\", tab\\t, control\\u0001, é, 😀, /slash\",\"😀\":\"before U+FB33 in UTF-16 order\",\"דּ\":\"after the emoji key\"},\"created_at\":1700000001,\"prev\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"schema\":\"hic/v1\",\"type\":\"Note\"}",
+  "cid": "bdcec6fffa87c43c394d6cab3a002e944d9cae184602d4dbab6071c091c4eb8d",
+  "description": "Key sorting (including a character outside the Basic Multilingual Plane, which sorts by UTF-16), string escaping, negative integers, booleans and null.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "a": [
+        1,
+        -2,
+        true,
+        null
+      ],
+      "z": "line\nbreak, \"quoted\", tab\t, control\u0001, é, 😀, /slash",
+      "דּ": "after the emoji key",
+      "😀": "before U+FB33 in UTF-16 order"
+    },
+    "created_at": 1700000001,
+    "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+    "schema": "hic/v1",
+    "type": "Note"
+  },
+  "name": "02-ordering-and-escaping.json",
+  "signed": {
+    "cid": "bdcec6fffa87c43c394d6cab3a002e944d9cae184602d4dbab6071c091c4eb8d",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "a": [
+          1,
+          -2,
+          true,
+          null
+        ],
+        "z": "line\nbreak, \"quoted\", tab\t, control\u0001, é, 😀, /slash",
+        "דּ": "after the emoji key",
+        "😀": "before U+FB33 in UTF-16 order"
+      },
+      "created_at": 1700000001,
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "schema": "hic/v1",
+      "type": "Note"
+    },
+    "sig": "ba3759d401f5ff85f78f2c03e6cae2c387f02a9d54ff9ae43d49c88d86a930e68bb550a21e8db767416c0f992ef4138cfbd98b11ae0b1f0ee3689b7b56f30c02"
+  },
+  "signing_input": "hic/v1/Note\nbdcec6fffa87c43c394d6cab3a002e944d9cae184602d4dbab6071c091c4eb8d",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

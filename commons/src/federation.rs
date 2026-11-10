@@ -26,7 +26,7 @@ pub struct Sender<'a> {
 /// Build the share a node posts to a commons' `/inbox`.
 pub fn build_share(sender: &Sender, rec: &HandleRec, v: &Version) -> Value {
     let profile = v.payload.clone().unwrap_or_default();
-    json!({
+    let mut share = json!({
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Create",
         "actor": {
@@ -49,7 +49,13 @@ pub fn build_share(sender: &Sender, rec: &HandleRec, v: &Version) -> Value {
             "profile": profile,
         },
         "signature": { "type": "ed25519", "value": v.signature },
-    })
+    });
+    // The signed recovery-key declaration travels alongside, so a commons can
+    // record it (see crate::identity). It is a separate signed object.
+    if let Some(d) = &rec.recovery_decl {
+        share["recovery"] = serde_json::to_value(d).expect("signed objects serialise");
+    }
+    share
 }
 
 /// A string field, or `None`.
@@ -120,6 +126,8 @@ pub struct Holders<'a> {
     pub held: &'a [RemoteEntry],
     /// Every withdrawal recorded here.
     pub withdrawn: &'a [Tombstone],
+    /// The key this server's identity record names for the handle, if any.
+    pub claimed: Option<&'a str>,
 }
 
 /// Whether a commons accepts a verified share.
@@ -162,6 +170,7 @@ pub fn admit(incoming: &RemoteEntry, h: &Holders) -> Admission {
 pub fn handle_taken(handle: &str, except_key: Option<&str>, h: &Holders) -> bool {
     let other = |k: &str| except_key != Some(k);
     h.local.is_some_and(other)
+        || h.claimed.is_some_and(other)
         || h.held.iter().any(|r| r.handle == handle && other(&r.ed_pub))
         || h.withdrawn.iter().any(|t| t.handle == handle && other(&t.ed_pub))
 }
@@ -221,19 +230,23 @@ pub fn verify_withdraw(v: &Value, my_base_url: &str) -> Result<Withdrawal, Strin
 /// What a commons does with a verified withdrawal: the tombstone to record,
 /// or why not. The caller then deletes the key's shared profile.
 ///
-/// Refused when the key's held profile is under a different handle, or was
-/// shared *after* this withdrawal was signed (an old withdrawal must not
-/// remove a later re-share).
-pub fn apply_withdraw(w: &Withdrawal, held: &[RemoteEntry]) -> Result<Tombstone, &'static str> {
-    if let Some(r) = held.iter().find(|r| r.ed_pub == w.ed_pub) {
-        if r.handle != w.handle {
-            return Err("that key holds a different handle here");
-        }
-        if r.created_at > w.created_at {
-            return Err("a newer version was shared after this withdrawal");
-        }
+/// Only the key that currently holds the handle here may withdraw it. (A
+/// thief with an old, rotated-away key must not be able to leave a tombstone
+/// that blocks the real owner.) Withdrawing twice is harmless. An older
+/// withdrawal can't remove a later re-share.
+pub fn apply_withdraw(
+    w: &Withdrawal,
+    held: &[RemoteEntry],
+    withdrawn: &[Tombstone],
+) -> Result<Tombstone, &'static str> {
+    let tomb = Tombstone { ed_pub: w.ed_pub.clone(), handle: w.handle.clone(), withdrawn_at: w.created_at };
+    match held.iter().find(|r| r.ed_pub == w.ed_pub) {
+        Some(r) if r.handle != w.handle => Err("that key holds a different handle here"),
+        Some(r) if r.created_at > w.created_at => Err("a newer version was shared after this withdrawal"),
+        Some(_) => Ok(tomb),
+        None if withdrawn.iter().any(|t| t.ed_pub == w.ed_pub && t.handle == w.handle) => Ok(tomb),
+        None => Err("nothing is shared here under that key"),
     }
-    Ok(Tombstone { ed_pub: w.ed_pub.clone(), handle: w.handle.clone(), withdrawn_at: w.created_at })
 }
 
 #[cfg(test)]
@@ -242,7 +255,7 @@ mod tests {
     use crate::keys;
 
     fn holders<'a>(local: Option<&'a str>, held: &'a [RemoteEntry], withdrawn: &'a [Tombstone]) -> Holders<'a> {
-        Holders { local, held, withdrawn }
+        Holders { local, held, withdrawn, claimed: None }
     }
 
     /// A signed share for `handle` at time `t`, plus the sender's keys.
@@ -263,6 +276,9 @@ mod tests {
             secret_hash: String::new(),
             current_cid: Some(cid.clone()),
             shared_to: vec![],
+            recovery_pub: None,
+            recovery_decl: None,
+            pending_rotation: None,
         };
         let v = Version {
             cid,
@@ -357,6 +373,9 @@ mod tests {
             secret_hash: String::new(),
             current_cid: None,
             shared_to: vec![],
+            recovery_pub: None,
+            recovery_decl: None,
+            pending_rotation: None,
         }
     }
 
@@ -388,9 +407,13 @@ mod tests {
         let (share, k) = signed_share("tega", 100, "back again");
         let held = vec![verify_share(&share, 0).unwrap()];
         let w = Withdrawal { handle: "tega".into(), ed_pub: k.ed_pub.clone(), created_at: 60 };
-        assert!(apply_withdraw(&w, &held).is_err());
+        assert!(apply_withdraw(&w, &held, &[]).is_err());
         let w = Withdrawal { created_at: 150, ..w };
-        assert_eq!(apply_withdraw(&w, &held).unwrap().withdrawn_at, 150);
+        assert_eq!(apply_withdraw(&w, &held, &[]).unwrap().withdrawn_at, 150);
+        assert!(
+            apply_withdraw(&w, &[], &[]).unwrap_err().contains("nothing is shared"),
+            "a key holding nothing can't leave a tombstone"
+        );
     }
 
     #[test]

@@ -29,7 +29,12 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `config.rs` | Environment variables → `Config`; where to listen. | yes (`from_lookup`) |
 | `role.rs` | Is this data folder a node or a commons? `decide()` is the rule; `resolve()` reads/writes `instance.json`. | `decide` yes |
 | `model.rs` | The stored and sent types: `HandleRec`, `Profile`, `Version`, `RemoteEntry`, `Reach`. | yes |
-| `canonical.rs` | The content address (`cid`) of a version. **Its bytes are a contract.** | yes |
+| `canonical.rs` | The content address (`cid`) of a profile version (format version 0). **Its bytes are a contract.** | yes |
+| `jcs.rs` | Canonical JSON (RFC 8785) for format `hic/v1`. | yes |
+| `envelope.rs` | Signed `hic/v1` objects: build, sign, cosign, verify. See `docs/spec/`. | yes |
+| `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
+| `publishing.rs` | Sign a profile version (used by publish and by key rotation). | yes, except members-only encryption |
+| `outbound.rs` | Which addresses this server may contact for a member (ADR 0012). | yes, except the DNS lookup |
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |
 | `backup.rs` | Encrypted identity backups (seal and open). | yes, except salt/nonce generation |
@@ -42,9 +47,11 @@ randomness or the network, so it can be tested with a one-line assertion.
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
 | `web/pages.rs` | The body of each page. | yes |
 | `web/handlers.rs` | Request handlers: load → decide (pure) → render. | no |
+| `web/account.rs` | Handlers for a member's keys: recovery key, replacing a key, recovering. | no |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css` and `avatar.js`, compiled into the binary. | — |
 | `../tests/http.rs` | In-process HTTP tests of the whole router. | — |
+| `../tests/spec_vectors.rs` | Checks `docs/spec/vectors/` against this implementation. | — |
 
 ### Following a request: someone shares a profile to a commons
 
@@ -95,7 +102,8 @@ interleave) → redirect to the profile.
 |---|---|---|
 | `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http.rs` (the whole router in-process). | ~5 s |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | The app's pure rules (role migration, health check, labels). | ~1 s once built |
-| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only. | ~15 s |
+| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, withdrawal, key rotation and recovery. | ~20 s |
+| `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
 All three run on every pull request (`.github/workflows/pr-checks.yml`), with
 `cargo fmt --check` and `cargo clippy -D warnings`.

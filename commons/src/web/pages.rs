@@ -122,6 +122,10 @@ pub struct OwnerPanel {
     pub known: Vec<String>,
     /// Commons already shared to.
     pub shared_to: Vec<String>,
+    /// Whether a recovery key has been made for this handle.
+    pub has_recovery: bool,
+    /// Whether a key change is waiting to reach some commons.
+    pub rotation_pending: bool,
 }
 
 /// A member's profile page. `readable` is the profile the viewer may read
@@ -229,6 +233,7 @@ fn owner_panel(handle: &str, o: &OwnerPanel) -> Markup {
             // to members-only may also want the shared copies gone.
             @if !o.shared_to.is_empty() { (withdraw_panel(handle, o)) }
             (backup_panel(handle, &o.csrf))
+            (keys_panel(handle, o))
         }
     }
 }
@@ -271,6 +276,88 @@ fn backup_panel(handle: &str, csrf: &str) -> Markup {
                 }
             }
         }
+    }
+}
+
+/// Recovery key and key replacement.
+fn keys_panel(handle: &str, o: &OwnerPanel) -> Markup {
+    html! {
+        section class="share-panel keys-panel" {
+            h2 class="field-label" { "Your keys" }
+            @if !o.has_recovery {
+                p class="hint" { "@" (handle) " has no recovery key yet. A recovery key, kept on paper, lets you take your handle back if your keys are ever stolen." }
+                form method="post" action="/recovery/new" class="share-form" {
+                    input type="hidden" name="handle" value=(handle);
+                    input type="hidden" name="csrf" value=(o.csrf);
+                    button class="secondary" type="submit" { "Make a recovery key" }
+                }
+            }
+            p class="hint" { "Think someone else may have your keys (a lost laptop, a leaked backup)? Replace them. Every commons you've shared to moves @" (handle) " to the new key, and the old one stops working." }
+            form method="post" action="/rotate" class="share-form" {
+                input type="hidden" name="handle" value=(handle);
+                input type="hidden" name="csrf" value=(o.csrf);
+                button class="secondary" type="submit" { (if o.rotation_pending { "Finish replacing my key" } else { "Replace my key" }) }
+            }
+            details class="add-commons" {
+                summary { "Someone else has already replaced my key" }
+                p class="hint" { "Use the recovery code you printed when you made @" (handle) ". It overrides any key change made with your old key." }
+                form method="post" action="/recover" class="share-form" {
+                    input type="hidden" name="handle" value=(handle);
+                    input type="hidden" name="csrf" value=(o.csrf);
+                    div class="share-row" {
+                        input name="code" type="text" placeholder="xxxxxxxx-xxxxxxxx-…" required autocomplete="off";
+                        button class="secondary" type="submit" { "Recover" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The one-time display of a recovery code.
+pub fn recovery_code(handle: &str, code: &str, next: &str) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Your recovery code" }
+            p class="lede" { "Write this down or print this page, and keep it somewhere safe and offline. It's shown only once." }
+        }
+        section class="recovery" {
+            p class="recovery-code mono" { (code) }
+            p class="hint" {
+                "If your keys are ever stolen, this code lets you take @" (handle) " back on every commons, even if the thief changed your key first. "
+                "Don't keep it on this computer or in your backup file: anyone with your laptop or backup could then use it too."
+            }
+        }
+        div class="actions" { a class="primary" href=(next) { "I've saved it" } }
+    }
+}
+
+/// The result of replacing or recovering a key.
+pub fn key_change(handle: &str, done: &[String], failed: &[(String, String)], new_code: Option<&str>) -> Markup {
+    html! {
+        header class="intro" {
+            @if failed.is_empty() {
+                h1 { "Key replaced" }
+                p class="lede" { "@" (handle) " now uses a new key on this node and on every commons you've shared to. The old key no longer works." }
+            } @else {
+                h1 { "Not finished yet" }
+                p class="lede" { "Some commons couldn't be reached. This node keeps using your current key until every commons has the change; press the button again later to finish." }
+            }
+        }
+        @if !done.is_empty() {
+            p { "Accepted by: " @for (i, c) in done.iter().enumerate() { @if i > 0 { ", " } (host_label(c)) } }
+        }
+        @if !failed.is_empty() {
+            ul { @for (c, why) in failed { li { strong { (host_label(c)) } ": " (why) } } }
+        }
+        @if let Some(code) = new_code {
+            section class="recovery" {
+                h2 class="field-label" { "Your new recovery code" }
+                p class="recovery-code mono" { (code) }
+                p class="hint" { "Your old recovery code no longer works. Write this one down; it's shown only once." }
+            }
+        }
+        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
 }
 
