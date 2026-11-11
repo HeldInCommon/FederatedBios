@@ -156,14 +156,19 @@ curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "
 # Stories: tega writes one on their node, shares it to the commons they're
 # listed on, then withdraws it; the commons lists it, then doesn't.
 SLOC=$(curl -s -D - -o /dev/null -X POST http://localhost:8090/stories/new -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "title=Night bus on Lime Street" --data-urlencode "text=The 38 sighs at the stop. A dog answers." --data-urlencode "visibility=public" --data-urlencode "license=cc-by-nc" --data-urlencode "signals=credit" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
-STORY_ID=${SLOC#/story/}
+STORY_ID=$(echo "$SLOC" | cut -d/ -f3)   # /story/<id>/rights: the rights step comes next
 [ ${#STORY_ID} -eq 16 ] && ok "node saved a signed story" || no "story not saved ($SLOC)"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/story/share -H "Cookie: hic_session=$SID" --data-urlencode "id=$STORY_ID" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node shared the story to the commons" || no "story share failed"
 curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && ok "commons lists the story" || no "story not listed on the commons"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/story/withdraw -H "Cookie: hic_session=$SID" --data-urlencode "id=$STORY_ID" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node withdrew the story" || no "story withdrawal failed"
 curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && no "withdrawn story still listed" || ok "withdrawn story gone from the commons"
+# Edit it and re-share: the commons replaces its copy with the new version.
+curl -s -o /dev/null -X POST "http://localhost:8090/story/$STORY_ID/edit" -H "Cookie: hic_session=$SID" --data-urlencode "csrf=$CSRF" --data-urlencode "title=Night bus on Lime St" --data-urlencode "text=The 38 sighs. A dog answers. Later."
 sharestory(){ curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/story/share -H "Cookie: hic_session=$SID" --data-urlencode "id=$STORY_ID" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091"; }
-[ "$(sharestory)" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && ok "a withdrawn story can be shared again" || no "re-sharing a withdrawn story failed"
+[ "$(sharestory)" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Night bus on Lime St<" && ok "a withdrawn, then edited, story can be shared again (new version)" || no "re-sharing an edited story failed"
+# A second story, shared from its rights step ("Share to the room").
+S2=$(curl -s -D - -o /dev/null -X POST http://localhost:8090/stories/new -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "title=Scaffold rain" --data-urlencode "text=The scaffold keeps playing." | grep -i '^location:' | tr -d '\r' | awk '{print $2}' | cut -d/ -f3)
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:8090/story/$S2/rights" -H "Cookie: hic_session=$SID" --data-urlencode "csrf=$CSRF" --data-urlencode "visibility=commons" --data-urlencode "license=cc-by" --data-urlencode "signals=credit" --data-urlencode "action=share" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Scaffold rain" && ok "a new story shared from its rights step reaches the commons" || no "sharing from the rights step failed"
 
 # Key rotation (decision record 0010): tega replaces their key; every commons
 # moves @tega to the new key, and the old key stops working there.
@@ -173,20 +178,20 @@ curl -s -X POST http://localhost:8090/rotate -H "Cookie: hic_session=$SID" --dat
 NEWKEY=$(curl -s http://localhost:8090/api/@tega | grep -oE '"ed25519_public":"[0-9a-f]+"')
 [ -n "$NEWKEY" ] && [ "$NEWKEY" != "$OLDKEY" ] && ok "node now signs with the new key" || no "node key unchanged"
 grep -q "${NEWKEY#*:\"}" "$T/commons/identities/tega.json" && ok "commons records @tega under the new key" || no "commons didn't move @tega"
-curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && no "a story signed by the replaced key is still listed" || ok "stories signed by the replaced key are taken down"
+curl -s http://localhost:8091/stories | grep -q "Night bus on Lime St<" && no "a story signed by the replaced key is still listed" || ok "stories signed by the replaced key are taken down"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/old-key-share.json")" = "409" ] && ok "a share signed by the old key is refused (409)" || no "old key still accepted"
 # Recovery: the recovery code takes the handle to fresh keys and issues a new code.
 REC=$(curl -s -X POST http://localhost:8090/recover -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "code=$RCODE")
 printf '%s' "$REC" | grep -q "Your new recovery code" && ok "recovery code moved @tega to fresh keys" || no "recovery failed"
 curl -s http://localhost:8091/ | grep -q "@tega" && ok "@tega still listed on the commons after recovery" || no "@tega lost after recovery"
-[ "$(sharestory)" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && ok "after recovery the story is re-signed and shared again" || no "story not re-shared after recovery"
+[ "$(sharestory)" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Night bus on Lime St<" && ok "after recovery the story is re-signed and shared again" || no "story not re-shared after recovery"
 
 # Withdrawal: @tega asks the commons to remove its copy. The commons drops it,
 # keeps @tega reserved for tega's key, and refuses a replay of the old share.
 curl -s -X POST http://localhost:8090/withdraw -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Withdrawn" && ok "node withdrew @tega from the commons" || no "withdrawal failed"
 grep -rq '"tega"' "$T/commons/remote/" 2>/dev/null && no "withdrawn copy still stored" || ok "withdrawn copy removed from the commons"
-curl -s http://localhost:8091/stories | grep -q "Night bus on Lime Street" && no "stories stayed after the profile was withdrawn" || ok "withdrawing the profile took the story with it"
-curl -s "http://localhost:8090/story/$STORY_ID" -H "Cookie: hic_session=$SID" | grep -q "shared ✓" && no "node still marks the story as shared" || ok "node no longer marks the story as shared"
+curl -s http://localhost:8091/stories | grep -q "Night bus on Lime St<" && no "stories stayed after the profile was withdrawn" || ok "withdrawing the profile took the story with it"
+curl -s "http://localhost:8090/story/$STORY_ID" -H "Cookie: hic_session=$SID" | grep -q ">Shared to<" && no "node still marks the story as shared" || ok "node no longer marks the story as shared"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/cap.json")" = "409" ] && ok "withdrawn version can't be replayed (409)" || no "withdrawn version was accepted again"
 curl -s http://localhost:8091/api/handle/tega | grep -q '"available":false' && ok "@tega stays reserved after withdrawal" || no "@tega freed by withdrawal"
 

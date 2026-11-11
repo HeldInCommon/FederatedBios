@@ -7,7 +7,6 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use maud::{html, Markup, DOCTYPE};
 
-use crate::governance::{license_name, license_url, signal_name};
 use crate::model::Reach;
 use crate::role::Role;
 
@@ -126,6 +125,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                     nav class="topbar" {
                         a class="wordmark" href="/" {
                             img class="wordmark-logo" src="/logo.png" alt="Held in Common" width="173" height="46";
+                            span class="tagline" { "Federated data commons for creative communities" }
                         }
                         span class="topbar-links" {
                             a href="/" { "Directory" }
@@ -146,6 +146,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                                 a href="/join" { "Add your profile" }
                                 a href="/login" { "Sign in" }
                             }
+                            a href=(PROJECT_URL) { "About the project \u{2197}" }
                         }
                     }
                     @if let Some(n) = &page.notices {
@@ -199,22 +200,6 @@ pub fn reach_bar_class(reach: Reach) -> &'static str {
         Reach::Public => "vis-public",
         Reach::Commons => "vis-commons",
         Reach::Members => "vis-members",
-    }
-}
-
-/// The licence link and signal chips for a version.
-pub fn gov_row(license: &str, signals: &[String]) -> Markup {
-    html! {
-        div class="gov" {
-            @if license_url(license).is_empty() {
-                span class="gov-license" { (license_name(license)) }
-            } @else {
-                a class="gov-license" rel="license" href=(license_url(license)) { (license_name(license)) }
-            }
-            @for s in signals {
-                span class="signal-chip" { (signal_name(s)) }
-            }
-        }
     }
 }
 

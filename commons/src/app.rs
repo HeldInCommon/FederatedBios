@@ -132,6 +132,8 @@ pub fn router(state: Shared) -> Router {
         .route("/stories/{kid}/{id}", get(handlers::held_story))
         .route("/story/{id}", get(handlers::own_story))
         .route("/story/{id}/text", get(handlers::story_text))
+        .route("/story/{id}/edit", get(handlers::story_edit_form).post(handlers::story_edit))
+        .route("/story/{id}/rights", get(handlers::rights_form).post(handlers::rights_submit))
         .route("/story/share", post(handlers::story_share))
         .route("/story/withdraw", post(handlers::story_withdraw))
         .route("/@{handle}", get(handlers::profile))
@@ -153,6 +155,7 @@ pub fn router(state: Shared) -> Router {
         // Static files and health
         .route("/style.css", get(|| async { static_file("text/css", web::STYLE_CSS) }))
         .route("/avatar.js", get(|| async { static_file("application/javascript", web::AVATAR_JS) }))
+        .route("/rights.js", get(|| async { static_file("application/javascript", web::RIGHTS_JS) }))
         .route("/password.js", get(|| async { static_file("application/javascript", web::PASSWORD_JS) }))
         .route("/logo.png", get(|| async { ([(header::CONTENT_TYPE, "image/png")], web::LOGO_PNG).into_response() }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))

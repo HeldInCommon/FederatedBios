@@ -18,5 +18,6 @@ mod ramp;
 mod sharing;
 mod steward;
 mod stories;
+mod story_edit;
 mod vouching;
 mod waiting;

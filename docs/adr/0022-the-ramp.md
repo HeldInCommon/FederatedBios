@@ -12,6 +12,8 @@ A signed-in member's profile page showed everything at once: update, waiting, sh
 - **The front page** stops offering a signed-in member "Add your profile" (which would make a second identity). It offers their profile's next thing (publish, share to the commons, waiting, or their page on the commons) and, as a secondary link, "Create another profile for a new commons".
 - **Rights are explained in full** on the publish form, open by default: licences are cards saying, in plain words, whether credit is required, whether changed versions are allowed, and whether commercial use is.
 - **Confirmations** after sharing or withdrawing a story say what happened, where, and what it does and doesn't undo.
+- **Writing a story takes two steps**: the words (a new story starts as Listed in the commons, CC BY, Credit), then "Who can read it, and how", ending in "Share to the room" or "Keep it on this computer for now". The same rights step is "Change its terms" later, and "Edit story" reopens the first step.
+- **The look follows heldincommon.org** (the "ramped experience" canvas): the logo and tagline, pink eyebrows over mono headings, section labels with a rule, numbered starbursts, choices in one outlined panel with the chosen one filled in ink, story cards with licence chips and "Verified", and a two-column story page with where it's shared and its terms. Members-only stories are described as staying on the node, never as encrypted (they aren't; decision record 0020).
 - The rules live in one pure module, `commons/src/ramp.rs`.
 
 ## Why

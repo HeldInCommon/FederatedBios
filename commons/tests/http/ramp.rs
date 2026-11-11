@@ -31,7 +31,8 @@ async fn the_next_step_and_tabs_follow_what_has_happened() {
     let people = send(&node, get("/@tega?tab=people", Some(&sid))).await.text;
     assert!(!people.contains("Vouch for someone"));
     let account = send(&node, get("/@tega?tab=account", Some(&sid))).await.text;
-    assert!(account.contains("Back up your identity") && account.contains("Your keys"));
+    assert!(account.contains("If this computer is lost") && account.contains("Your key"));
+    assert!(account.contains("for=\"backup-pass\""), "the passphrase box has a visible label");
     let sharing = send(&node, get("/@tega?tab=sharing", Some(&sid))).await.text;
     assert!(sharing.contains("Share to a commons"));
 
@@ -90,7 +91,8 @@ async fn licences_are_cards_with_plain_terms() {
     let form = send(&node, get("/new", Some(&sid))).await.text;
     assert!(form.contains("class=\"license-card\""));
     assert!(form.contains("Commercial use"));
-    assert!(form.contains("value=\"cc-by\" checked"), "the current licence is selected");
+    assert!(form.contains("value=\"cc-by\" data-label=\"CC BY 4.0\" checked"), "the current licence is selected");
+    assert!(form.contains("What travels with every copy") && form.contains("/rights.js"));
 }
 
 /// The room keeps time, not the app: the writing form has no timer.
@@ -101,7 +103,14 @@ async fn the_story_form_offers_how_it_travels_and_no_timer() {
     let sid = join_and_publish(&node, "tega", "public").await;
     let form = send(&node, get("/stories/new", Some(&sid))).await.text;
     assert!(!form.contains("Start 10 minutes") && !form.contains("/timer.js"));
-    assert!(form.contains("How it travels") && form.contains("coming soon"));
+    // "How it travels" is on the second step, the rights page.
+    let csrf = csrf_in(&form);
+    let r = send(&node, post_form("/stories/new", &format!("handle=tega&csrf={csrf}&title=T&text=Words"), Some(&sid)))
+        .await;
+    let rights = r.headers.get(header::LOCATION).unwrap().to_str().unwrap().to_string();
+    assert!(rights.ends_with("/rights"));
+    let page = send(&node, get(&rights, Some(&sid))).await.text;
+    assert!(page.contains("How it travels") && page.contains("Coming soon"));
 }
 
 #[tokio::test]
@@ -111,7 +120,7 @@ async fn a_story_page_confirms_what_just_happened() {
     let csrf = csrf_in(&send(&node, get("/stories/new", Some(&sid))).await.text);
     let body = format!("handle=ada&csrf={csrf}&title=Night+bus&text=Hello&visibility=public&license=cc-by");
     let r = send(&node, post_form("/stories/new", &body, Some(&sid))).await;
-    let loc = r.headers.get(header::LOCATION).unwrap().to_str().unwrap().to_string();
+    let loc = r.headers.get(header::LOCATION).unwrap().to_str().unwrap().trim_end_matches("/rights").to_string();
 
     let gone = send(&node, get(&format!("{loc}?done=withdrawn&at=room.local:8081"), Some(&sid))).await.text;
     assert!(gone.contains("Your story is gone from room.local:8081"));

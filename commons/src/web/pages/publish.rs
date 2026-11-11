@@ -1,11 +1,13 @@
-//! The publish form: profile fields, who can see it, licence and signals.
+//! The publish form: about you, then Sharing and rights (see `rights.rs`).
 
 use maud::{html, Markup};
 
-use crate::governance::{license_terms, LICENSES, SIGNALS};
+use super::parts::{page_head, section_label, terms_panel};
+use super::rights::{rights_fields, RightsFor};
 use crate::model::{Profile, Reach};
 
-/// The publish form, prefilled from the current version.
+/// The publish form, prefilled from the current version: about you, then
+/// Sharing and rights open and explained, then what travels with every copy.
 pub fn publish_form(
     me: &str,
     csrf: &str,
@@ -15,22 +17,35 @@ pub fn publish_form(
     signals: &[String],
     first_time: bool,
 ) -> Markup {
+    let title = if first_time { "Say who you are" } else { "Update your profile" };
     html! {
-        header class="intro" {
-            h1 { @if first_time { "Your profile" } @else { "Update your profile" } }
-            p class="lede" {
-                @if first_time { "You're signed in as @" (me) ". Fill this in and publish it to the commons." }
-                @else { "Signed in as @" (me) ". Change anything and republish — each version gets its own content address." }
-            }
-        }
-        form method="post" action="/publish" class="stack-form" {
+        (page_head(&format!("Your profile \u{b7} @{me}"), title, Some("Then decide who can see it, and how it can be used.")))
+        form method="post" action="/publish" class="stack-form rights-form" {
             input type="hidden" name="handle" value=(me);
             input type="hidden" name="csrf" value=(csrf);
+            (section_label("About you", None))
             (profile_fields(p))
-            (reach_and_governance(reach, license, signals))
-            div class="actions" { button class="primary" type="submit" { "Publish to the commons" } }
+            (section_label("Sharing and rights", None))
+            div class="rights-intro" {
+                p class="rights-intro-title" { "Who can see it, and how it can be used." }
+                p { "These three choices are signed with your key and travel with every copy you share. Change them any time: the next version carries the new terms. Good defaults are already chosen." }
+            }
+            (rights_fields(RightsFor::Profile, reach, license, signals))
+            (section_label("What travels with every copy", None))
+            (terms_panel(reach, license, signals, true))
+            aside class="caution" {
+                p {
+                    strong { "Publishing cannot be fully undone." }
+                    " Each version gets a permanent content address. You can withdraw copies you share to a commons, but anyone who already downloaded one keeps it."
+                }
+            }
+            div class="actions" {
+                button class="btn-ink" type="submit" { "Publish" }
+                span class="hint" { "It stays on this computer. Sharing comes next." }
+            }
         }
         script src="/avatar.js" {}
+        script src="/rights.js" {}
     }
 }
 
@@ -75,67 +90,6 @@ fn profile_fields(p: &Profile) -> Markup {
             label class="field-label" for="place" { "Where you work" }
             input id="place" name="place_name" type="text" maxlength="120" value=(place.map(|x| x.name.as_str()).unwrap_or("")) placeholder="Studio or institution";
             input id="place_city" name="place_city" type="text" maxlength="80" value=(place.map(|x| x.city.as_str()).unwrap_or("")) placeholder="City" class="city-input";
-        }
-    }
-}
-
-pub(super) fn reach_and_governance(sel: Reach, sel_license: &str, sel_sig: &[String]) -> Markup {
-    html! {
-        fieldset class="reach-options" {
-            legend class="field-label" { "Who can see this" }
-            @for (val, title, desc) in [
-                (Reach::Public, "Public", "Listed in the commons directory and open to search engines."),
-                (Reach::Commons, "Listed in the commons", "In the directory; anyone with the link can read it, kept out of search."),
-                (Reach::Members, "Members only", "Encrypted to the member set. Only signed-in members can read it."),
-            ] {
-                label class="reach" {
-                    input type="radio" name="visibility" value=(val.as_str()) checked[val == sel];
-                    span class="reach-text" {
-                        span class="reach-title" { (title) }
-                        span class="reach-body" { (desc) }
-                    }
-                }
-            }
-        }
-        fieldset class="gov-options" {
-            legend class="field-label" { "Licence: how people may reuse it" }
-            p class="hint" { "A Creative Commons licence tells people what they may do with your work without asking you first." }
-            div class="license-grid" {
-                @for (key, name, _) in LICENSES {
-                    @let t = license_terms(key);
-                    label class="license-card" {
-                        span class="license-head" {
-                            input type="radio" name="license" value=(key) checked[*key == sel_license];
-                            span class="license-name" { (name) }
-                        }
-                        span class="license-summary" { (t.summary) }
-                        span class="license-facts" {
-                            span { "Credit \u{b7} " (t.credit) }
-                            span { "Adapt \u{b7} " (t.adapt) }
-                            span class={ "license-commercial " (if t.commercial { "is-yes" } else { "is-no" }) } {
-                                "Commercial use \u{b7} " (if t.commercial { "yes" } else { "no" })
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        fieldset class="gov-options" {
-            legend class="field-label" { "Signals — how models may learn from this" }
-            div class="signal-grid" {
-                @for (key, name, desc) in SIGNALS {
-                    label class="signal" {
-                        input type="checkbox" name="signals" value=(key) checked[sel_sig.iter().any(|s| s == key)];
-                        span { span class="signal-name" { (name) } span class="signal-desc" { (desc) } }
-                    }
-                }
-            }
-        }
-        aside class="caution" {
-            p {
-                strong { "Publishing cannot be fully undone." }
-                " Each version gets a permanent content address. You can withdraw copies you share to a commons, but anyone who already downloaded one keeps it."
-            }
         }
     }
 }

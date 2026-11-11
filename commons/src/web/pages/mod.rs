@@ -9,7 +9,8 @@
 //! |---|---|
 //! | `directory.rs` | the commons' front page, with the steward's tools and the waiting list |
 //! | `profile.rs` | a member's profile page |
-//! | `owner.rs` | the panels a member sees under their own profile (share, vouch, backup, keys) |
+//! | `owner_account.rs` | the Account tab: backup, recovery key, your key, Advanced |
+//! | `owner.rs` | a member's own profile: next step, tabs, Sharing and People |
 //! | `publish.rs` | the publish form |
 //! | `signin.rs` | sign-up, sign-in, and the "this is a shared commons" gate |
 //! | `account.rs` | recovery code, key change, restore from backup |
@@ -18,7 +19,11 @@
 //! | `federated.rs` | a profile shared in from another node |
 //! | `about.rs` | how this works |
 //! | `guide.rs` | run your own commons: questions and answers, and a practice commons |
-//! | `stories.rs` | the writing form, story lists, one story |
+//! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
+//! | `story.rs` | one story: the author's view with its sharing tools, and a commons' |
+//! | `story_form.rs` | writing a story (new or editing), then its rights step |
+//! | `rights.rs` | Sharing and rights: who can see it, licence, signals, how a story travels |
+//! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
 
 use crate::model::RemoteEntry;
 use crate::web::layout::host_label;
@@ -30,11 +35,16 @@ mod federated;
 mod guide;
 mod invites;
 mod owner;
+mod owner_account;
+mod parts;
 mod profile;
 mod publish;
+mod rights;
 mod sharing;
 mod signin;
 mod stories;
+mod story;
+mod story_form;
 
 pub use about::about;
 pub use account::{key_change, recovery_code, restore_form};
@@ -47,7 +57,9 @@ pub use profile::profile;
 pub use publish::publish_form;
 pub use sharing::{shared, shared_pending, vouched, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
-pub use stories::{commons_stories, held_story, node_stories, own_story, story_form, StoryOutcome, StoryOwner};
+pub use stories::{commons_stories, node_stories};
+pub use story::{held_story, own_story, StoryOutcome, StoryOwner};
+pub use story_form::{rights_form, write_form};
 
 /// The host a shared profile says it came from, or its node's name if it
 /// sent no usable address. Both are the sender's own claims.

@@ -129,7 +129,8 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
                     form method="post" action="/backup" class="next-step-form" {
                         input type="hidden" name="handle" value=(handle);
                         input type="hidden" name="csrf" value=(o.csrf);
-                        input name="passphrase" type="password" placeholder="Your passphrase" required aria-label="Your passphrase";
+                        label class="field-label" for="next-pass" { "Your passphrase" }
+                        input id="next-pass" name="passphrase" type="password" required autocomplete="current-password";
                         button class="btn-solid" type="submit" { "Download backup" }
                     }
                     form method="post" action="/backup/later" {
@@ -176,7 +177,7 @@ pub(super) fn tab_panel(handle: &str, o: &OwnerPanel) -> Markup {
                 Tab::Profile => {}
                 Tab::Sharing => { (sharing_tab(handle, o)) }
                 Tab::People => { (invite_panel(handle, o)) (vouch_panel(handle, o)) }
-                Tab::Account => { (backup_panel(handle, &o.csrf)) (keys_panel(handle, o)) }
+                Tab::Account => { (super::owner_account::account_tab(handle, o)) }
             }
         }
     }
@@ -325,60 +326,6 @@ fn vouch_panel(handle: &str, o: &OwnerPanel) -> Markup {
                     }
                 }
                 div class="actions" { button class="secondary" type="submit" { "Vouch" } }
-            }
-        }
-    }
-}
-
-/// Download an encrypted backup of this identity.
-fn backup_panel(handle: &str, csrf: &str) -> Markup {
-    html! {
-        section class="share-panel backup-panel" {
-            h2 class="field-label" { "Back up your identity" }
-            p class="hint" { "Your keys live only on this computer, and each commons ties @" (handle) " to them. Download a backup, keep it somewhere safe, and you can restore @" (handle) " on a new computer. It's locked with your passphrase." }
-            form method="post" action="/backup" class="share-form" {
-                input type="hidden" name="handle" value=(handle);
-                input type="hidden" name="csrf" value=(csrf);
-                div class="share-row" {
-                    input name="passphrase" type="password" placeholder="Your passphrase" required aria-label="Your passphrase";
-                    button class="secondary" type="submit" { "Download backup" }
-                }
-            }
-        }
-    }
-}
-
-/// Recovery key and key replacement.
-fn keys_panel(handle: &str, o: &OwnerPanel) -> Markup {
-    html! {
-        section class="share-panel keys-panel" {
-            h2 class="field-label" { "Your keys" }
-            p class="hint" { "Your key: " span class="mono" { (short(&o.key)) } ". People who vouch for you check that it matches." }
-            @if !o.has_recovery {
-                p class="hint" { "@" (handle) " has no recovery key yet. A recovery key, kept on paper, lets you take your handle back if your keys are ever stolen." }
-                form method="post" action="/recovery/new" class="share-form" {
-                    input type="hidden" name="handle" value=(handle);
-                    input type="hidden" name="csrf" value=(o.csrf);
-                    button class="secondary" type="submit" { "Make a recovery key" }
-                }
-            }
-            details class="add-commons" open[o.rotation_pending] {
-                summary { "Advanced \u{b7} replace my key, recover my handle" }
-                p class="hint" { "Think someone else may have your keys (a lost laptop, a leaked backup)? Replace them. Every commons you've shared to moves @" (handle) " to the new key, and the old one stops working." }
-                form method="post" action="/rotate" class="share-form" {
-                    input type="hidden" name="handle" value=(handle);
-                    input type="hidden" name="csrf" value=(o.csrf);
-                    button class="secondary" type="submit" { (if o.rotation_pending { "Finish replacing my key" } else { "Replace my key" }) }
-                }
-                p class="hint" { "Someone else has already replaced your key? Use the recovery code you printed when you made @" (handle) ". It overrides any key change made with your old key." }
-                form method="post" action="/recover" class="share-form" {
-                    input type="hidden" name="handle" value=(handle);
-                    input type="hidden" name="csrf" value=(o.csrf);
-                    div class="share-row" {
-                        input name="code" type="text" placeholder="xxxxxxxx-xxxxxxxx-…" required autocomplete="off" aria-label="Recovery code";
-                        button class="secondary" type="submit" { "Recover" }
-                    }
-                }
             }
         }
     }

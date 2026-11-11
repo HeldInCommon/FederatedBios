@@ -25,6 +25,9 @@ pub const PASSWORD_JS: &str = include_str!("../../static/password.js");
 /// The profile-picture picker used on the publish form.
 pub const AVATAR_JS: &str = include_str!("../../static/avatar.js");
 
+/// Keeps the "What travels with every copy" summary in step with the rights choices.
+pub const RIGHTS_JS: &str = include_str!("../../static/rights.js");
+
 /// Tells search engines to skip the forms. Profiles with the `commons` reach
 /// are marked `noindex` on the page itself.
 /// The Held in Common logo (the same file heldincommon.org uses).

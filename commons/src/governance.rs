@@ -69,6 +69,8 @@ pub fn signals_from_form(values: &[String]) -> Vec<String> {
 pub struct LicenseTerms {
     /// One line: the gist.
     pub summary: &'static str,
+    /// A few words, for compact cards.
+    pub short: &'static str,
     /// Must reusers credit the author?
     pub credit: &'static str,
     /// May they make changed versions?
@@ -79,24 +81,38 @@ pub struct LicenseTerms {
 
 /// The plain-language terms of a licence key (unknown keys read as all rights reserved).
 pub fn license_terms(key: &str) -> LicenseTerms {
-    let t = |summary, credit, adapt, commercial| LicenseTerms { summary, credit, adapt, commercial };
-    match key {
-        "cc0" => t("No conditions. Free for any use.", "not required", "yes", true),
-        "cc-by" => t("Any use, as long as you're credited.", "required", "yes", true),
-        "cc-by-sa" => {
-            t("Any use with credit; changed versions carry this same licence.", "required", "yes, share alike", true)
-        }
-        "cc-by-nc" => t("With credit, for non-commercial use only.", "required", "yes", false),
-        "cc-by-nc-sa" => t(
+    // (summary, short, credit, adapt, commercial)
+    let (summary, short, credit, adapt, commercial) = match key {
+        "cc0" => ("No conditions. Free for any use.", "No conditions", "not required", "yes", true),
+        "cc-by" => ("Any use, as long as you're credited.", "Any use, with credit", "required", "yes", true),
+        "cc-by-sa" => (
+            "Any use with credit; changed versions carry this same licence.",
+            "Credit, share alike",
+            "required",
+            "yes, share alike",
+            true,
+        ),
+        "cc-by-nc" => ("With credit, for non-commercial use only.", "Credit, non-commercial", "required", "yes", false),
+        "cc-by-nc-sa" => (
             "Non-commercial, with credit; changed versions carry this licence.",
+            "Non-commercial, share alike",
             "required",
             "yes, share alike",
             false,
         ),
-        "cc-by-nd" => t("Share it as it is, with credit. No changed versions.", "required", "no", true),
-        "cc-by-nc-nd" => t("Share it as it is, with credit, non-commercially.", "required", "no", false),
-        _ => t("No reuse without asking you first.", "ask first", "ask first", false),
-    }
+        "cc-by-nd" => {
+            ("Share it as it is, with credit. No changed versions.", "Credit, no changes", "required", "no", true)
+        }
+        "cc-by-nc-nd" => (
+            "Share it as it is, with credit, non-commercially.",
+            "Credit, as is, non-commercial",
+            "required",
+            "no",
+            false,
+        ),
+        _ => ("No reuse without asking you first.", "Ask first", "ask first", "ask first", false),
+    };
+    LicenseTerms { summary, short, credit, adapt, commercial }
 }
 
 #[cfg(test)]
@@ -135,5 +151,6 @@ mod tests {
         assert!(!license_terms("cc-by-nc").commercial);
         assert_eq!(license_terms("cc-by-nd").adapt, "no");
         assert_eq!(license_terms("arr").credit, "ask first");
+        assert_eq!(license_terms("cc-by").short, "Any use, with credit");
     }
 }
