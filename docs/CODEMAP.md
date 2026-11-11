@@ -123,5 +123,7 @@ interleave) → redirect to the profile.
 | `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
 All four run on every pull request (`.github/workflows/pr-checks.yml`), with
-`cargo fmt --check`, `cargo clippy -D warnings`, and `./scripts/lint-css.sh`
-(the stylesheets' layout and rules; needs Node).
+`cargo fmt --check`, `cargo clippy -D warnings`, `./scripts/lint-css.sh`
+(the stylesheets' layout and rules; needs Node), and
+`python3 scripts/check-docs.py` (every Rust file, function and type has a
+doc comment).

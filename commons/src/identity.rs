@@ -194,6 +194,7 @@ mod tests {
     use super::*;
     use crate::keys;
 
+    /// Everything a handle's owner holds: the main keys and the recovery key pair.
     struct Owner {
         main: NewKeys,
         recovery: (String, String),

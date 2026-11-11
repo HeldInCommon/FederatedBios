@@ -246,6 +246,7 @@ cargo test --manifest-path commons/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml        # if src-tauri changed
 cargo build --release --manifest-path commons/Cargo.toml && ./scripts/test-federation.sh
 python3 scripts/check_spec_vectors.py
+python3 scripts/check-docs.py
 ./scripts/lint-css.sh                                  # if any CSS changed
 ```
 
@@ -306,6 +307,11 @@ Every change leaves the code it touches well commented:
 - **Keep comments true.** When code changes, change its comments in the same
   commit: a wrong comment is worse than none. Delete commented-out code
   instead of keeping it.
+- **The check.** `python3 scripts/check-docs.py` (run in CI) lists any Rust
+  file without its `//!` comment, and any function, struct, enum, trait,
+  type, const or static without a `///` comment (test functions excepted).
+  It can't judge variants, fields or whether a comment explains *why*:
+  those are still yours to get right.
 
 ## 9. Dependencies
 

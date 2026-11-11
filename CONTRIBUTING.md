@@ -49,7 +49,9 @@ file, and the path a request takes.
   in Rust); every function, public or private, has a `///` comment; steps a
   newcomer wouldn't follow get a comment explaining why; security code cites
   its decision record. Keep comments true when the code changes. The full
-  rule is in `.claude/skills/house-style/SKILL.md` (§8).
+  rule is in `.claude/skills/house-style/SKILL.md` (§8);
+  `python3 scripts/check-docs.py` lists any file, function or type that is
+  missing its comment.
 - **Don't change the signed format.** `commons/src/canonical.rs` defines bytes
   that every existing signature depends on. Its golden test must never change.
   A new format needs a new schema version (see the review, M1).
@@ -64,7 +66,8 @@ file, and the path a request takes.
   reuse the shared patterns (the mono label, buttons, panels) before adding
   a class. `./scripts/lint-css.sh --fix` lays the files out.
 - **Before pushing:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`,
-  `./scripts/lint-css.sh`, and the tests above. CI runs the same checks.
+  `./scripts/lint-css.sh`, `python3 scripts/check-docs.py`, and the tests
+  above. CI runs the same checks.
 
 Working with Claude Code? `.claude/skills/house-style/SKILL.md` sums up these
 conventions as a skill, so Claude follows them too. Keep it in step with this
