@@ -248,9 +248,15 @@ pub fn start_page(kind: Kind) -> &'static str {
     }
 }
 
-/// Where the window goes to show `kind` on `port`.
-pub fn open_url(kind: Kind, port: u16) -> String {
-    format!("{}{}", local_url(port), start_page(kind))
+/// Where the window goes to show `kind` on `port`. A commons' steward view
+/// carries the launch `token`, which is what proves the steward (ADR 0023).
+pub fn open_url(kind: Kind, port: u16, token: &str) -> String {
+    let page = start_page(kind);
+    if page == "/steward" {
+        format!("{}{page}?launch={token}", local_url(port))
+    } else {
+        format!("{}{page}", local_url(port))
+    }
 }
 
 /// In the background, show the server on `port` in the main window as soon
@@ -261,7 +267,7 @@ pub fn open_when_up(app: tauri::AppHandle, token: String, kind: Kind, port: u16)
             if network::probe(port, &token) == Probe::Ours {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.eval(format!("location.replace('{}')", open_url(kind, port)));
+                    let _ = win.eval(format!("location.replace('{}')", open_url(kind, port, &token)));
                 }
                 return;
             }
@@ -304,7 +310,8 @@ mod tests {
         assert_eq!(start_page(Kind::Commons), "/steward");
         assert_eq!(start_page(Kind::Practice), "/steward");
         assert_eq!(start_page(Kind::Node), "/");
-        assert_eq!(open_url(Kind::Practice, 8082), "http://127.0.0.1:8082/steward");
+        assert_eq!(open_url(Kind::Practice, 8082, "t0k"), "http://127.0.0.1:8082/steward?launch=t0k");
+        assert_eq!(open_url(Kind::Node, 8080, "t0k"), "http://127.0.0.1:8080/", "a node needs no token");
     }
 
     #[test]

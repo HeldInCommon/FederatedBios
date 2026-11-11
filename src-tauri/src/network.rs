@@ -42,15 +42,16 @@ pub enum Probe {
     Other,
 }
 
-/// Classify a `/health` reply. `Ours` only when it is `hic-commons` and
-/// echoes `token`.
-pub fn classify_health(status_ok: bool, body: &str, token: &str) -> Probe {
+/// Classify a `/health` reply to a probe that sent our launch token. `Ours`
+/// only when it is `hic-commons` and says `"ours": true` (the server checked
+/// the token; it never sends it back, ADR 0023).
+pub fn classify_health(status_ok: bool, body: &str) -> Probe {
     if !status_ok {
         return Probe::Other;
     }
     let Ok(j) = serde_json::from_str::<serde_json::Value>(body) else { return Probe::Other };
     let ours = j.get("service").and_then(|v| v.as_str()) == Some("hic-commons")
-        && j.get("launch").and_then(|v| v.as_str()) == Some(token);
+        && j.get("ours").and_then(|v| v.as_bool()) == Some(true);
     if ours {
         Probe::Ours
     } else {
@@ -70,7 +71,7 @@ pub fn probe(port: u16, token: &str) -> Probe {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else { return Probe::Nothing };
     let _ = s.set_read_timeout(Some(Duration::from_millis(800)));
-    let req = "GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    let req = format!("GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nX-HIC-Launch: {token}\r\nConnection: close\r\n\r\n");
     if s.write_all(req.as_bytes()).is_err() {
         return Probe::Other;
     }
@@ -78,7 +79,7 @@ pub fn probe(port: u16, token: &str) -> Probe {
     // A short or failed read still leaves whatever arrived to classify.
     let _ = s.take(64 * 1024).read_to_string(&mut raw);
     let (ok, body) = split_http(&raw);
-    classify_health(ok, body, token)
+    classify_health(ok, body)
 }
 
 /// The texts in the node's answer to `POST /api/notices/claim` (a JSON list
@@ -125,13 +126,17 @@ pub fn lan_url(port: u16) -> Option<String> {
     Some(format!("http://{ip}:{port}"))
 }
 
-/// A token identifying this launch of the app. It only needs to differ
-/// between launches (it tells our server apart from others); it is not a
-/// secret, since anyone who can reach `/health` can read it.
+/// A random token for this launch of the app: 32 bytes from the operating
+/// system, as hex. It is a **secret**: it tells our servers apart from others,
+/// collects the node's notices, and opens a commons' steward view (ADR 0023).
+/// Only this app and the servers it starts know it.
 pub fn launch_token() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    format!("{:x}-{:x}", nanos, std::process::id())
+    use std::io::Read;
+    let mut b = [0u8; 32];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut b))
+        .expect("the operating system provides /dev/urandom on macOS and Linux");
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 #[cfg(test)]
@@ -140,22 +145,21 @@ mod tests {
 
     #[test]
     fn our_server_is_recognised() {
-        let body = r#"{"status":"ok","service":"hic-commons","launch":"abc"}"#;
-        assert_eq!(classify_health(true, body, "abc"), Probe::Ours);
+        let body = r#"{"status":"ok","service":"hic-commons","ours":true}"#;
+        assert_eq!(classify_health(true, body), Probe::Ours);
     }
 
     #[test]
     fn another_hic_server_is_not_ours() {
-        let body = r#"{"status":"ok","service":"hic-commons","launch":"old"}"#;
-        assert_eq!(classify_health(true, body, "abc"), Probe::Other);
-        let no_token = r#"{"status":"ok","service":"hic-commons"}"#;
-        assert_eq!(classify_health(true, no_token, "abc"), Probe::Other);
+        let not_ours = r#"{"status":"ok","service":"hic-commons"}"#;
+        assert_eq!(classify_health(true, not_ours), Probe::Other);
     }
 
     #[test]
     fn other_programs_are_not_ours() {
-        assert_eq!(classify_health(true, "<html>dev server</html>", "abc"), Probe::Other);
-        assert_eq!(classify_health(false, r#"{"service":"hic-commons","launch":"abc"}"#, "abc"), Probe::Other);
+        assert_eq!(classify_health(true, "<html>dev server</html>"), Probe::Other);
+        assert_eq!(classify_health(true, r#"{"service":"other","ours":true}"#), Probe::Other);
+        assert_eq!(classify_health(false, r#"{"service":"hic-commons","ours":true}"#), Probe::Other);
     }
 
     #[test]
@@ -186,9 +190,10 @@ mod tests {
     }
 
     #[test]
-    fn launch_tokens_differ() {
+    fn launch_tokens_are_random_and_url_safe() {
         let a = launch_token();
-        std::thread::sleep(std::time::Duration::from_millis(1));
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, launch_token());
     }
 }
