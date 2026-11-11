@@ -146,6 +146,32 @@ pub fn node_up(which: Option<String>, cfg: tauri::State<'_, AppConfig>, chosen: 
     network::probe(saved.port_of(kind), &cfg.launch_token) == Probe::Ours
 }
 
+/// What to tell someone whose server hasn't started, given what is on its
+/// `port`: the port-taken message when another program holds it, otherwise
+/// nothing (still starting, or already up). Pure, so it can be tested.
+pub fn stall_message(on_port: Probe, port: u16) -> Option<String> {
+    match on_port {
+        // ADR 0008: never open a server we didn't start; say why instead.
+        Probe::Other => Some(port_taken(port)),
+        Probe::Nothing | Probe::Ours => None,
+    }
+}
+
+/// Why `which` kind's server (default: the first-launch role) hasn't come
+/// up, if the app can tell: today, only "another program has the port". The
+/// loading screen asks once start-up has taken longer than usual. Only reads.
+#[tauri::command]
+pub fn port_problem(
+    which: Option<String>,
+    cfg: tauri::State<'_, AppConfig>,
+    chosen: tauri::State<'_, Chosen>,
+) -> Option<String> {
+    let saved = chosen.0.lock().unwrap().clone();
+    let kind = kind_or_first(which, &saved).ok()?;
+    let port = saved.port_of(kind);
+    stall_message(network::probe(port, &cfg.launch_token), port)
+}
+
 /// Where the window goes to show `which` kind (default: the first-launch role).
 #[tauri::command]
 pub fn server_url(
@@ -301,4 +327,21 @@ pub fn remove_practice_now(app: AppHandle) -> Result<(), String> {
     remove_practice(&app)?;
     close_setup(app);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn another_program_on_the_port_is_named_not_opened() {
+        let msg = stall_message(Probe::Other, 8080).expect("a message when another program has the port");
+        assert!(msg.contains("port 8080"), "{msg}");
+    }
+
+    #[test]
+    fn a_server_still_starting_or_already_ours_needs_no_message() {
+        assert_eq!(stall_message(Probe::Nothing, 8080), None);
+        assert_eq!(stall_message(Probe::Ours, 8080), None);
+    }
 }

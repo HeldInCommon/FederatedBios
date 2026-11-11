@@ -242,6 +242,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::node_up,
+            commands::port_problem,
             commands::server_url,
             commands::setup_state,
             commands::choose_role,
@@ -267,6 +268,16 @@ pub fn run() {
                 if let Err(e) = settings::save(&base, &saved) {
                     log::warn!("couldn't update app.json: {e}");
                 }
+            }
+            // Before any server starts: the log will hold a commons' steward
+            // link and founding invite, so only this user may read it (ADR 0023).
+            match app.path().app_log_dir() {
+                Ok(dir) => {
+                    if let Err(e) = settings::make_private(&dir) {
+                        log::warn!("couldn't make the log folder private: {e}");
+                    }
+                }
+                Err(e) => log::warn!("couldn't find the log folder: {e}"),
             }
             app.manage(Shown::default());
             main_window(app.handle()).map_err(std::io::Error::other)?;

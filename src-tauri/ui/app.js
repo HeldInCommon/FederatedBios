@@ -15,6 +15,7 @@
 //   remove_practice_now                 delete the practice commons
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
+//   port_problem (which) -> string|null why it hasn't started (another program has the port)
 //   server_url   (which) -> string      where the window goes to show it
 //   restart_node (which)                start (or restart) it
 // `which` is "node", "commons" or "practice"; left out, the first-launch role.
@@ -61,10 +62,18 @@ async function poll(){
   n++;
   if (n <= msgs.length * 3) $('s').textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
   if (await isUp()){ done = true; await arrive(); return; }
-  // ~12s of patience, then reveal the manual Start button + fallback link.
+  // ~12s of patience, then reveal the manual Start button, and say so if
+  // another program holds the port (ADR 0008: we never open a server we
+  // didn't start, so the person needs to know why nothing is happening).
   if (n > 20){
     $('s').textContent = 'Taking longer than usual.';
     $('actions').classList.add('show');
+    if (invoke){
+      try {
+        const problem = await invoke('port_problem', { which: waitFor });
+        if (problem) $('err').textContent = problem;
+      } catch(e){}
+    }
   }
   setTimeout(poll, 600);
 }

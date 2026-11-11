@@ -195,6 +195,37 @@ pub fn clean_name(typed: &str) -> Result<String, String> {
     Ok(name)
 }
 
+/// Make `dir` readable only by this computer's current user: the folder
+/// becomes `700` (owner only) and each file already in it `600`.
+///
+/// Used for the log folder. A commons prints its steward link and founding
+/// invite at start-up (ADR 0017, ADR 0023), and the log is where a steward
+/// finds them, so it must not be readable by other accounts on a shared
+/// computer. Locking the folder is what protects files written later
+/// (including the rotated backup log); the files are tightened as well in
+/// case one is ever moved out of it.
+///
+/// **Writes** the permissions of `dir` and of the files directly in it.
+/// Does nothing on Windows, where a user's own folders are already private.
+pub fn make_private(dir: &Path) -> std::io::Result<()> {
+    // Learner note: `#[cfg(unix)]` compiles this block only on macOS and
+    // Linux; `PermissionsExt` (the `mode` numbers) exists only there.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_file() {
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+    Ok(())
+}
+
 /// The data folder for `kind`. `node-data` is the folder earlier versions
 /// used, so existing nodes keep their data.
 pub fn data_dir_for(base: &Path, kind: Kind) -> PathBuf {
@@ -249,6 +280,27 @@ pub fn save(base: &Path, s: &Saved) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn the_log_folder_is_readable_only_by_its_owner() {
+        use std::os::unix::fs::PermissionsExt;
+        // A fresh folder under the system temp folder, readable by everyone
+        // to start with, holding one log file that is too.
+        let dir = std::env::temp_dir().join(format!("hic-log-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("held-in-common.log");
+        std::fs::write(&file, "steward link").unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o775)).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o664)).unwrap();
+
+        make_private(&dir).unwrap();
+
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700, "only the owner may enter the folder");
+        assert_eq!(mode(&file), 0o600, "only the owner may read the log");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn saved_role_wins() {

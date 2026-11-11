@@ -337,19 +337,6 @@ h1 {
   pointer-events: auto;
 }
 
-.fallback {
-  margin-top: var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--gray);
-}
-
-.fallback a {
-  font-family: var(--font-mono);
-  color: var(--blue);
-  text-decoration: none;
-  border-bottom: 1px solid currentcolor;
-}
-
 /* First launch: choose a node or a commons */
 .choose {
   width: min(760px, 100%);
