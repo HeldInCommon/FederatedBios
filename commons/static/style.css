@@ -710,6 +710,10 @@ fieldset {
   --tone: var(--violet);
 }
 
+.steward-hint {
+  margin: 0 0 var(--space-4);
+}
+
 /* The commons' "run a node to join" page */
 .gate {
   max-width: var(--panel-width);

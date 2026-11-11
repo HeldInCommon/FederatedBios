@@ -17,7 +17,7 @@ node.
   which when it first starts, and can run both side by side, plus a practice
   commons to learn on (**Go** menu).
 
-Current version: **0.5.1**, signed and notarized for macOS.
+Current version: **0.5.0**, signed and notarized for macOS.
 
 | I want to… | Read |
 |---|---|
