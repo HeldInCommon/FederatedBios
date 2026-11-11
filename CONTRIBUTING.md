@@ -63,6 +63,10 @@ file, and the path a request takes.
 - **Before pushing:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`,
   `./scripts/lint-css.sh`, and the tests above. CI runs the same checks.
 
+Working with Claude Code? `.claude/skills/house-style/SKILL.md` sums up these
+conventions as a skill, so Claude follows them too. Keep it in step with this
+file.
+
 ## 6. Open a pull request
 
 Branch from `main` in `HeldInCommon/FederatedBios` (not a fork), describe what
