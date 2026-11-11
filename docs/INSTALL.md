@@ -161,4 +161,4 @@ Open **http://localhost:8080**. Your data lives in the `hic-node` volume.
 
 ## How it all fits together
 
-Slides: **https://phoenixperry.github.io/FederatedBios/architecture.html**
+Slides: **https://heldincommon.github.io/FederatedBios/architecture.html**

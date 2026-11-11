@@ -121,11 +121,9 @@ from it: [commons/README.md](../commons/README.md).
 
 ## 5. Architecture slides
 
-`docs/architecture.html` is a self-contained reveal.js deck, currently served
-from the original fork at
-https://phoenixperry.github.io/FederatedBios/architecture.html. To serve it from
-the organisation instead: Settings → **Pages** → deploy from `main`, folder
-`/docs`; it will be at `https://heldincommon.github.io/FederatedBios/architecture.html`.
+`docs/architecture.html` is a self-contained reveal.js deck. GitHub Pages
+serves the `docs/` folder of `main` (Settings → **Pages**), so it updates on
+every merge: https://heldincommon.github.io/FederatedBios/architecture.html
 
 ---
 
