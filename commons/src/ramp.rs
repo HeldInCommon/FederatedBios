@@ -108,17 +108,16 @@ pub fn next_step(s: &MemberState) -> NextStep {
     NextStep::Done
 }
 
-/// The tabs a member sees: Profile always; Sharing and Account once there is a
-/// profile to share or keep safe; People once they're listed somewhere (before
-/// that there's nobody to invite to, and nothing to vouch with).
+/// The tabs a member sees: Profile and People always; Sharing and Account once
+/// there is a profile to share or keep safe. People is always there so members
+/// can find vouching; until they're listed somewhere it says how to get listed
+/// rather than showing forms they can't use yet (ADR 0022, updated 2026-11-11).
 pub fn tabs(s: &MemberState) -> Vec<Tab> {
     let mut out = vec![Tab::Profile];
     if s.published {
         out.push(Tab::Sharing);
     }
-    if !s.listed_on().is_empty() {
-        out.push(Tab::People);
-    }
+    out.push(Tab::People);
     if s.published {
         out.push(Tab::Account);
     }
@@ -180,11 +179,11 @@ mod tests {
     }
 
     #[test]
-    fn tabs_arrive_as_they_become_useful() {
+    fn people_is_always_there_and_the_rest_arrive_when_useful() {
         let room = vec!["http://room:8081".to_string()];
-        assert_eq!(tabs(&s(false, &[], &[], false)), vec![Tab::Profile]);
-        assert_eq!(tabs(&s(true, &[], &[], false)), vec![Tab::Profile, Tab::Sharing, Tab::Account]);
-        assert_eq!(tabs(&s(true, &room, &room, false)), vec![Tab::Profile, Tab::Sharing, Tab::Account], "waiting");
+        assert_eq!(tabs(&s(false, &[], &[], false)), vec![Tab::Profile, Tab::People]);
+        assert_eq!(tabs(&s(true, &[], &[], false)), Tab::ALL.to_vec(), "published");
+        assert_eq!(tabs(&s(true, &room, &room, false)), Tab::ALL.to_vec(), "waiting");
         assert_eq!(tabs(&s(true, &room, &[], false)), Tab::ALL.to_vec(), "listed");
     }
 

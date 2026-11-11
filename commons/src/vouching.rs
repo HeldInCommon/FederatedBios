@@ -34,8 +34,9 @@ pub const VOUCH: &str = "Vouch";
 pub const INVITE_TTL: u64 = 14 * 86_400;
 /// The period the vouching limit counts over (a week).
 pub const WEEK: u64 = 7 * 86_400;
-/// The default limit: people one member can bring in per week.
-pub const DEFAULT_LIMIT: u32 = 5;
+/// The default limit: people one member can bring in per week. Raised from 5
+/// to 100 on 2026-11-11 so a workshop room can fill quickly (see ADR 0011).
+pub const DEFAULT_LIMIT: u32 = 100;
 /// Founding invites start with this, so they're easy to tell from member invites.
 pub const FOUNDING_PREFIX: &str = "hic-founding-";
 /// Invites made by a commons' steward start with this.

@@ -20,6 +20,8 @@ It stops mass sign-ups completely rather than slowing them, and it matches how a
 - Vouches and invites are signed `hic/v1` objects (`Invite`, `Vouch`; spec §5.3); every admission is recorded with who vouched.
 - `HIC_OPEN_COMMONS=1` turns vouching off for a commons that wants open sharing (for example a test commons).
 
+**Update (2026-11-11):** the default limit is now **100** people per member per week, not 5, so a workshop room can fill quickly. Phoenix chose this "for now"; a commons can still set `HIC_VOUCH_LIMIT` lower. Mass sign-ups are still stopped by needing a vouch at all, which the limit only bounds.
+
 ## Consequences
 A newcomer needs a member (or the steward's founding invite) to vouch for them. The pending list shows each waiting handle with a short key fingerprint and where it came from, so members can recognise who they're vouching for; it shows no profile content.
 
