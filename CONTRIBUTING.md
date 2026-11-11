@@ -44,9 +44,12 @@ file, and the path a request takes.
   clearly named place that says what it writes. A function named like a read
   (`load`, `check`) only reads. Functions that write return a `Result`. Test
   the pure part with a unit test in the same file.
-- **Comment the why.** Every module starts with a `//!` comment saying what it
-  is for; every public function has a `///` comment. Explain decisions that
-  aren't obvious from the code.
+- **Comment all code well.** The team is learning Rust, so comments are part
+  of the code. Every file starts with a comment saying what it is for (`//!`
+  in Rust); every function, public or private, has a `///` comment; steps a
+  newcomer wouldn't follow get a comment explaining why; security code cites
+  its decision record. Keep comments true when the code changes. The full
+  rule is in `.claude/skills/house-style/SKILL.md` (§8).
 - **Don't change the signed format.** `commons/src/canonical.rs` defines bytes
   that every existing signature depends on. Its golden test must never change.
   A new format needs a new schema version (see the review, M1).

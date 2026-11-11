@@ -11,6 +11,8 @@ clear, say so and do the clearer thing.
 
 The team is **learning Rust**. Write code a learner can follow: plain over
 clever, named steps over long chains, and comments that explain *why*.
+**Comment all code well** (§8): comments are part of the code here, not an
+extra.
 
 The longer versions live in the repo. Read the one that matches the task:
 
@@ -143,7 +145,8 @@ before it gets long. "It will rapidly get huge as the site grows outward."
 Don't extend an existing file with an unrelated page.
 
 **Every module** starts with a `//!` comment saying what it is for. **Every
-public function** has a `///` comment. Each `mod.rs` keeps its table of files
+function**, public or private, has a `///` comment (see "Comment all code
+well" in §8). Each `mod.rs` keeps its table of files
 up to date. In those tables, write file names as plain code (`` `notices.rs` ``),
 not intra-doc links, which break the `cargo doc` check (§6).
 
@@ -271,6 +274,38 @@ python3 scripts/check_spec_vectors.py
 - **Cite sources** for factual claims (RFCs, docs), and mark anything you
   haven't verified. Never invent references.
 - **Assume teammates will read everything.**
+
+### Comment all code well
+
+The team is learning Rust, so comments are part of the code, not an extra.
+Every change leaves the code it touches well commented:
+
+- **Every file** starts with a comment saying what it is for: `//!` in Rust,
+  a header comment in CSS and JavaScript.
+- **Every function**, public or private, has a `///` comment saying what it
+  does and what it returns. If it writes anything, the comment says what
+  (§1). So does every struct, enum and variant, and every field whose
+  meaning isn't obvious from its name.
+- **Inside a function**, comment each step a newcomer wouldn't follow at a
+  glance: why a check is there, what an edge case is, why the order matters.
+  A long function should read as a sequence of commented steps.
+- **Explain why, not what.** `// Re-sign after a key change: the old
+  signature names the old key` helps; `// sign the story` repeats the code.
+  Don't narrate obvious lines.
+- **Security, protocol and privacy code** says what it protects against and
+  cites its decision record, for example `// ADR 0012: a hosted node must not
+  reach internal addresses`.
+- **Rust that may surprise a learner** (lifetimes, `?`, `Box<…>`, `move`
+  closures, `impl Trait`, `dyn Trait`) gets a short plain-English note the
+  first time it appears in a file.
+- **Tests** state their rule in their name (§6). A comment explains any setup
+  that isn't obvious.
+- **CSS:** each group of rules has a comment saying which part of a page it
+  styles, and any non-obvious value says why (this width, this order). The
+  linter wants a blank line before each comment.
+- **Keep comments true.** When code changes, change its comments in the same
+  commit: a wrong comment is worse than none. Delete commented-out code
+  instead of keeping it.
 
 ## 9. Dependencies
 
