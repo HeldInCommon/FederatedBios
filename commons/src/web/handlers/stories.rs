@@ -28,7 +28,7 @@ pub async fn stories(State(st): State<Shared>, headers: HeaderMap) -> Response {
     }
     let visible: Vec<OwnStory> =
         st.store.own_stories().into_iter().filter(|s| me.is_some() || s.story.reach() != Reach::Members).collect();
-    render(&st.site, Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.is_some())))
+    render(&st.site, Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.as_deref())))
 }
 
 /// `GET /stories/{keyid}/{id}` — a story shared to this commons.

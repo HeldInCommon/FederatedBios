@@ -113,3 +113,14 @@ async fn the_rights_summary_script_is_served() {
     assert_eq!(r.status, StatusCode::OK);
     assert!(r.text.contains("data-summary"));
 }
+
+#[tokio::test]
+async fn on_your_own_stories_the_chips_open_the_rights_step() {
+    let (node, _) = server(Role::Node);
+    let sid = join_and_publish(&node, "ada", "public").await;
+    let (id, _) = write(&node, &sid, "ada").await;
+    let list = send(&node, get("/stories", Some(&sid))).await.text;
+    assert!(list.contains(&format!("class=\"story-chips is-editable\" href=\"/story/{id}/rights\"")));
+    let visitor = send(&node, get("/stories", None)).await.text;
+    assert!(visitor.contains("Bins at six") && !visitor.contains("/rights"), "visitors can't change it");
+}
