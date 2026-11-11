@@ -16,6 +16,8 @@ A signed-in member's profile page showed everything at once: update, waiting, sh
 - **The look follows heldincommon.org** (the "ramped experience" canvas): the logo and tagline, pink eyebrows over mono headings, section labels with a rule, numbered starbursts, choices in one outlined panel with the chosen one filled in ink, story cards with licence chips and "Verified", and a two-column story page with where it's shared and its terms. Members-only stories are described as staying on the node, never as encrypted (they aren't; decision record 0020).
 - The rules live in one pure module, `commons/src/ramp.rs`.
 
+**Update (2026-11-11):** the **People** tab is now always shown, so members can find vouching (Phoenix found it "gone" while not yet listed). Until a member is listed somewhere it explains how to get listed (publish, share, or wait for a vouch) instead of showing the invite and vouch forms, which a commons would refuse.
+
 ## Why
 The rules from the review: one next step at a time; unlock by what happened, never by a setting; nothing disappears once shown for a reason that still holds; defaults over decisions, but rights explained in full for workshops; rare, risky actions out of the way.
 

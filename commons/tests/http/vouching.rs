@@ -84,6 +84,42 @@ async fn a_vouch_lists_someone_waiting() {
     assert!(send(&commons, get("/", None)).await.text.contains("@newbie"));
 }
 
+/// The chain of trust: someone brought in by a vouch is a member, so they can
+/// vouch for the next person, and that person for the next (ADR 0011).
+#[tokio::test]
+async fn someone_vouched_in_can_vouch_for_the_next_person() {
+    let (commons, store) = closed_commons(5);
+    store.save_founding_code("hic-founding-x3").unwrap();
+    // The first member comes in with the founding invite.
+    let first = person("first");
+    send(&commons, post_json("/inbox", &share_of(&first, Some("hic-founding-x3")))).await;
+
+    // Each person waits, then the one before them in the chain vouches.
+    let chain = [person("second"), person("third"), person("fourth")];
+    let mut voucher = &first;
+    for newcomer in &chain {
+        send(&commons, post_json("/inbox", &share_of(newcomer, None))).await;
+        let vouch = hic_commons::vouching::make_vouch(
+            &voucher.ed_pub,
+            &voucher.ed_priv,
+            COMMONS_URL,
+            &newcomer.handle,
+            &newcomer.ed_pub,
+            hic_commons::now(),
+        )
+        .unwrap();
+        let r = send(&commons, post_json("/inbox", &serde_json::to_value(&vouch).unwrap())).await;
+        assert_eq!(r.text, "accepted", "@{} vouching for @{}", voucher.handle, newcomer.handle);
+        voucher = newcomer;
+    }
+
+    assert!(store.pending().is_empty(), "nobody is left waiting");
+    let page = send(&commons, get("/", None)).await.text;
+    for p in &chain {
+        assert!(page.contains(&format!("@{}", p.handle)), "@{} is listed", p.handle);
+    }
+}
+
 #[tokio::test]
 async fn the_steward_sets_the_weekly_limit() {
     let (commons, store) = closed_commons(1);

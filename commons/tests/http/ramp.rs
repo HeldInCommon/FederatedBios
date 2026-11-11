@@ -20,16 +20,19 @@ async fn the_next_step_and_tabs_follow_what_has_happened() {
     let page = send(&node, get("/@ada", Some(&sid))).await.text;
     assert!(page.contains("Publish your profile."), "first: publish");
     assert!(!page.contains("?tab=sharing"), "no Sharing tab before there's anything to share");
+    let people = send(&node, get("/@ada?tab=people", Some(&sid))).await.text;
+    assert!(people.contains("Publish your profile first"), "People points an unpublished member at publishing");
 
     let sid = join_and_publish(&node, "tega", "public").await;
     let page = send(&node, get("/@tega", Some(&sid))).await.text;
     assert!(page.contains("Share your profile to a commons."), "then: share (no default commons here)");
     assert!(page.contains("/@tega?tab=sharing") && page.contains("/@tega?tab=account"));
-    assert!(!page.contains("/@tega?tab=people"), "People arrives once listed somewhere");
+    assert!(page.contains("/@tega?tab=people"), "People is always there, so members can find vouching");
 
-    // A tab that isn't open yet falls back to the profile.
+    // Before they're listed, People says how to get listed instead of showing forms.
     let people = send(&node, get("/@tega?tab=people", Some(&sid))).await.text;
     assert!(!people.contains("Vouch for someone"));
+    assert!(people.contains("Share your profile to get listed"));
     let account = send(&node, get("/@tega?tab=account", Some(&sid))).await.text;
     assert!(account.contains("If this computer is lost") && account.contains("Your key"));
     assert!(account.contains("for=\"backup-pass\""), "the passphrase box has a visible label");

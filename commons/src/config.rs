@@ -35,7 +35,7 @@ pub struct Config {
     /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
     pub open_commons: bool,
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
-    /// steward (today, whoever hosts the commons) sets it. Default 5.
+    /// steward (today, whoever hosts the commons) sets it. Default 100.
     pub vouch_limit: u32,
     /// `HIC_SESSION_COOKIE`: the sign-in cookie's name. Default `hic_session`.
     /// Browsers share cookies between ports of the same host, so the desktop

@@ -176,7 +176,7 @@ pub(super) fn tab_panel(handle: &str, o: &OwnerPanel) -> Markup {
             @match o.active() {
                 Tab::Profile => {}
                 Tab::Sharing => { (sharing_tab(handle, o)) }
-                Tab::People => { (invite_panel(handle, o)) (vouch_panel(handle, o)) }
+                Tab::People => { (people_tab(handle, o)) }
                 Tab::Account => { (super::owner_account::account_tab(handle, o)) }
             }
         }
@@ -274,6 +274,32 @@ fn your_commons(handle: &str, o: &OwnerPanel) -> Markup {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// People: invite and vouch once listed on a commons; before that, what to do
+/// to get listed. Vouching needs a listing because a commons only accepts a
+/// vouch from someone it already lists (ADR 0011).
+fn people_tab(handle: &str, o: &OwnerPanel) -> Markup {
+    if !o.state().listed_on().is_empty() {
+        return html! { (invite_panel(handle, o)) (vouch_panel(handle, o)) };
+    }
+    html! {
+        section class="share-panel" {
+            h2 class="field-label" { "Invite and vouch for people" }
+            p class="hint" { "Once you're listed on a commons, this is where you invite people you know and vouch for people waiting to join it." }
+            @if !o.waiting_on.is_empty() {
+                p class="hint" {
+                    "You're waiting to be listed on "
+                    @for (i, c) in o.waiting_on.iter().enumerate() { @if i > 0 { ", " } strong { (host_label(c)) } }
+                    ". When a member vouches for you or the steward approves you, you can bring others in."
+                }
+            } @else if o.published {
+                div class="actions" { a class="btn-line" href=(tab_href(handle, Tab::Sharing)) { "Share your profile to get listed" } }
+            } @else {
+                div class="actions" { a class="btn-line" href="/new" { "Publish your profile first" } }
             }
         }
     }
