@@ -51,6 +51,7 @@ impl AppState {
             role,
             instance: config.instance.clone(),
             base_url: config.base_url.clone(),
+            also_known_as: config.also_known_as.clone(),
             share_default: config.share_default.clone(),
             practice: config.practice,
             in_app: config.in_app(),

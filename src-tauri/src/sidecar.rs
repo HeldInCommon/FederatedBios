@@ -108,7 +108,8 @@ impl Sidecar {
 
 /// The environment a server of `kind` starts with, apart from the data
 /// folder and launch token. Pure, so the per-kind differences are testable.
-/// `lan` is this computer's network address for the commons, if known.
+/// `lan` is this computer's network address for the commons, if known, and
+/// `public` its address outside the room, if set in `app.json`.
 pub fn server_env(
     kind: Kind,
     port: u16,
@@ -116,6 +117,7 @@ pub fn server_env(
     cfg_override: Option<&str>,
     share_default: &str,
     lan: Option<String>,
+    public: Option<String>,
 ) -> Vec<(&'static str, String)> {
     let mut env = vec![
         ("PORT", port.to_string()),
@@ -125,8 +127,12 @@ pub fn server_env(
     ];
     match kind {
         Kind::Node => env.push(("HIC_SHARE_DEFAULT", share_default.to_string())),
-        // A room commons: nodes on the same network reach it at this address.
-        Kind::Commons => env.extend(lan.map(|url| ("HIC_BASE_URL", url))),
+        // A room commons: nodes on the same network reach it at this address,
+        // and people outside the room at its public one, if it has one.
+        Kind::Commons => {
+            env.extend(lan.map(|url| ("HIC_BASE_URL", url)));
+            env.extend(public.map(|url| ("HIC_ALSO_KNOWN_AS", url)));
+        }
         // Practice: only this computer can reach it, and its pages say so.
         Kind::Practice => env.extend([
             ("HIC_BIND", "127.0.0.1".to_string()),
@@ -149,13 +155,14 @@ fn spawn(
     let data_dir = data_dir_for(&cfg.base, kind);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
     let lan = if kind == Kind::Commons { network::lan_url(port) } else { None };
+    let public = if kind == Kind::Commons { crate::settings::load(&cfg.base).0.public_address } else { None };
     let mut cmd = app
         .shell()
         .sidecar("hic-commons")
         .map_err(|e| format!("could not locate the server binary: {e}"))?
         .env("HIC_DATA", data_dir.to_string_lossy().to_string())
         .env("HIC_LAUNCH_TOKEN", &cfg.launch_token);
-    for (k, v) in server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan) {
+    for (k, v) in server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan, public) {
         cmd = cmd.env(k, v);
     }
 
@@ -318,9 +325,17 @@ mod tests {
 
     /// The settings a server of `kind` on `port` starts with, as a lookup table.
     fn env_of(kind: Kind, port: u16) -> std::collections::HashMap<&'static str, String> {
-        server_env(kind, port, "Name", None, "https://c.example", Some("http://192.168.1.5:8081".into()))
-            .into_iter()
-            .collect()
+        server_env(
+            kind,
+            port,
+            "Name",
+            None,
+            "https://c.example",
+            Some("http://192.168.1.5:8081".into()),
+            Some("https://hic.tail.ts.net".into()),
+        )
+        .into_iter()
+        .collect()
     }
 
     #[test]
@@ -335,6 +350,8 @@ mod tests {
         assert_eq!(commons["HIC_ROLE"], "commons");
         assert_eq!(commons["HIC_BASE_URL"], "http://192.168.1.5:8081");
         assert_eq!(commons["HIC_SESSION_COOKIE"], "hic_session_8081");
+        assert_eq!(commons["HIC_ALSO_KNOWN_AS"], "https://hic.tail.ts.net");
+        assert!(!env_of(Kind::Node, 8080).contains_key("HIC_ALSO_KNOWN_AS"), "only a commons has one");
         assert!(!commons.contains_key("HIC_PRACTICE"));
 
         let practice = env_of(Kind::Practice, 8082);

@@ -67,7 +67,9 @@ async fn run(config: Config) -> Result<(), String> {
             store.save_steward_key(&vouching::new_steward_key()).map_err(|e| e.to_string())?;
         }
         if let Some(key) = store.steward_key().map_err(|e| e.to_string())? {
-            println!("hic-commons steward link (keep private): {}/steward?key={key}", config.base_url);
+            for base in std::iter::once(&config.base_url).chain(&config.also_known_as) {
+                println!("hic-commons steward link (keep private): {base}/steward?key={key}");
+            }
         }
     }
 

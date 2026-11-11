@@ -126,6 +126,20 @@ can **Withdraw** it from there at any time, and **Export** it as a text file.
 this computer can reach. Share your profile to it, approve yourself, make an
 invite. **Go → Remove practice commons…** deletes it when you're done.
 
+**Also public (Tailscale Funnel, a reverse proxy)?** A commons started by the
+app knows itself only by its room address, so invite codes and vouches made
+for its public address are refused as "for a different commons". Tell it its
+public address: quit the app, add one line to `app.json` in the app's data
+folder (`~/Library/Application Support/org.heldincommon.node/` on a Mac,
+`~/.local/share/org.heldincommon.node/` on Linux), and reopen it:
+
+```
+"public_address": "https://your-commons.example.ts.net"
+```
+
+The commons then accepts both addresses, shows the public one first ("Nodes
+share to …"), and prints a steward link for each.
+
 To host on a server or in Docker instead, see [commons/README.md](../commons/README.md).
 
 ---

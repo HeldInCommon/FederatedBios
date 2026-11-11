@@ -21,6 +21,9 @@ pub struct Site {
     pub instance: String,
     /// This server's public address.
     pub base_url: String,
+    /// Its other addresses (`HIC_ALSO_KNOWN_AS`), shown first on a commons:
+    /// usually the one people outside the room use.
+    pub also_known_as: Vec<String>,
     /// The default commons a node shares to (blank if none).
     pub share_default: String,
     /// A practice commons, for learning (`HIC_PRACTICE=1`).
@@ -99,7 +102,11 @@ fn role_banner(site: &Site) -> Markup {
                 a class="role-link" href=(site.share_default) { "Visit the commons \u{2197}" }
             }
             @if site.is_commons() {
-                span class="role-address" { "Nodes share to " code { (site.base_url) } }
+                span class="role-address" {
+                    "Nodes share to "
+                    @for url in &site.also_known_as { code { (url) } " or " }
+                    code { (site.base_url) }
+                }
             }
         }
     }
@@ -275,6 +282,7 @@ mod tests {
             role,
             instance: "Test".into(),
             base_url: "http://c".into(),
+            also_known_as: Vec::new(),
             share_default: String::new(),
             practice: false,
             in_app: false,
@@ -294,6 +302,12 @@ mod tests {
         let m = frame(&site(Role::Commons), &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Nodes share to"));
         assert!(m.contains("Shared commons"));
+        let public = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
+        let m = frame(&public, &Page::new("t", None, html! {})).into_string();
+        assert!(
+            m.contains("<code>https://hic.tail.ts.net</code> or <code>http://c</code>"),
+            "the public address comes first"
+        );
     }
 
     #[test]
