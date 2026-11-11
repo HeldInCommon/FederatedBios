@@ -90,6 +90,7 @@ pub async fn story_create(State(st): State<Shared>, headers: HeaderMap, body: St
 pub async fn story_edit_form(State(st): State<Shared>, Path(id): Path<String>, headers: HeaderMap) -> Response {
     let (s, _rec, sess) = match owned_story(&st, &headers, &id) {
         Ok(x) => x,
+        // `*resp` takes the page out of its `Box` (see `owned_story`).
         Err(resp) => return *resp,
     };
     let body = pages::write_form(&sess.handle, &sess.csrf, Some(&s.story));

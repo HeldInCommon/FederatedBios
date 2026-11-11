@@ -37,13 +37,18 @@ pub fn section_label(text: &str, aside: Option<&str>) -> Markup {
 /// The colours a numbered starburst can take.
 #[derive(Clone, Copy)]
 pub enum Tone {
+    /// heldincommon.org's pink: the first step.
     Pink,
+    /// Blue: the second.
     Blue,
+    /// Jade: the third.
     Jade,
+    /// Violet: the fourth.
     Violet,
 }
 
 impl Tone {
+    /// The CSS class that sets this colour (`--tone`).
     fn class(self) -> &'static str {
         match self {
             Tone::Pink => "tone-pink",

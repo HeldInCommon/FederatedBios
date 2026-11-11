@@ -138,6 +138,7 @@ pub fn active_tab(asked: Tab, visible: &[Tab]) -> Tab {
 mod tests {
     use super::*;
 
+    /// A member state for these tests: shareable, with a suggested commons.
     fn s<'a>(published: bool, shared: &'a [String], waiting: &'a [String], backup_done: bool) -> MemberState<'a> {
         MemberState {
             published,

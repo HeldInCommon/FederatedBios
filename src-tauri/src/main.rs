@@ -1,6 +1,7 @@
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// The program's entry point: set up the Linux web view, then run the app (`lib.rs`).
 fn main() {
     // Linux: WebKitGTK (which draws the window) shares GPU buffers with the
     // compositor through DMA-BUF by default. NVIDIA drivers refuse ("Failed

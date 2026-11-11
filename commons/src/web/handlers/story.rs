@@ -27,7 +27,9 @@ fn may_read(st: &AppState, headers: &HeaderMap, s: &OwnStory) -> bool {
 /// (`?done=shared|withdrawn&at=<commons host>`, or `?done=saved`).
 #[derive(serde::Deserialize)]
 pub struct DoneQ {
+    /// `shared`, `withdrawn` or `saved`.
     pub done: Option<String>,
+    /// The commons' host, for shared and withdrawn (checked before it's shown).
     pub at: Option<String>,
 }
 
@@ -105,12 +107,18 @@ pub async fn story_text(State(st): State<Shared>, Path(id): Path<String>, header
 /// The story `id`, its author's record and session, if the signed-in member
 /// wrote it (for pages; forms also check the CSRF token, see
 /// [`authors_story`]).
+///
+/// Rust note: the error is a whole page to send back (`Response`), which is
+/// large. `Box` keeps it on the heap so this `Result` stays small (clippy's
+/// `result_large_err`); callers take the page back out with `*resp`.
 pub(crate) fn owned_story(
     st: &AppState,
     headers: &HeaderMap,
     id: &str,
 ) -> Result<(OwnStory, HandleRec, Session), Box<Response>> {
+    // `let … else`: if there is no session, leave here (sign in first).
     let Some(sess) = session(st, headers) else { return Err(Box::new(redirect("/login"))) };
+    // Only the author: anyone else gets "not found", not a hint it exists.
     let s = match st.store.own_story(id) {
         Ok(Some(s)) if s.story.handle == sess.handle => s,
         Ok(_) => return Err(Box::new(not_found(&st.site, Some(&sess.handle)))),
@@ -148,8 +156,17 @@ pub(crate) fn authors_story(
 
 /// Apply `change` to story `id` and save it, under the write lock, re-reading
 /// it first so two requests can't undo each other. **Writes the story file.**
+///
+/// Rust note: `change` is any function called once with the story that
+/// returns the changed one, usually a closure written at the call site
+/// (`|old| old.with_shared_to(…)`). That's what `impl FnOnce(OwnStory) ->
+/// OwnStory` means.
 pub(crate) fn update_story(st: &AppState, id: &str, change: impl FnOnce(OwnStory) -> OwnStory) -> Result<(), String> {
+    // `_g` holds the write lock until this function ends; nothing else can
+    // change a record in between our read and our write.
     let _g = st.write.lock().unwrap();
+    // `?` hands an error straight back to the caller; `ok_or` turns
+    // "no such story" into one.
     let s = st.store.own_story(id).map_err(|e| e.to_string())?.ok_or("the story is gone")?;
     st.store.save_own_story(&change(s)).map_err(|e| e.to_string())
 }

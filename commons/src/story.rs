@@ -41,12 +41,17 @@ pub const PROMPT: &str = "Listen to your street for a minute. Write a small stor
 pub struct Story {
     /// Stable across versions: 16 lowercase hex characters.
     pub id: String,
+    /// The handle the author holds (a commons checks they're listed under it).
     pub handle: String,
+    /// Its title, 1–120 characters.
     pub title: String,
+    /// The story itself, 1–12,000 characters; blank lines separate paragraphs.
     pub text: String,
     /// `public`, `commons` or `members` (members-only stories never leave the node).
     pub visibility: String,
+    /// The licence key (see `governance::LICENSES`).
     pub license: String,
+    /// CC signal keys (see `governance::SIGNALS`), sorted, no repeats.
     pub signals: Vec<String>,
 }
 
@@ -103,7 +108,9 @@ impl Story {
 /// commons it has been shared to.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OwnStory {
+    /// What the story says, as signed.
     pub story: Story,
+    /// The signed object: what gets sent to a commons, and proof of authorship.
     pub signed: Signed,
     #[serde(default)]
     pub shared_to: Vec<String>,
@@ -161,8 +168,11 @@ impl OwnStory {
 /// A story shared to a commons, kept with its signature as proof.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HeldStory {
+    /// What the story says, as signed.
     pub story: Story,
+    /// The signed object as received, kept as proof.
     pub signed: Signed,
+    /// When this commons received it (seconds since 1970).
     pub received_at: u64,
 }
 
@@ -181,8 +191,11 @@ impl HeldStory {
 /// What remains on a commons after a story is withdrawn.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StoryTombstone {
+    /// The key that signed the withdrawn story.
     pub author: String,
+    /// The story's id.
     pub id: String,
+    /// When it was withdrawn: copies dated then or earlier are refused.
     pub withdrawn_at: u64,
 }
 
@@ -193,7 +206,9 @@ pub const WITHDRAWN_SHOWN_FOR: u64 = 86_400;
 /// story itself is kept (decision record 0020).
 #[derive(Debug, PartialEq, Eq)]
 pub struct RecentWithdrawal {
+    /// Who withdrew it (their handle on this commons).
     pub handle: String,
+    /// When (seconds since 1970).
     pub at: u64,
 }
 
@@ -331,8 +346,11 @@ pub fn build_withdraw(
 /// A verified request to withdraw a story.
 #[derive(Debug, PartialEq, Eq)]
 pub struct StoryWithdrawal {
+    /// The key that signed the withdrawal.
     pub author: String,
+    /// The story being withdrawn.
     pub id: String,
+    /// When the withdrawal was signed.
     pub created_at: u64,
 }
 
@@ -361,6 +379,7 @@ pub fn verify_withdraw(msg: &Value, my_hosts: &[String]) -> Result<StoryWithdraw
 /// Whether a commons takes a story.
 #[derive(Debug, PartialEq, Eq)]
 pub enum StoryAdmission {
+    /// Keep it (or keep the same copy again).
     Accept,
     /// The author isn't listed here under the story's handle.
     NotListed,
@@ -417,6 +436,7 @@ mod tests {
 
     const ID: &str = "0123456789abcdef";
 
+    /// A small public story by `handle_`, for these tests.
     fn story(handle_: &str) -> Story {
         new_story(
             ID,
@@ -430,6 +450,7 @@ mod tests {
         .unwrap()
     }
 
+    /// A commons' record of `handle_` listed under `key`, with nothing else filled in.
     fn listed(handle_: &str, key: &str) -> RemoteEntry {
         RemoteEntry {
             ed_pub: key.into(),

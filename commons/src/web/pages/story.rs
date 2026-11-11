@@ -206,6 +206,7 @@ mod tests {
     use crate::keys;
     use crate::story::{new_story, sign};
 
+    /// One of @ada's stories with this text and reach, not shared anywhere.
     fn own(text: &str, visibility: &str) -> OwnStory {
         let k = keys::generate();
         let s = new_story("0123456789abcdef", "ada", "Night bus", text, visibility, "cc-by", &[]).unwrap();
@@ -217,6 +218,7 @@ mod tests {
         }
     }
 
+    /// The author's view, offering these commons.
     fn owner(known: &[&str]) -> StoryOwner {
         StoryOwner { csrf: "c".into(), known: known.iter().map(|k| k.to_string()).collect() }
     }

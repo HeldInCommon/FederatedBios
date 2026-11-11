@@ -233,6 +233,7 @@ fn app_config(base: PathBuf) -> AppConfig {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Start the app: plugins, commands, the menu, the main window, and every server this computer runs.
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
