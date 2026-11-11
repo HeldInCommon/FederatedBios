@@ -113,8 +113,6 @@ fn signed_in_actions(m: &SignedIn) -> Markup {
 pub enum Viewer<'a> {
     /// Anyone.
     Visitor,
-    /// Someone at the commons' own computer who hasn't opened the steward view.
-    AtThisComputer,
     /// The steward.
     Steward(&'a StewardView),
 }
@@ -134,9 +132,6 @@ pub fn directory(
     };
     html! {
         @if let Some(v) = steward { (steward_panel(v)) }
-        @if let Viewer::AtThisComputer = viewer {
-            p class="hint steward-hint" { "You're at this commons' computer. " a href="/steward" { "Open the steward view" } " to approve people and make invites." }
-        }
         header class="intro" {
             h1 { "The commons" }
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }

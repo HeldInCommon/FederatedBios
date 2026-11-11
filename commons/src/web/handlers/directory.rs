@@ -1,11 +1,8 @@
 //! `GET /`: the directory.
 
-use std::net::SocketAddr;
-
-use axum::extract::{ConnectInfo, State};
+use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::Response;
-use axum::Extension;
 
 use super::notices::notices_for;
 use super::session;
@@ -15,11 +12,7 @@ use crate::web::layout::{render, Page};
 use crate::web::pages::{self, Card};
 
 /// `GET /` — the directory.
-pub async fn directory(
-    State(st): State<Shared>,
-    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let sess = session(&st, &headers);
     let me = sess.as_ref().map(|s| s.handle.clone());
     let mut cards = Vec::new();
@@ -40,8 +33,7 @@ pub async fn directory(
     }
     let remotes = st.store.remotes();
     let pending = if st.site.is_commons() { st.store.pending() } else { Vec::new() };
-    // The steward sees their tools (and the founding invite); someone at the
-    // commons' own computer gets a link to the steward view.
+    // The steward sees their tools (and the founding invite).
     let steward = if st.site.is_commons() { super::steward::steward_session(&st, &headers) } else { None };
     let view = steward.map(|s| pages::StewardView {
         csrf: s.csrf,
@@ -50,7 +42,6 @@ pub async fn directory(
     });
     let viewer = match &view {
         Some(v) => pages::Viewer::Steward(v),
-        None if st.site.is_commons() && super::steward::from_this_computer(&peer) => pages::Viewer::AtThisComputer,
         None => pages::Viewer::Visitor,
     };
     let signed_in =
