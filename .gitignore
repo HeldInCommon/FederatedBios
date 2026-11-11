@@ -46,5 +46,6 @@ Held-In-Common-macOS-AppleSilicon.dmg
 # CSS lint tools (installed by scripts/lint-css.sh)
 tools/css-lint/node_modules/
 
-# A node's data folder, created when the server runs here without HIC_DATA
+# A node's data folder, created when the server runs here (or in commons/) without HIC_DATA
 /data/
+/commons/data/
