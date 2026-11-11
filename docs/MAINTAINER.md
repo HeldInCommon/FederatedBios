@@ -84,28 +84,29 @@ which only `main` and `node-app-v*` tags can use, so a workflow on another
 branch can't read them ([decision record 0015](adr/0015-macos-signing.md)). If
 any is missing, the macOS job stops instead of publishing an unsigned build.
 
-Set them from your own Terminal, with `gh` signed in as an admin. Run each
-command **on its own**, and paste a value only at the "Paste your secret"
-prompt:
+Set them from your own Terminal, with `gh` signed in as an admin. Type
+secret values only at the script's hidden prompts, never into chat:
 
 1. **Export the certificate:** Keychain Access → *login* → *My Certificates* →
    right-click **Developer ID Application: … (TEAMID)** → **Export…** → `.p12`
    with a strong password.
 2. **Make an app-specific password** at account.apple.com → Sign-In and
    Security → App-Specific Passwords.
-3. **Add the secrets** (`R=HeldInCommon/FederatedBios`):
+3. **Check it and store the secrets:**
    ```
-   base64 -i ~/Desktop/hic-developer-id.p12 | gh secret set APPLE_CERTIFICATE --repo $R --env macos-signing
-   gh secret set APPLE_CERTIFICATE_PASSWORD --repo $R --env macos-signing
-   gh secret set APPLE_PASSWORD --repo $R --env macos-signing
-   gh secret set APPLE_ID --repo $R --env macos-signing
-   gh secret set APPLE_TEAM_ID --repo $R --env macos-signing --body TEAMID
-   gh secret set APPLE_SIGNING_IDENTITY --repo $R --env macos-signing --body "Developer ID Application: NAME (TEAMID)"
+   ./scripts/set-mac-signing-secrets.sh ~/Desktop/hic-developer-id.p12
    ```
-4. **Delete the `.p12`.**
+   It imports the `.p12` into a throwaway keychain, the way GitHub's runner
+   does. A wrong password, or a `.p12` without its private key, stops it
+   before anything is stored. It then sets the certificate, its password, the
+   signing identity and the Team ID, and asks (hidden) for the Apple ID and
+   app-specific password; press Return to keep the stored ones. Nothing secret
+   is printed.
+4. **Delete the `.p12`.** The script offers to.
 
 The workflow tidies stray spaces and line breaks in pasted secrets. When the
-certificate expires, repeat steps 1, 3 and 4.
+certificate expires, or the macOS build fails to import it, repeat steps 1, 3
+and 4.
 
 ---
 
