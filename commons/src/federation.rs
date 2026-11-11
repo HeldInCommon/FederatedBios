@@ -19,7 +19,9 @@ use crate::web::layout::host_label;
 
 /// Who is sending a share: this node's public address and name.
 pub struct Sender<'a> {
+    /// This node's public address, which the commons records as the origin.
     pub base_url: &'a str,
+    /// This node's name for itself.
     pub instance: &'a str,
 }
 
@@ -331,6 +333,7 @@ pub fn build_withdraw(rec: &HandleRec, commons_url: &str, created_at: u64) -> Re
 pub struct Withdrawal {
     pub handle: String,
     pub ed_pub: String,
+    /// The withdrawal's signed time; shares dated at or before it are refused.
     pub created_at: u64,
 }
 
@@ -381,6 +384,8 @@ mod tests {
     use super::*;
     use crate::keys;
 
+    /// The holders of a handle on a commons, built from the three lists the
+    /// tests vary (`claimed` is left empty).
     fn holders<'a>(local: Option<&'a str>, held: &'a [RemoteEntry], withdrawn: &'a [Tombstone]) -> Holders<'a> {
         Holders { local, held, withdrawn, claimed: None }
     }
@@ -561,6 +566,7 @@ mod tests {
         assert_eq!(admit(&newer, &holders(None, &[], &tomb)), Admission::Accept, "owner may share again later");
     }
 
+    /// A member and their signed public version, with `avatar` as the picture.
     fn published(handle: &str, avatar: &str) -> (HandleRec, Version) {
         let rec = rec_with_keys(handle);
         let draft = crate::publishing::Draft {

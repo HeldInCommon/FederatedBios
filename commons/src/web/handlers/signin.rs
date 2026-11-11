@@ -122,6 +122,7 @@ pub async fn login_submit(State(st): State<Shared>, body: String) -> Response {
         return error_page(&st.site, "Too many wrong passphrases for this handle. Wait 15 minutes and try again.")
             .into_response_with(StatusCode::TOO_MANY_REQUESTS);
     }
+    /// One message for both mistakes, so the page never says which handles exist.
     const WRONG: &str = "No such handle, or the passphrase is wrong.";
     let rec = match st.store.handle(&h) {
         Ok(Some(r)) => r,

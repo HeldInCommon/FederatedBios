@@ -17,8 +17,10 @@ use serde_json::{json, Value};
 
 /// Published test keys. **Never use these for anything real.**
 const TEST_KEY_A: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+/// A second published test key, for cosignatures. **Never use it for anything real.**
 const TEST_KEY_B: &str = "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f";
 
+/// The folder holding the spec's test vectors, `docs/spec/vectors`.
 fn vectors_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/spec/vectors")
 }

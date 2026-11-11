@@ -18,6 +18,7 @@ pub const OPEN_NODE: &str = "hic-app://open/node";
 
 /// Where the install guide and the Docker instructions live.
 const INSTALL_GUIDE: &str = "https://github.com/HeldInCommon/FederatedBios/blob/main/docs/INSTALL.md";
+/// Running a commons with Docker.
 const DOCKER_GUIDE: &str = "https://github.com/HeldInCommon/FederatedBios/blob/main/commons/README.md";
 
 /// The page body. `in_app` is true when the desktop app runs this node.

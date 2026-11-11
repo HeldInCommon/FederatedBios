@@ -24,6 +24,7 @@ pub enum Role {
 }
 
 impl Role {
+    /// The role as written in the role file and on pages: `node` or `commons`.
     pub fn as_str(self) -> &'static str {
         match self {
             Role::Node => "node",
@@ -45,6 +46,7 @@ impl Role {
 #[derive(Serialize, Deserialize)]
 pub struct InstanceFile {
     pub role: Role,
+    /// When the role was decided, in Unix seconds.
     pub created_at: u64,
 }
 
@@ -154,6 +156,7 @@ pub fn save(data_dir: &Path, role: Role, now: u64) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// The facts `decide` looks at, written out in one line per test.
     fn facts(
         saved: Option<Option<Role>>,
         env: Option<&'static str>,

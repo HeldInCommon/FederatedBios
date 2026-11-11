@@ -7,6 +7,7 @@ use hic_commons::story;
 
 use crate::common::*;
 
+/// A well-formed story id (16 hex characters) for these tests.
 const ID: &str = "0123456789abcdef";
 
 /// A signed story share by `rec`, dated `t`.

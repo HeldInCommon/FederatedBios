@@ -9,6 +9,11 @@ use std::sync::Arc;
 
 use hic_commons::{app, config::Config, now, role, store::Store, vouching};
 
+/// Start the server. Any start-up failure is printed as one plain line and
+/// the process exits with code 2, rather than a panic and a stack trace.
+///
+/// Learner note: `#[tokio::main]` turns this `async fn` into an ordinary
+/// `main` that starts the Tokio runtime and runs it to the end.
 #[tokio::main]
 async fn main() {
     let config = Config::from_env();
@@ -18,6 +23,11 @@ async fn main() {
     }
 }
 
+/// Open the data folder, settle its role (node or commons), print the
+/// one-time links for the operator, and serve until stopped.
+///
+/// **Writes**, only the first time each is needed: the role file for a new
+/// data folder, and on a commons the founding invite and the steward key.
 async fn run(config: Config) -> Result<(), String> {
     let store = Store::open(&config.data_dir)
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;

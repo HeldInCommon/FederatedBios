@@ -84,6 +84,7 @@ pub fn profile_json(h: &HandleRec, v: &Version) -> Value {
     })
 }
 
+/// A JSON error reply: `{"error": msg}` with the given status.
 fn json_error(status: StatusCode, msg: &str) -> Response {
     (status, Json(json!({ "error": msg }))).into_response()
 }
@@ -277,6 +278,7 @@ pub async fn outbox(State(st): State<Shared>, Path(h): Path<String>) -> Response
 mod tests {
     use super::*;
 
+    /// A bare version with the given reach, enough for the reach checks.
     fn version(reach: &str) -> Version {
         Version {
             cid: "c".into(),

@@ -23,6 +23,7 @@ use crate::web::pages;
 /// commons (the room can read it, search engines are asked not to), CC BY,
 /// and the Credit signal. The rights step comes next to change them.
 const NEW_STORY_REACH: &str = "commons";
+/// The signals a new story starts with (see above).
 const NEW_STORY_SIGNALS: [&str; 1] = ["credit"];
 
 /// `GET /stories/new` — step one: write it.

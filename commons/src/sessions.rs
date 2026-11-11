@@ -98,7 +98,9 @@ pub struct AttemptLimiter {
 }
 
 impl AttemptLimiter {
+    /// Wrong passphrases allowed for one handle within one window.
     pub const MAX_FAILURES: u32 = 5;
+    /// How long a run of failures counts for, in seconds (15 minutes).
     pub const WINDOW: u64 = 15 * 60;
 
     /// True when `key` may try again at time `now`.

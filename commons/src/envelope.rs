@@ -31,14 +31,18 @@ pub const SCHEMA: &str = "hic/v1";
 /// The unsigned object.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Envelope {
+    /// Always `hic/v1` today.
     pub schema: String,
+    /// What this object is (`Profile`, `Story`, `Invite` …); `type` on the wire.
     #[serde(rename = "type")]
     pub kind: String,
     /// The signer's Ed25519 public key, hex.
     pub author: String,
+    /// When it was signed, in Unix seconds.
     pub created_at: u64,
     /// The `cid` of the author's previous object in the same chain, if any.
     pub prev: Option<String>,
+    /// The type's own fields.
     pub body: Value,
 }
 
@@ -52,7 +56,9 @@ impl Envelope {
 /// An extra signature over the same bytes, by another key.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Cosig {
+    /// The cosigner's Ed25519 public key, hex.
     pub key: String,
+    /// Their signature, hex.
     pub sig: String,
 }
 
@@ -60,9 +66,12 @@ pub struct Cosig {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Signed {
     pub envelope: Envelope,
+    /// Hex SHA-256 of the canonical envelope (see the module notes).
     pub cid: String,
     /// The author's signature, hex.
     pub sig: String,
+    /// Signatures by other keys, e.g. the new key on a key rotation, proving
+    /// whoever made the rotation holds it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cosigs: Vec<Cosig>,
 }

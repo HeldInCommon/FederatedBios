@@ -72,6 +72,7 @@ mod tests {
     use super::*;
     use crate::model::Reach;
 
+    /// A member, their first signed version and the profile inside it.
     fn member_with_version() -> (HandleRec, Version, Profile) {
         let rec = HandleRec::new("tega", "Tega", 0, keys::generate(), String::new(), String::new());
         let profile = Profile { name: "Tega".into(), ..Default::default() };
@@ -86,6 +87,7 @@ mod tests {
         (rec, v, profile)
     }
 
+    /// A key rotation for `rec` that has been signed but not yet sent anywhere.
     fn pending_for(rec: &HandleRec, next_recovery: Option<(String, String)>) -> PendingRotation {
         let new = keys::generate();
         let change = identity::rotate(&rec.handle, &rec.ed_pub, &rec.ed_priv, &new, 5).unwrap();
