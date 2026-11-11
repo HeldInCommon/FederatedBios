@@ -104,6 +104,12 @@ pub struct Saved {
     /// True while there is a practice commons.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub practice: bool,
+    /// The commons' public address, when it is also reachable from outside
+    /// the room (Tailscale Funnel, a reverse proxy), e.g.
+    /// `"https://heldincommon.example.ts.net"`. Set by hand in `app.json`;
+    /// the commons then accepts invites and vouches made for it too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_address: Option<String>,
 }
 
 impl Saved {
@@ -249,6 +255,13 @@ pub fn instance_label(override_: Option<&str>, name: Option<&str>, role: &str) -
     override_.or(name).map(str::to_string).unwrap_or_else(|| format!("A Held in Common {role}"))
 }
 
+/// A public address as typed into `app.json`: trimmed, without a trailing
+/// slash, and only if it is an `http(s)://` URL.
+fn clean_address(a: &str) -> Option<String> {
+    let a = a.trim().trim_end_matches('/');
+    (a.starts_with("https://") || a.starts_with("http://")).then(|| a.to_string())
+}
+
 /// Read `app.json`. Returns the settings and whether they differ from the
 /// file (an install from before the chooser, or a name that needed tidying),
 /// in which case the caller should [`save`] them. Reads only.
@@ -265,6 +278,7 @@ pub fn load(base: &Path) -> (Saved, bool) {
         name: file.name.as_deref().and_then(|n| clean_name(n).ok()),
         other_name: file.other_name.as_deref().and_then(|n| clean_name(n).ok()),
         practice: file.practice,
+        public_address: file.public_address.as_deref().and_then(clean_address),
     };
     let changed = saved != file;
     (saved, changed)
@@ -300,6 +314,22 @@ mod tests {
         assert_eq!(mode(&dir), 0o700, "only the owner may enter the folder");
         assert_eq!(mode(&file), 0o600, "only the owner may read the log");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_public_address_in_app_json_is_kept_and_tidied() {
+        let dir = std::env::temp_dir().join(format!("hic-settings-public-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("app.json"),
+            r#"{"role":"commons","name":"Room","public_address":" https://hic.tail.ts.net/ "}"#,
+        )
+        .unwrap();
+        assert_eq!(load(&dir).0.public_address.as_deref(), Some("https://hic.tail.ts.net"));
+        std::fs::write(dir.join("app.json"), r#"{"role":"commons","name":"Room","public_address":"hic.tail"}"#)
+            .unwrap();
+        assert_eq!(load(&dir).0.public_address, None, "only an http(s) URL counts");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -360,6 +390,7 @@ mod tests {
             name: Some("Room 4".into()),
             other_name: Some("Laptop".into()),
             practice: false,
+            public_address: None,
         };
         assert_eq!(steward.running(), vec![Kind::Commons, Kind::Node], "the first-launch role comes first");
         assert_eq!(steward.home(), Some(Kind::Node));

@@ -161,3 +161,46 @@ async fn member_invite_page_can_be_emailed_and_passphrase_boxes_get_an_eye() {
         .text
         .contains("so it stays on your node and is never shared"));
 }
+
+/// A room commons that is also public (through Tailscale Funnel, say) accepts
+/// vouches addressed to its public name, and still refuses ones for any
+/// other commons.
+#[tokio::test]
+async fn a_vouch_for_the_commons_public_address_is_accepted() {
+    use hic_commons::app::{router, AppState};
+    use hic_commons::config::Config;
+    use hic_commons::role::Role;
+    use hic_commons::store::Store;
+    let dir = std::env::temp_dir().join(format!("hic-http-aka-{}", hic_commons::sessions::random_hex(6)));
+    let store = Store::open(&dir).unwrap();
+    let config = Config::from_lookup(|k| match k {
+        "PORT" => Some("8081".into()),
+        "HIC_BASE_URL" => Some("http://10.0.0.5:8081".into()),
+        "HIC_ALSO_KNOWN_AS" => Some("https://hic.tail.ts.net".into()),
+        _ => None,
+    });
+    let commons = router(std::sync::Arc::new(AppState::new(config, Role::Commons, store.clone())));
+    store.save_founding_code("hic-founding-p1").unwrap();
+    let m = person("member");
+    send(&commons, post_json("/inbox", &share_of(&m, Some("hic-founding-p1")))).await;
+    let newbie = person("newbie");
+    send(&commons, post_json("/inbox", &share_of(&newbie, None))).await;
+
+    let vouch_for = |commons_url: &str| {
+        let v = hic_commons::vouching::make_vouch(
+            &m.ed_pub,
+            &m.ed_priv,
+            commons_url,
+            "newbie",
+            &newbie.ed_pub,
+            hic_commons::now(),
+        )
+        .unwrap();
+        serde_json::to_value(&v).unwrap()
+    };
+    let elsewhere = send(&commons, post_json("/inbox", &vouch_for("https://another.example"))).await;
+    assert_eq!(elsewhere.status, StatusCode::FORBIDDEN, "a vouch for another commons is refused");
+    let r = send(&commons, post_json("/inbox", &vouch_for("https://hic.tail.ts.net"))).await;
+    assert_eq!(r.text, "accepted");
+    assert!(store.pending().is_empty());
+}

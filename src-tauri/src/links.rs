@@ -115,7 +115,13 @@ mod tests {
 
     /// What a computer with a node called "Laptop" runs, plus a commons and practice if asked.
     fn saved(other: Option<&str>, practice: bool) -> Saved {
-        Saved { role: Some("node".into()), name: Some("Laptop".into()), other_name: other.map(String::from), practice }
+        Saved {
+            role: Some("node".into()),
+            name: Some("Laptop".into()),
+            other_name: other.map(String::from),
+            practice,
+            public_address: None,
+        }
     }
 
     #[test]

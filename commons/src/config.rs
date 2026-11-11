@@ -19,6 +19,11 @@ pub struct Config {
     pub bind: Option<IpAddr>,
     /// `HIC_BASE_URL`: this server's public address. Default `http://localhost:<port>`.
     pub base_url: String,
+    /// `HIC_ALSO_KNOWN_AS`: other addresses this server is reached at, comma
+    /// separated, such as a commons announced on the room's Wi-Fi that is also
+    /// public through Tailscale Funnel or a reverse proxy. Invites, vouches and
+    /// withdrawals made for any of them count as addressed here.
+    pub also_known_as: Vec<String>,
     /// `HIC_INSTANCE`: a human name for this server.
     pub instance: String,
     /// `HIC_SHARE_DEFAULT`: the commons pre-filled in "Share to a commons".
@@ -48,6 +53,12 @@ pub struct Config {
     pub practice: bool,
 }
 
+/// The host (and port, if any) of a URL: `https://c.example/x` → `c.example`.
+fn host_of(url: &str) -> String {
+    let rest = url.split("://").nth(1).unwrap_or("localhost");
+    rest.split('/').next().unwrap_or(rest).to_string()
+}
+
 /// The sign-in cookie's name unless `HIC_SESSION_COOKIE` says otherwise.
 pub const DEFAULT_SESSION_COOKIE: &str = "hic_session";
 
@@ -70,6 +81,12 @@ impl Config {
                 .map(|u| u.trim().trim_end_matches('/').to_string())
                 .filter(|u| !u.is_empty())
                 .unwrap_or_else(|| format!("http://localhost:{port}")),
+            also_known_as: get("HIC_ALSO_KNOWN_AS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|u| u.trim().trim_end_matches('/').to_string())
+                .filter(|u| u.contains("://"))
+                .collect(),
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             role_env: get("HIC_ROLE"),
@@ -94,7 +111,7 @@ impl Config {
 
     /// The host part of [`Config::base_url`] (used in WebFinger `acct:` ids).
     pub fn domain(&self) -> String {
-        self.base_url.split("://").nth(1).unwrap_or("localhost").trim_end_matches('/').to_string()
+        host_of(&self.base_url)
     }
 
     /// True when the desktop app started this server (it set a launch token),
@@ -114,6 +131,12 @@ impl Config {
     /// these names exist for.
     pub fn own_hosts(&self) -> Vec<String> {
         let mut hosts = vec![self.domain()];
+        for url in &self.also_known_as {
+            let host = host_of(url);
+            if !hosts.contains(&host) {
+                hosts.push(host);
+            }
+        }
         for h in ["127.0.0.1", "localhost"] {
             let local = format!("{h}:{}", self.port);
             if !hosts.contains(&local) {
@@ -177,6 +200,21 @@ mod tests {
         let c = cfg(&[("PORT", "8081"), ("HIC_BASE_URL", "http://192.168.1.5:8081")]);
         assert_eq!(c.own_hosts(), vec!["192.168.1.5:8081", "127.0.0.1:8081", "localhost:8081"]);
         assert_eq!(cfg(&[]).own_hosts(), vec!["localhost:8080", "127.0.0.1:8080"], "no duplicates");
+    }
+
+    #[test]
+    fn a_commons_also_answers_to_its_other_public_addresses() {
+        let c = cfg(&[
+            ("PORT", "8081"),
+            ("HIC_BASE_URL", "http://10.0.0.5:8081"),
+            ("HIC_ALSO_KNOWN_AS", " https://hic.tail.ts.net/ , not-a-url, https://c.example:8443"),
+        ]);
+        assert_eq!(c.also_known_as, vec!["https://hic.tail.ts.net", "https://c.example:8443"], "URLs only, tidied");
+        assert_eq!(
+            c.own_hosts(),
+            vec!["10.0.0.5:8081", "hic.tail.ts.net", "c.example:8443", "127.0.0.1:8081", "localhost:8081"]
+        );
+        assert!(cfg(&[]).also_known_as.is_empty());
     }
 
     #[test]
