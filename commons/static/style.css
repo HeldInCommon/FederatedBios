@@ -876,7 +876,6 @@ fieldset {
   color: var(--text);
 }
 
-/* Licence and signals */
 /* A profile shared in from another node: where it came from */
 .origin-box {
   --tone: var(--violet);
@@ -910,8 +909,8 @@ fieldset {
   color: var(--text-muted);
 }
 
-/* A member's own tools under their profile */
-/* The content of a profile tab: the tabs above already set it apart. */
+/* A member's own tools: the content of a profile tab (the tabs above
+   already set it apart). */
 .owner-panel {
   margin-top: var(--space-2);
 }
@@ -1033,7 +1032,6 @@ fieldset {
   margin: var(--space-4) 0 0;
 }
 
-/* Stories: the writing box, a story's terms and text */
 /* Ramp: the member's next step and tabs (decision record 0022) */
 
 /* Buttons from heldincommon.org: ink, outline, and the pair used on a pink
