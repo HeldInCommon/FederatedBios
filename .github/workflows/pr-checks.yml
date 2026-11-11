@@ -3,6 +3,8 @@
 #                     builds hic-commons and runs scripts/test-federation.sh
 #   css-lint          checks the two stylesheets' layout and rules
 #                     (scripts/lint-css.sh)
+#   doc-comments      checks every Rust file, function and type has a doc
+#                     comment (scripts/check-docs.py)
 #   mac-preview       builds the desktop app for Apple Silicon and attaches the
 #                     unsigned .dmg to this workflow run (Actions -> the run ->
 #                     Artifacts), so reviewers can try a PR without a Rust setup.
@@ -15,6 +17,7 @@ on:
       - 'src-tauri/**'
       - 'scripts/test-federation.sh'
       - 'scripts/lint-css.sh'
+      - 'scripts/check-docs.py'
       - 'tools/css-lint/**'
       - '.github/workflows/pr-checks.yml'
   workflow_dispatch:
@@ -56,6 +59,13 @@ jobs:
           cache-dependency-path: tools/css-lint/package-lock.json
       - name: Stylesheets
         run: ./scripts/lint-css.sh
+
+  doc-comments:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every file, function and type documented
+        run: python3 scripts/check-docs.py
 
   mac-preview:
     runs-on: macos-latest

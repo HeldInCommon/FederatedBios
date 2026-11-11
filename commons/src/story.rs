@@ -435,6 +435,7 @@ mod tests {
     use super::*;
     use crate::keys;
 
+    /// A well-formed story id (16 hex characters) for these tests.
     const ID: &str = "0123456789abcdef";
 
     /// A small public story by `handle_`, for these tests.

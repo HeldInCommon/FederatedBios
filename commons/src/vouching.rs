@@ -206,6 +206,7 @@ mod tests {
     use super::*;
     use crate::keys;
 
+    /// The commons these tests run as.
     const URL: &str = "http://commons.example";
 
     /// The commons' view for a test: its members, used invite codes and intros,

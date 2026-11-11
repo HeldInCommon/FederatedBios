@@ -1,3 +1,5 @@
+//! The desktop app's entry point. The app itself lives in `lib.rs`.
+
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
