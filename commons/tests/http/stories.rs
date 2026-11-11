@@ -124,10 +124,11 @@ async fn a_node_does_not_take_stories_in() {
     assert_eq!(r.status, StatusCode::NOT_FOUND);
 }
 
-/// The story id from a `Location: /story/<id>` header.
+/// The story id from a `Location: /story/<id>…` header.
 fn story_id(r: &Reply) -> String {
     let loc = r.headers.get(header::LOCATION).unwrap().to_str().unwrap().to_string();
-    loc.strip_prefix("/story/").expect("redirects to the story").to_string()
+    let rest = loc.strip_prefix("/story/").expect("redirects to the story");
+    rest.split(['/', '?']).next().unwrap().to_string()
 }
 
 #[tokio::test]
@@ -140,7 +141,7 @@ async fn writing_a_story_on_a_node() {
     let sid = join_and_publish(&node, "ada", "public").await;
     let form = send(&node, get("/stories/new", Some(&sid))).await;
     assert!(form.text.contains("Listen to your street"));
-    assert!(form.text.contains("Who can see this"), "the rights choices are open on the form");
+    assert!(!form.text.contains("name=\"visibility\""), "rights come in step two");
     let csrf = csrf_in(&form.text);
 
     let body = format!(

@@ -3,25 +3,18 @@
 use maud::{html, Markup};
 
 use super::origin_host;
-use super::profile::profile_details;
+use super::profile::{places_list, profile_header, terms_line};
 use crate::canonical::short;
-use crate::model::{display_name_or_handle, RemoteEntry};
-use crate::web::layout::gov_row;
+use crate::model::{Reach, RemoteEntry};
 
 /// A profile shared in from another node, with where it came from.
 pub fn federated(r: &RemoteEntry) -> Markup {
     let p = &r.profile;
+    let reach = Reach::parse(&r.visibility).unwrap_or(Reach::Public);
     html! {
-        header class="intro profile-head" {
-            span class="vis-badge vis-federated" { "Federated" }
-            @if !p.avatar.is_empty() { img class="profile-avatar" src=(p.avatar) alt=""; }
-            h1 { (display_name_or_handle(&p.name, &r.handle)) }
-            @if !p.pronouns.is_empty() { p class="pronouns" { (p.pronouns) } }
-            @if !p.role.is_empty() { p class="lede" { (p.role) } }
-        }
-        (profile_details(p))
+        (profile_header(&r.handle, Some(p), &format!("Shared in \u{b7} {}", terms_line(reach, &r.license, &r.signals))))
+        (places_list(p))
         section class="profile-meta" {
-            (gov_row(&r.license, &r.signals))
             div class="origin-box" {
                 p class="origin-line" {
                     "Shared from "

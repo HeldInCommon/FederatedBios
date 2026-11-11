@@ -12,6 +12,8 @@
 //!
 //! Everything here is pure; the request handlers do the I/O.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -65,6 +67,26 @@ impl Story {
         }
     }
 
+    /// How many words it has (for "48 words").
+    pub fn word_count(&self) -> usize {
+        self.text.split_whitespace().count()
+    }
+
+    /// The same story with a new title and text: its id, author and terms
+    /// stay. Checked like a new one.
+    pub fn revised(&self, title: &str, text: &str) -> Result<Story, &'static str> {
+        new_story(&self.id, &self.handle, title, text, &self.visibility, &self.license, &self.signals)
+    }
+
+    /// The same story with new terms: who can see it, licence and signals.
+    pub fn with_terms(&self, visibility: &str, license: &str, signals: &[String]) -> Story {
+        let mut s = self.clone();
+        s.visibility = Reach::parse(visibility).unwrap_or(Reach::Commons).as_str().to_string();
+        s.license = license_from_form(license);
+        s.signals = signals_from_form(signals);
+        s
+    }
+
     /// The story as a plain text file (Export).
     pub fn as_text_file(&self) -> String {
         format!(
@@ -85,6 +107,9 @@ pub struct OwnStory {
     pub signed: Signed,
     #[serde(default)]
     pub shared_to: Vec<String>,
+    /// When it was last shared to each commons in `shared_to`.
+    #[serde(default)]
+    pub shared_at: BTreeMap<String, u64>,
 }
 
 impl OwnStory {
@@ -93,18 +118,43 @@ impl OwnStory {
         self.signed.envelope.created_at
     }
 
-    /// The same story, recorded as shared to `commons`.
-    pub fn with_shared_to(mut self, commons: &str) -> OwnStory {
+    /// The time to date this story's next version: `now`, but always later
+    /// than the current version. A commons keeps only a newer version, and
+    /// refuses one no later than a withdrawal, so an edit made in the same
+    /// second as the last version or a withdrawal must still come after it.
+    pub fn next_version_at(&self, now: u64) -> u64 {
+        now.max(self.created_at() + 1)
+    }
+
+    /// The same story, recorded as shared to `commons` at time `at`.
+    pub fn with_shared_to(mut self, commons: &str, at: u64) -> OwnStory {
         if !self.shared_to.iter().any(|c| c == commons) {
             self.shared_to.push(commons.to_string());
         }
+        self.shared_at.insert(commons.to_string(), at);
         self
     }
 
     /// The same story, no longer recorded as shared to `commons`.
     pub fn without_shared_to(mut self, commons: &str) -> OwnStory {
         self.shared_to.retain(|c| c != commons);
+        self.shared_at.remove(commons);
         self
+    }
+
+    /// The same story, a new version: `story` signed as `signed`. Where it's
+    /// shared doesn't change (the copies there are now older; see
+    /// [`OwnStory::changed_since_shared`]).
+    pub fn with_version(mut self, story: Story, signed: Signed) -> OwnStory {
+        self.story = story;
+        self.signed = signed;
+        self
+    }
+
+    /// True when this version was made after the copy on `commons` was
+    /// shared, so that copy is out of date until it's shared again.
+    pub fn changed_since_shared(&self, commons: &str) -> bool {
+        self.shared_at.get(commons).is_some_and(|at| self.created_at() > *at)
     }
 }
 
@@ -134,6 +184,39 @@ pub struct StoryTombstone {
     pub author: String,
     pub id: String,
     pub withdrawn_at: u64,
+}
+
+/// How long a commons shows that a story was withdrawn: a day.
+pub const WITHDRAWN_SHOWN_FOR: u64 = 86_400;
+
+/// A recent withdrawal, as a commons shows it: who, and when. Nothing of the
+/// story itself is kept (decision record 0020).
+#[derive(Debug, PartialEq, Eq)]
+pub struct RecentWithdrawal {
+    pub handle: String,
+    pub at: u64,
+}
+
+/// The withdrawals to show on a commons' stories page, newest first: within
+/// [`WITHDRAWN_SHOWN_FOR`] of `now`, by someone still listed here (for their
+/// handle), and not since shared again.
+pub fn recent_withdrawals(
+    withdrawn: &[StoryTombstone],
+    held: &[HeldStory],
+    listed: &[RemoteEntry],
+    now: u64,
+) -> Vec<RecentWithdrawal> {
+    let mut out: Vec<RecentWithdrawal> = withdrawn
+        .iter()
+        .filter(|t| now.saturating_sub(t.withdrawn_at) <= WITHDRAWN_SHOWN_FOR)
+        .filter(|t| !held.iter().any(|h| h.author() == t.author && h.story.id == t.id))
+        .filter_map(|t| {
+            let who = listed.iter().find(|r| r.ed_pub == t.author)?;
+            Some(RecentWithdrawal { handle: who.handle.clone(), at: t.withdrawn_at })
+        })
+        .collect();
+    out.sort_by_key(|w| std::cmp::Reverse(w.at));
+    out
 }
 
 /// True for a story id: 16 lowercase hex characters (also safe in file names).
@@ -468,6 +551,68 @@ mod tests {
         assert!(apply_withdraw(&w, &[], &[]).is_err(), "nothing to withdraw");
         let tomb = [StoryTombstone { author: k.ed_pub.clone(), id: ID.into(), withdrawn_at: 300 }];
         assert!(apply_withdraw(&w, &[], &tomb).is_ok(), "withdrawing twice is harmless");
+    }
+
+    #[test]
+    fn editing_keeps_the_id_and_terms_and_marks_shared_copies_out_of_date() {
+        let k = keys::generate();
+        let s = story("ada");
+        let own = OwnStory {
+            signed: sign(&s, &k.ed_pub, &k.ed_priv, 100).unwrap(),
+            story: s.clone(),
+            shared_to: vec![],
+            shared_at: BTreeMap::new(),
+        }
+        .with_shared_to("http://room", 150);
+        assert!(!own.changed_since_shared("http://room"));
+        let v2 = s.revised("Night bus, again", "New words.").unwrap();
+        assert_eq!((v2.id.as_str(), v2.license.as_str()), (ID, "cc-by"));
+        let own = own.with_version(v2.clone(), sign(&v2, &k.ed_pub, &k.ed_priv, 200).unwrap());
+        assert!(own.changed_since_shared("http://room"), "the copy there is the old version");
+        assert!(!own.with_shared_to("http://room", 210).changed_since_shared("http://room"));
+        assert!(s.revised(" ", "x").is_err(), "checked like a new story");
+    }
+
+    #[test]
+    fn each_new_version_is_dated_after_the_last() {
+        let k = keys::generate();
+        let s = story("ada");
+        let own = OwnStory {
+            signed: sign(&s, &k.ed_pub, &k.ed_priv, 500).unwrap(),
+            story: s,
+            shared_to: vec![],
+            shared_at: BTreeMap::new(),
+        };
+        assert_eq!(own.next_version_at(900), 900, "normally, now");
+        assert_eq!(own.next_version_at(500), 501, "same second: one later");
+        assert_eq!(own.next_version_at(10), 501, "a clock that went back: still later");
+    }
+
+    #[test]
+    fn new_terms_are_tidied() {
+        let s = story("ada").with_terms("members", "nonsense", &["open".into(), "x".into()]);
+        assert_eq!(s.visibility, "members");
+        assert_eq!(s.license, crate::governance::DEFAULT_LICENSE);
+        assert_eq!(s.signals, vec!["open".to_string()]);
+        assert_eq!(s.word_count(), 9, "The 38 sighs at the stop. A dog answers.");
+    }
+
+    #[test]
+    fn a_commons_shows_recent_withdrawals_without_the_story() {
+        let k = keys::generate();
+        let tomb = StoryTombstone { author: k.ed_pub.clone(), id: ID.into(), withdrawn_at: 1_000 };
+        let ada = [listed("ada", &k.ed_pub)];
+        let recent = recent_withdrawals(std::slice::from_ref(&tomb), &[], &ada, 1_100);
+        assert_eq!(recent, vec![RecentWithdrawal { handle: "ada".into(), at: 1_000 }]);
+        let a_day_later = 1_000 + WITHDRAWN_SHOWN_FOR + 1;
+        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &ada, a_day_later).is_empty(), "old news");
+        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &[], 1_100).is_empty(), "they left");
+        let again = [HeldStory {
+            story: story("ada"),
+            signed: sign(&story("ada"), &k.ed_pub, &k.ed_priv, 1_050).unwrap(),
+            received_at: 1_050,
+        }];
+        assert!(recent_withdrawals(&[tomb], &again, &ada, 1_100).is_empty(), "shared again");
     }
 
     #[test]

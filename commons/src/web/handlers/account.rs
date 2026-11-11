@@ -158,7 +158,9 @@ async fn finish_key_change(st: &AppState, h: &str, mut pending: PendingRotation)
     };
     reshare(st, h).await;
     // Commons take down stories signed by the old key; they can be shared again.
-    super::stories::forget_shares(st, h, None);
+    if let Err(e) = super::story::forget_shares(st, h, None) {
+        eprintln!("warning: keys replaced, but {e}");
+    }
     let body = pages::key_change(h, &pending.done, &[], new_code.as_deref());
     render(&st.site, Page::new("Key replaced", Some(h), body))
 }

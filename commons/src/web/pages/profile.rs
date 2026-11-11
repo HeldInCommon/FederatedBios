@@ -3,10 +3,11 @@
 use maud::{html, Markup};
 
 use super::owner::{next_step_block, profile_actions, tab_nav, tab_panel, OwnerPanel};
+use super::parts::{reach_label, signals_line};
 use crate::canonical::short;
-use crate::model::{display_name_or_handle, HandleRec, Profile, Version};
+use crate::governance::license_name;
+use crate::model::{display_name_or_handle, HandleRec, Profile, Reach, Version};
 use crate::ramp::Tab;
-use crate::web::layout::{gov_row, reach_badge};
 
 /// A member's profile page. `readable` is the profile the viewer may read
 /// (for members-only versions, only if it decrypted for them). The owner
@@ -31,52 +32,79 @@ pub fn profile(
     }
 }
 
-/// The profile itself: what anyone allowed to read it sees.
+/// The profile itself, as anyone allowed to read it sees it.
 fn profile_content(rec: &HandleRec, version: Option<&Version>, readable: Option<&Profile>) -> Markup {
+    let Some(v) = version else {
+        return html! {
+            header class="intro" {
+                h1 { "@" (rec.handle) }
+                p class="lede" { "This creator has not published a profile yet." }
+            }
+        };
+    };
+    let terms = terms_line(v.reach(), &v.license, &v.signals);
     html! {
-        @match version {
-            None => {
-                header class="intro" {
-                    h1 { "@" (rec.handle) }
-                    p class="lede" { "This creator has not published a profile yet." }
+        (profile_header(&rec.handle, readable, &terms))
+        @if let Some(p) = readable { (places_list(p)) }
+        section class="profile-meta" {
+            p class="cid" { "Version " span class="mono" { (short(&v.cid)) } " \u{b7} permanent content address" }
+        }
+    }
+}
+
+/// The terms a profile travels with, as one line ("Public · CC BY 4.0 · Signals: Credit").
+pub(super) fn terms_line(reach: Reach, license: &str, signals: &[String]) -> String {
+    let mut line = format!("{} \u{b7} {}", reach_label(reach), license_name(license));
+    if !signals.is_empty() {
+        line.push_str(&format!(" \u{b7} Signals: {}", signals_line(signals)));
+    }
+    line
+}
+
+/// A profile's header: a square photo (or the first letter of the name), its
+/// terms, the name, handle, pronouns and role, and the bio. `readable` is
+/// `None` for a members-only profile the viewer can't decrypt.
+pub(super) fn profile_header(handle: &str, readable: Option<&Profile>, terms: &str) -> Markup {
+    let name = readable.map(|p| display_name_or_handle(&p.name, handle)).unwrap_or_else(|| format!("@{handle}"));
+    let initial = name.trim_start_matches('@').chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+    html! {
+        section class="profile-head" {
+            div class="profile-photo" {
+                @match readable.filter(|p| !p.avatar.is_empty()) {
+                    Some(p) => { img src=(p.avatar) alt=""; }
+                    None => { span aria-hidden="true" { (initial) } }
                 }
             }
-            Some(v) => {
-                header class="intro profile-head" {
-                    (reach_badge(v.reach()))
-                    @match readable {
-                        Some(p) => {
-                            @if !p.avatar.is_empty() { img class="profile-avatar" src=(p.avatar) alt=""; }
-                            h1 { (display_name_or_handle(&p.name, &rec.handle)) }
-                            @if !p.pronouns.is_empty() { p class="pronouns" { (p.pronouns) } }
-                            @if !p.role.is_empty() { p class="lede" { (p.role) } }
+            div class="profile-info" {
+                p class="profile-terms" { (terms) }
+                h1 class="profile-name" { (name) }
+                @match readable {
+                    Some(p) => {
+                        p class="profile-handle" {
+                            "@" (handle)
+                            @if !p.pronouns.is_empty() { " \u{b7} " (p.pronouns) }
+                            @if !p.role.is_empty() { " \u{b7} " (p.role) }
                         }
-                        None => {
-                            h1 { "@" (rec.handle) }
-                            p class="lede" { "This profile is members-only and encrypted to the member set. Sign in as a member to read it." }
-                        }
+                        @if !p.bio.is_empty() { p class="profile-lead" { (p.bio) } }
                     }
-                }
-                @if let Some(p) = readable { (profile_details(p)) }
-                section class="profile-meta" {
-                    (gov_row(&v.license, &v.signals))
-                    p class="cid" { "Version " span class="mono" { (short(&v.cid)) } " · permanent content address" }
+                    None => {
+                        p class="profile-lead" { "This profile is members-only and encrypted to the member set. Sign in as a member to read it." }
+                    }
                 }
             }
         }
     }
 }
 
-/// Bio and places, shared by member and shared-in profile pages.
-pub(super) fn profile_details(p: &Profile) -> Markup {
+/// Where someone works, if they said.
+pub(super) fn places_list(p: &Profile) -> Markup {
     html! {
-        @if !p.bio.is_empty() { section class="profile-bio" { p { (p.bio) } } }
         @if !p.places.is_empty() {
             section class="profile-places" {
                 h2 class="section-h" { "Where they work" }
                 ul {
                     @for pl in &p.places {
-                        li { (pl.name) @if !pl.city.is_empty() { span class="place-city" { " · " (pl.city) } } }
+                        li { (pl.name) @if !pl.city.is_empty() { span class="place-city" { " \u{b7} " (pl.city) } } }
                     }
                 }
             }

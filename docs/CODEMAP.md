@@ -52,14 +52,16 @@ Writes happen in clearly named places that say what they change.
 | `sessions.rs` | Sessions (expire after 24 h) and the sign-in attempt limit. | cookie helpers yes |
 | `store.rs` | **The only module that touches files.** Atomic writes; "missing" vs "damaged"; the member and shared-profile lists cached in memory, cleared by every write. | no |
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
-| `web/pages/` | The body of each page, one file per page (`directory.rs`, `profile.rs`, `owner.rs`, `publish.rs`, `signin.rs`, …); `mod.rs` lists them. | yes |
+| `web/pages/` | The body of each page, one file per page (`directory.rs`, `profile.rs`, `owner.rs`, `publish.rs`, `signin.rs`, `stories.rs`, `story.rs`, `story_form.rs`, …); `mod.rs` lists them. Shared pieces of the heldincommon.org look (page heading, section label, starburst, terms panel, "2 min ago") are in `parts.rs`; the Sharing and rights fields, used by profiles and stories, in `rights.rs`. | yes |
 | `web/handlers/` | Request handlers, one file per page or flow: load → decide (pure) → render. `mod.rs` lists each file's routes and holds the shared helpers (session, CSRF check, `update_member`). | no |
 | `web/handlers/inbox.rs` | What a commons receives from nodes: shares, vouches, withdrawals, identity changes. | no |
 | `web/handlers/share.rs` | Sharing to and withdrawing from a commons; sending to a commons' inbox. | no |
 | `web/handlers/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
 | `web/handlers/membership.rs` | Bringing people in: invite codes and vouches. | no |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
-| `web/handlers/stories.rs` | Stories: write, read, export, share and withdraw on a node; list and read on a commons. | no |
+| `web/handlers/stories.rs` | Story lists (a node's; a commons', with recent withdrawals) and a story on a commons. | no |
+| `web/handlers/story.rs` | One story on its author's node: the page, export, share (`share_story_to`), withdraw. | no |
+| `web/handlers/story_edit.rs` | Writing a story in two steps (the words, then its rights), editing it, changing its terms. | no |
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css`, `avatar.js` and `password.js`, compiled into the binary. | — |

@@ -165,7 +165,9 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
                 eprintln!("warning: withdrawn, but couldn't update the list for @{h}: {e}");
             }
             // The commons removed this member's stories with the profile.
-            super::stories::forget_shares(&st, &h, Some(&commons));
+            if let Err(e) = super::story::forget_shares(&st, &h, Some(&commons)) {
+                eprintln!("warning: withdrawn, but {e}");
+            }
             render(&st.site, Page::new("Withdrawn", Some(&h), pages::withdrawn(&h, &label)))
         }
         Ok(r) => {

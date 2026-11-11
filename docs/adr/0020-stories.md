@@ -21,7 +21,8 @@ A member shares it to a commons where they are **already listed**; the commons k
 - Members-only stories never leave the node, and aren't encrypted there (the node holds the keys anyway; see the Three reaches in ARCHITECTURE).
 - A commons won't take a withdrawn copy back, so after a withdrawal the node re-signs its copy (dated after the withdrawal); sharing it again sends that newer version.
 - A key change can't move a story (its signature is the old key's), so commons take down stories signed by a replaced key, and the node forgets where they were shared. Sharing again re-signs them with the new key.
-- No editing yet: write a new story instead.
+- Stories can be edited and their terms changed (decision record 0022): each change is a new signed version with the same id, dated after the last one, and a copy already shared stays the earlier version until it's re-shared.
+- A commons shows a withdrawal for a day as "Withdrawn by @handle · when": who and when, never the story's title or text, which it no longer keeps.
 
 ## Alternatives considered
 Put the story in the bio (rejected: too short, and it would share the profile's terms). Accept stories from anyone (rejected: no gate). Read stories straight from the author's node (rejected for now: nodes don't accept connections, decision record 0004).

@@ -22,7 +22,9 @@
 //! | `account.rs` | recovery key, replacing and recovering a key |
 //! | `membership.rs` | invite codes and vouches, from a member's node |
 //! | `steward.rs` | the steward view of a commons |
-//! | `stories.rs` | stories: write, read, export, share and withdraw (node); list and read (commons) |
+//! | `stories.rs` | `GET /stories` (a node's, or a commons' with recent withdrawals), `GET /stories/{keyid}/{id}` |
+//! | `story.rs` | one story on its author's node: `GET /story/{id}`, export, `POST /story/share`, `POST /story/withdraw` |
+//! | `story_edit.rs` | writing and changing a story: `/stories/new`, `/story/{id}/edit`, `/story/{id}/rights` |
 
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
@@ -44,6 +46,8 @@ mod publish;
 mod share;
 mod signin;
 mod stories;
+mod story;
+mod story_edit;
 
 pub mod account;
 pub mod membership;
@@ -61,7 +65,9 @@ pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
 pub(crate) use share::{post_to_commons, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};
-pub use stories::{held_story, own_story, stories, story_create, story_form, story_share, story_text, story_withdraw};
+pub use stories::{held_story, stories};
+pub use story::{own_story, story_share, story_text, story_withdraw};
+pub use story_edit::{rights_form, rights_submit, story_create, story_edit, story_edit_form, story_form};
 
 /// The signed-in session for this request, if any.
 pub(crate) fn session(st: &AppState, headers: &HeaderMap) -> Option<Session> {
