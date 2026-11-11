@@ -30,7 +30,7 @@ Current version: **0.5.0**, signed and notarized for macOS.
 | Release, sign, or host it | [docs/MAINTAINER.md](docs/MAINTAINER.md) |
 | Run a commons in Docker | [commons/README.md](commons/README.md) |
 
-Slides: https://phoenixperry.github.io/FederatedBios/architecture.html
+Slides: https://heldincommon.github.io/FederatedBios/architecture.html
 
 ---
 
