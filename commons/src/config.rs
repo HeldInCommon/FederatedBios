@@ -37,6 +37,25 @@ pub struct Config {
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
     /// steward (today, whoever hosts the commons) sets it. Default 5.
     pub vouch_limit: u32,
+    /// `HIC_SESSION_COOKIE`: the sign-in cookie's name. Default `hic_session`.
+    /// Browsers share cookies between ports of the same host, so the desktop
+    /// app gives each server it runs on this computer (a node, a commons, a
+    /// practice commons) its own name; otherwise signing in to one would sign
+    /// you out of another.
+    pub session_cookie: String,
+    /// `HIC_PRACTICE=1`: this commons is a practice one, for learning to run a
+    /// commons. Only changes what its pages say.
+    pub practice: bool,
+}
+
+/// The sign-in cookie's name unless `HIC_SESSION_COOKIE` says otherwise.
+pub const DEFAULT_SESSION_COOKIE: &str = "hic_session";
+
+/// A cookie name we accept: 1 to 40 ASCII letters, digits or `_`. Anything
+/// else would need quoting in a `Set-Cookie` header, so it falls back to the
+/// default.
+fn valid_cookie_name(c: &str) -> bool {
+    (1..=40).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 impl Config {
@@ -60,6 +79,11 @@ impl Config {
             vouch_limit: get("HIC_VOUCH_LIMIT")
                 .and_then(|v| v.trim().parse().ok())
                 .unwrap_or(crate::vouching::DEFAULT_LIMIT),
+            session_cookie: get("HIC_SESSION_COOKIE")
+                .map(|c| c.trim().to_string())
+                .filter(|c| valid_cookie_name(c))
+                .unwrap_or_else(|| DEFAULT_SESSION_COOKIE.into()),
+            practice: get("HIC_PRACTICE").is_some_and(|v| v.trim() == "1"),
         }
     }
 
@@ -71,6 +95,32 @@ impl Config {
     /// The host part of [`Config::base_url`] (used in WebFinger `acct:` ids).
     pub fn domain(&self) -> String {
         self.base_url.split("://").nth(1).unwrap_or("localhost").trim_end_matches('/').to_string()
+    }
+
+    /// True when the desktop app started this server (it set a launch token),
+    /// so pages may offer the app's own actions (see `web::pages::guide`).
+    pub fn in_app(&self) -> bool {
+        self.launch_token.is_some()
+    }
+
+    /// The hosts this server counts as itself when something signed is
+    /// addressed to it (a withdrawal, an invite, a vouch): its public address,
+    /// and `127.0.0.1` and `localhost` on its port. The last two matter on the
+    /// commons' own computer: a node there (the desktop app runs both) reaches
+    /// the commons at `127.0.0.1`, while the commons announces its Wi-Fi
+    /// address. Accepting them lets a message meant for "the commons on this
+    /// port of the sender's own computer" also count here; that is the same
+    /// commons whenever the sender is on this computer, which is the case
+    /// these names exist for.
+    pub fn own_hosts(&self) -> Vec<String> {
+        let mut hosts = vec![self.domain()];
+        for h in ["127.0.0.1", "localhost"] {
+            let local = format!("{h}:{}", self.port);
+            if !hosts.contains(&local) {
+                hosts.push(local);
+            }
+        }
+        hosts
     }
 
     /// Mark session cookies `Secure` only when served over https: browsers
@@ -119,6 +169,29 @@ mod tests {
         assert_eq!(c.base_url, "https://c.example");
         assert_eq!(c.share_default, "http://x");
         assert!(c.secure_cookie());
+    }
+
+    #[test]
+    fn a_commons_answers_to_its_public_and_local_addresses() {
+        let c = cfg(&[("PORT", "8081"), ("HIC_BASE_URL", "http://192.168.1.5:8081")]);
+        assert_eq!(c.own_hosts(), vec!["192.168.1.5:8081", "127.0.0.1:8081", "localhost:8081"]);
+        assert_eq!(cfg(&[]).own_hosts(), vec!["localhost:8080", "127.0.0.1:8080"], "no duplicates");
+    }
+
+    #[test]
+    fn session_cookie_name_is_checked() {
+        assert_eq!(cfg(&[]).session_cookie, "hic_session");
+        assert_eq!(cfg(&[("HIC_SESSION_COOKIE", " hic_session_8081 ")]).session_cookie, "hic_session_8081");
+        assert_eq!(cfg(&[("HIC_SESSION_COOKIE", "bad; name")]).session_cookie, "hic_session");
+        assert_eq!(cfg(&[("HIC_SESSION_COOKIE", "")]).session_cookie, "hic_session");
+    }
+
+    #[test]
+    fn practice_and_app_flags() {
+        assert!(!cfg(&[]).practice);
+        assert!(cfg(&[("HIC_PRACTICE", "1")]).practice);
+        assert!(!cfg(&[]).in_app());
+        assert!(cfg(&[("HIC_LAUNCH_TOKEN", "t")]).in_app());
     }
 
     #[test]

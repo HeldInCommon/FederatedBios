@@ -64,6 +64,41 @@ pub fn signals_from_form(values: &[String]) -> Vec<String> {
     out
 }
 
+/// What a licence lets people do, in plain words, for the licence cards.
+#[derive(Debug, PartialEq, Eq)]
+pub struct LicenseTerms {
+    /// One line: the gist.
+    pub summary: &'static str,
+    /// Must reusers credit the author?
+    pub credit: &'static str,
+    /// May they make changed versions?
+    pub adapt: &'static str,
+    /// May they use it commercially?
+    pub commercial: bool,
+}
+
+/// The plain-language terms of a licence key (unknown keys read as all rights reserved).
+pub fn license_terms(key: &str) -> LicenseTerms {
+    let t = |summary, credit, adapt, commercial| LicenseTerms { summary, credit, adapt, commercial };
+    match key {
+        "cc0" => t("No conditions. Free for any use.", "not required", "yes", true),
+        "cc-by" => t("Any use, as long as you're credited.", "required", "yes", true),
+        "cc-by-sa" => {
+            t("Any use with credit; changed versions carry this same licence.", "required", "yes, share alike", true)
+        }
+        "cc-by-nc" => t("With credit, for non-commercial use only.", "required", "yes", false),
+        "cc-by-nc-sa" => t(
+            "Non-commercial, with credit; changed versions carry this licence.",
+            "required",
+            "yes, share alike",
+            false,
+        ),
+        "cc-by-nd" => t("Share it as it is, with credit. No changed versions.", "required", "no", true),
+        "cc-by-nc-nd" => t("Share it as it is, with credit, non-commercially.", "required", "no", false),
+        _ => t("No reuse without asking you first.", "ask first", "ask first", false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,5 +125,15 @@ mod tests {
     #[test]
     fn unknown_signal_is_not_echoed() {
         assert_eq!(signal_name("<b>hi</b>"), "signal");
+    }
+
+    #[test]
+    fn every_licence_has_plain_terms() {
+        for (key, _, _) in LICENSES {
+            assert!(!license_terms(key).summary.is_empty());
+        }
+        assert!(!license_terms("cc-by-nc").commercial);
+        assert_eq!(license_terms("cc-by-nd").adapt, "no");
+        assert_eq!(license_terms("arr").credit, "ask first");
     }
 }

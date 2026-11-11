@@ -1,7 +1,7 @@
 //! Local networking: is our server answering, and what is this computer's
 //! address on the local network?
 //!
-//! The app must only ever show *its own* server. Another program might be
+//! The app must only ever show *its own* servers. Another program might be
 //! using port 8080 (a development server, a Docker container, an old copy of
 //! the app), and if the window showed that instead, someone could type their
 //! passphrase into it. So instead of "is the port open?", the app asks
@@ -12,14 +12,26 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
-/// The port the server listens on.
-pub const PORT: u16 = 8080;
+/// The address the window opens for the server on `port`. 127.0.0.1 rather
+/// than "localhost": a node listens only on IPv4 loopback, and "localhost"
+/// may resolve to IPv6 first.
+pub fn local_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
+}
 
-/// The address the window opens. 127.0.0.1 rather than "localhost": a node
-/// listens only on IPv4 loopback, and "localhost" may resolve to IPv6 first.
-pub const LOCAL_URL: &str = "http://127.0.0.1:8080";
+/// The port of a page on one of this computer's servers (`127.0.0.1` or
+/// `localhost`), or `None` for anywhere else.
+pub fn local_port(url: &str) -> Option<u16> {
+    let rest = url.strip_prefix("http://")?;
+    let host_port = rest.split(['/', '?', '#']).next()?;
+    let (host, port) = host_port.rsplit_once(':')?;
+    if host != "127.0.0.1" && host != "localhost" {
+        return None;
+    }
+    port.parse().ok()
+}
 
-/// What is answering on [`PORT`].
+/// What is answering on a port.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Probe {
     /// Nothing is listening yet.
@@ -53,9 +65,9 @@ pub fn split_http(raw: &str) -> (bool, &str) {
     (ok, body)
 }
 
-/// Ask whatever is on [`PORT`] for `/health` and classify it.
-pub fn probe(token: &str) -> Probe {
-    let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
+/// Ask whatever is on `port` for `/health` and classify it.
+pub fn probe(port: u16, token: &str) -> Probe {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else { return Probe::Nothing };
     let _ = s.set_read_timeout(Some(Duration::from_millis(800)));
     let req = "GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
@@ -82,8 +94,8 @@ pub fn parse_notices(body: &str) -> Vec<String> {
 /// Collect the node's news that hasn't been shown as a notification yet (the
 /// node marks it as shown). Proves it's the app with the launch token. Only
 /// talks to this computer.
-pub fn claim_notices(token: &str) -> Vec<String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
+pub fn claim_notices(port: u16, token: &str) -> Vec<String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else { return Vec::new() };
     let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
     let req = format!(
@@ -100,17 +112,17 @@ pub fn claim_notices(token: &str) -> Vec<String> {
     }
 }
 
-/// This computer's address on the local network, for a commons other people
-/// in the room share to. Connecting a UDP socket sends nothing; it only asks
-/// the operating system which interface it would use.
-pub fn lan_url() -> Option<String> {
+/// This computer's address on the local network, for a commons on `port`
+/// that other people in the room share to. Connecting a UDP socket sends
+/// nothing; it only asks the operating system which interface it would use.
+pub fn lan_url(port: u16) -> Option<String> {
     let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     sock.connect("8.8.8.8:80").ok()?;
     let ip = sock.local_addr().ok()?.ip();
     if ip.is_loopback() || ip.is_unspecified() {
         return None;
     }
-    Some(format!("http://{ip}:{PORT}"))
+    Some(format!("http://{ip}:{port}"))
 }
 
 /// A token identifying this launch of the app. It only needs to differ
@@ -160,6 +172,17 @@ mod tests {
         let body = r#"[{"handle":"ada","text":"@ada is now listed on c:8081.","at":1}]"#;
         assert_eq!(parse_notices(body), vec!["@ada is now listed on c:8081.".to_string()]);
         assert!(parse_notices("not json").is_empty());
+    }
+
+    #[test]
+    fn local_pages_are_recognised_by_port() {
+        assert_eq!(local_port("http://127.0.0.1:8080/@tega"), Some(8080));
+        assert_eq!(local_port("http://localhost:8082"), Some(8082));
+        assert_eq!(local_port("http://127.0.0.1:8081?x=1"), Some(8081));
+        assert_eq!(local_port("http://192.168.1.5:8081/"), None, "a room commons seen from outside");
+        assert_eq!(local_port("https://commons.example/"), None);
+        assert_eq!(local_port("http://127.0.0.1.evil.example:8080/"), None);
+        assert_eq!(local_port("tauri://localhost/index.html"), None);
     }
 
     #[test]

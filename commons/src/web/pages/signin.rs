@@ -8,11 +8,18 @@ use crate::web::layout::Site;
 const APP_DOWNLOAD: &str = "https://github.com/HeldInCommon/FederatedBios/releases/latest";
 
 /// The sign-up form (nodes only).
-pub fn join_form() -> Markup {
+/// The sign-up form. `signed_in_as`: someone already signed in is making a
+/// second profile, so the page says what that means.
+pub fn join_form(signed_in_as: Option<&str>) -> Markup {
     html! {
         header class="intro" {
-            h1 { "Join the commons" }
-            p class="lede" { "Pick a handle. We mint your keys on the node — you never handle a private key yourself." }
+            @if let Some(me) = signed_in_as {
+                h1 { "Create another profile" }
+                p class="lede" { "You're signed in as @" (me) ". A new profile gets its own handle and its own keys, separate from @" (me) ": useful for joining a different commons under another name. To share @" (me) " somewhere new instead, use " a href={ "/@" (me) "?tab=sharing" } { "your Sharing tab" } "." }
+            } @else {
+                h1 { "Join the commons" }
+                p class="lede" { "Pick a handle. We mint your keys on the node — you never handle a private key yourself." }
+            }
         }
         form method="post" action="/join" class="stack-form" {
             div class="field" {

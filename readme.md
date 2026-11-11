@@ -13,8 +13,9 @@ node.
   collective, a server). There's no sign-up on a commons: profiles arrive as
   signed copies from people's nodes, and a newcomer is listed once a member
   vouches for them or the steward approves them.
-- **Same program, two roles:** one binary runs as either; the desktop app asks
-  which when it first starts.
+- **Same program, two roles:** one binary runs as either. The desktop app asks
+  which when it first starts, and can run both side by side, plus a practice
+  commons to learn on (**Go** menu).
 
 Current version: **0.4.0**, signed and notarized for macOS.
 

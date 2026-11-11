@@ -3,19 +3,22 @@
 //! A thin native wrapper around the bundled `hic-commons` server. On first
 //! launch the person chooses what this computer runs: a **node** (their own
 //! profile and work) or a **commons** (a shared directory other nodes share
-//! to). After that the app starts the server in that role and shows its pages.
-//! No Docker, no terminal.
+//! to). Later they can add the other one, and a **practice commons** to
+//! learn on; all of them run side by side, and the **Go** menu and a row of
+//! buttons on every page move between them. No Docker, no terminal.
 //!
 //! | Module | Job |
 //! |---|---|
-//! | [`settings`] | the saved role and name, and the data folders (`app.json`) |
+//! | [`settings`] | what this computer runs, the names, ports and data folders (`app.json`) |
 //! | [`network`] | is *our* server answering; this computer's network address |
-//! | [`sidecar`] | starting and stopping the server process |
-//! | [`commands`] | what the app's screens (`ui/app.js`) can ask for |
+//! | [`sidecar`] | starting and stopping the server processes |
+//! | [`links`] | `hic-app://` links and the switcher between servers (pure) |
+//! | [`commands`] | what the app's screens (`ui/app.js`), the menu and links can ask for |
 //!
 //! This file only wires them together.
 
 pub mod commands;
+pub mod links;
 pub mod network;
 pub mod settings;
 pub mod sidecar;
@@ -25,83 +28,178 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-use commands::Chosen;
-use sidecar::{AppConfig, Sidecar};
+use commands::{Chosen, Shown};
+use settings::{Kind, Saved};
+use sidecar::{AppConfig, Servers};
 
-/// Injected into every server page (the node, or a commons the person
-/// visits). On anything but this computer's own server it adds a fixed
-/// "Back to your node" button, so a visited commons is never a dead end. The
-/// app can add this from the host side, so it works on any commons.
-const BACK_BUTTON_JS: &str = r#"(function(){
-  var NODE='http://127.0.0.1:8080';
-  var here=location.href;
-  var isNode=here.indexOf('127.0.0.1:8080')>-1||here.indexOf('localhost:8080')>-1;
-  var id='hic-back-node';
-  var old=document.getElementById(id); if(old){old.remove();}
-  if(isNode){return;}
-  var b=document.createElement('button'); b.id=id;
-  b.textContent='← Back to your node';
-  b.style.cssText='position:fixed;top:9px;right:12px;z-index:2147483647;cursor:pointer;border:0;padding:8px 12px;font:700 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.07em;text-transform:uppercase;color:#fff;background:#0a7a54;box-shadow:0 2px 10px rgba(0,0,0,.3);';
-  b.onclick=function(){location.href=NODE;};
-  document.body.appendChild(b);
-})();"#;
-
-/// The app's menu: the platform's standard menus plus **Node → Rename…**,
-/// which opens the naming screen in rename mode.
-fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
-    use tauri::menu::{Menu, MenuItem, Submenu};
+/// The Go menu: show each server this computer runs, or set it up; remove
+/// the practice commons; rename the node or commons; and, always, open the
+/// project's site. Rebuilt whenever what the computer runs changes
+/// ([`refresh_menu`]). Before first launch's choice it holds only the site.
+fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
     let menu = Menu::default(app)?;
-    let rename = MenuItem::with_id(app, "rename", "Rename…", true, None::<&str>)?;
-    menu.append(&Submenu::with_items(app, "Node", true, &[&rename])?)?;
+    let go = Submenu::new(app, "Go", true)?;
+    let about =
+        MenuItem::with_id(app, "about-project", "About the Held in Common project \u{2197}", true, None::<&str>)?;
+    if !saved.ready() {
+        go.append(&about)?;
+        menu.append(&go)?;
+        return Ok(menu);
+    }
+    for k in Kind::ALL {
+        let text = match (k, saved.runs(k)) {
+            (_, true) => k.label().to_string(),
+            (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
+            (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
+            (Kind::Practice, false) => "Open a practice commons".to_string(),
+        };
+        go.append(&MenuItem::with_id(app, format!("open:{}", k.key()), text, true, None::<&str>)?)?;
+    }
+    go.append(&PredefinedMenuItem::separator(app)?)?;
+    for k in [Kind::Node, Kind::Commons].into_iter().filter(|k| saved.runs(*k)) {
+        let text = format!("Rename {}\u{2026}", k.label().to_lowercase());
+        go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
+    }
+    if saved.practice {
+        go.append(&MenuItem::with_id(app, "remove-practice", "Remove practice commons\u{2026}", true, None::<&str>)?)?;
+    }
+    go.append(&PredefinedMenuItem::separator(app)?)?;
+    go.append(&about)?;
+    menu.append(&go)?;
     Ok(menu)
 }
 
+/// Rebuild the Go menu for what this computer now runs. Queued on the main
+/// thread rather than done here: callers may hold the [`Chosen`] lock on
+/// another thread, and waiting for the main thread while it waits for that
+/// lock (to show a page) would freeze the app.
+pub fn refresh_menu(app: &tauri::AppHandle, saved: &Saved) {
+    let (app, saved) = (app.clone(), saved.clone());
+    let queued = app.clone().run_on_main_thread(move || match build_menu(&app, &saved) {
+        Ok(menu) => {
+            if let Err(e) = app.set_menu(menu) {
+                log::warn!("couldn't update the menu: {e}");
+            }
+        }
+        Err(e) => log::warn!("couldn't build the menu: {e}"),
+    });
+    if let Err(e) = queued {
+        log::warn!("couldn't update the menu: {e}");
+    }
+}
+
+/// A Go menu choice.
+fn on_menu(app: &tauri::AppHandle, id: &str) {
+    let result = if let Some(k) = id.strip_prefix("open:").and_then(Kind::parse) {
+        commands::open(app, k)
+    } else if let Some(k) = id.strip_prefix("rename:").and_then(Kind::parse) {
+        commands::open_setup(app, &format!("do=rename&role={}", k.key()), "Rename");
+        Ok(())
+    } else if id == "remove-practice" {
+        commands::open_setup(app, "do=remove-practice", "Remove practice commons");
+        Ok(())
+    } else if id == "about-project" {
+        open_in_browser(app, links::PROJECT_URL);
+        Ok(())
+    } else {
+        Ok(())
+    };
+    if let Err(e) = result {
+        log::warn!("{id}: {e}");
+    }
+}
+
+/// Open `url` in the person's own web browser.
+fn open_in_browser(app: &tauri::AppHandle, url: &str) {
+    use tauri_plugin_opener::OpenerExt;
+    if let Err(e) = app.opener().open_url(url, None::<&str>) {
+        log::warn!("couldn't open {url} in the browser: {e}");
+    }
+}
+
+/// True when `url` is a page of one of this computer's servers, as this
+/// app runs them.
+fn is_ours(app: &tauri::AppHandle, url: &str) -> bool {
+    let Some(port) = network::local_port(url) else { return false };
+    app.try_state::<Chosen>().is_some_and(|c| links::kind_on(&c.0.lock().unwrap(), port).is_some())
+}
+
+/// A `hic-app://` link was followed in the main window. Act on it only if
+/// the page it was followed from is one of ours: a commons elsewhere can't
+/// ask the app to do anything. Runs on its own thread, since it may start a
+/// server or open a window.
+fn follow_app_link(app: &tauri::AppHandle, url: &str) {
+    let Some(links::AppLink::Open(kind)) = links::parse(url) else { return };
+    let from = app.try_state::<Shown>().map(|s| s.0.lock().unwrap().clone()).unwrap_or_default();
+    if !is_ours(app, &from) {
+        log::warn!("ignored {url}: followed from {from}, which isn't one of this computer's servers");
+        return;
+    }
+    let (app, url) = (app.clone(), url.to_string());
+    std::thread::spawn(move || {
+        if let Err(e) = commands::open(&app, kind) {
+            log::warn!("{url}: {e}");
+        }
+    });
+}
+
 /// The main window. Created here rather than in `tauri.conf.json` so it can
-/// hand `mailto:` links ("Email this invite") to the person's own mail app:
-/// a web view can't open them itself.
-fn main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), String> {
+/// catch links that shouldn't load in it: `mailto:` ("Email this invite")
+/// goes to the person's own mail app, the project's site
+/// ([`links::opens_in_browser`]) to their browser, and `hic-app://` to
+/// [`follow_app_link`].
+fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
     let handle = app.clone();
     tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
         .title("Held in Common")
         .inner_size(1100.0, 820.0)
-        .on_navigation(move |url| {
-            if url.scheme() != "mailto" {
-                return true;
+        .on_navigation(move |url| match url.scheme() {
+            "mailto" => {
+                use tauri_plugin_opener::OpenerExt;
+                if let Err(e) = handle.opener().open_url(url.as_str(), None::<&str>) {
+                    log::warn!("couldn't open the mail app: {e}");
+                }
+                false
             }
-            use tauri_plugin_opener::OpenerExt;
-            if let Err(e) = handle.opener().open_url(url.as_str(), None::<&str>) {
-                log::warn!("couldn't open the mail app: {e}");
+            links::SCHEME => {
+                follow_app_link(&handle, url.as_str());
+                false
             }
-            false
+            "http" | "https" if links::opens_in_browser(url.host_str()) => {
+                open_in_browser(&handle, url.as_str());
+                false
+            }
+            _ => true,
         })
         .build()
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
-/// Open the naming screen in rename mode, in its own small window (or bring
-/// that window forward if it's already open). It closes itself once the new
-/// name is saved; see `commands::set_name`.
-fn open_rename<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    if let Some(win) = app.get_webview_window(commands::RENAME_WINDOW) {
-        let _ = win.set_focus();
-        return;
-    }
-    let built =
-        tauri::WebviewWindowBuilder::new(app, commands::RENAME_WINDOW, tauri::WebviewUrl::App("index.html".into()))
-            .title("Rename this node")
-            .inner_size(620.0, 560.0)
-            .resizable(false)
-            .build();
-    if let Err(e) = built {
-        log::warn!("couldn't open the rename window: {e}");
-    }
-}
-
 /// True for pages served over http(s) by a server, as opposed to the app's
 /// own screens (served from `tauri.localhost`).
 fn is_server_page(url: &str) -> bool {
     (url.starts_with("http://") || url.starts_with("https://")) && !url.contains("tauri.localhost")
+}
+
+/// A page finished loading in a window. In the main window: remember where
+/// it is, set the title to say which server it is, and add the switcher.
+fn on_page(window: &tauri::Webview, url: &str) {
+    if window.label() != "main" {
+        return;
+    }
+    let app = window.app_handle();
+    if let Some(shown) = app.try_state::<Shown>() {
+        *shown.0.lock().unwrap() = url.to_string();
+    }
+    let Some(chosen) = app.try_state::<Chosen>().filter(|_| is_server_page(url)) else { return };
+    let saved = chosen.0.lock().unwrap().clone();
+    let here = network::local_port(url).and_then(|p| links::kind_on(&saved, p));
+    if let (Some(k), Some(w)) = (here, app.get_webview_window("main")) {
+        let _ = w.set_title(&sidecar::title_for(k));
+    }
+    let _ = window.eval(links::switcher_js(&links::places(&saved, here)));
 }
 
 /// The log file: `~/Library/Logs/org.heldincommon.node/held-in-common.log` on
@@ -143,25 +241,22 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::node_up,
+            commands::server_url,
             commands::setup_state,
             commands::choose_role,
+            commands::add_role,
             commands::set_name,
-            commands::close_rename,
-            commands::restart_node
+            commands::close_setup,
+            commands::restart_node,
+            commands::remove_practice_now
         ])
-        .on_page_load(|window, payload| {
-            if is_server_page(payload.url().as_str()) {
-                let _ = window.eval(BACK_BUTTON_JS);
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                on_page(webview, payload.url().as_str());
             }
         })
-        .menu(build_menu)
-        .on_menu_event(|app, event| {
-            if event.id() == "rename" {
-                open_rename(app);
-            }
-        })
+        .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
         .setup(|app| {
-            main_window(app.handle()).map_err(std::io::Error::other)?;
             let base = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
             std::fs::create_dir_all(&base).ok();
             let cfg = app_config(base.clone());
@@ -172,25 +267,35 @@ pub fn run() {
                     log::warn!("couldn't update app.json: {e}");
                 }
             }
-            let proc_ = Sidecar::default();
-            // A returning user starts straight away. A new one sees the chooser;
-            // one from before names existed is asked for a name first.
-            if let (Some(role), Some(name)) = (&saved.role, &saved.name) {
-                sidecar::start(app.handle(), &cfg, &proc_, role, name).map_err(std::io::Error::other)?;
+            app.manage(Shown::default());
+            main_window(app.handle()).map_err(std::io::Error::other)?;
+            let servers = Servers::default();
+            // A returning user starts straight away: every server this
+            // computer runs, with the first-launch role in the window (the
+            // loading screen opens it). A new one sees the chooser; one from
+            // before names existed is asked for a name first.
+            for kind in saved.running() {
+                if let Err(e) = sidecar::start(app.handle(), &cfg, &servers, &saved, kind, false) {
+                    if Some(kind) == saved.first() {
+                        return Err(std::io::Error::other(e).into());
+                    }
+                    log::error!("couldn't start {}: {e}", kind.key());
+                }
             }
+            refresh_menu(app.handle(), &saved);
             app.manage(cfg);
             app.manage(Chosen(Mutex::new(saved)));
-            app.manage(proc_);
+            app.manage(servers);
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|handle, event| {
             // The shell plugin doesn't stop sidecars on exit. Without this, a
-            // quit leaves the server holding port 8080 and the next launch stalls.
+            // quit leaves the servers holding their ports and the next launch stalls.
             if let tauri::RunEvent::Exit = event {
-                if let Some(proc_) = handle.try_state::<Sidecar>() {
-                    proc_.stop();
+                if let Some(servers) = handle.try_state::<Servers>() {
+                    servers.stop_all();
                 }
             }
         });
@@ -201,7 +306,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_server_pages_get_the_back_button() {
+    fn only_server_pages_get_the_switcher() {
         assert!(is_server_page("http://127.0.0.1:8080/@tega"));
         assert!(is_server_page("https://commons.example/"));
         assert!(!is_server_page("http://tauri.localhost/index.html"));

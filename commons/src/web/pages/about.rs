@@ -2,8 +2,9 @@
 
 use maud::{html, Markup};
 
-/// How the system works, in plain language.
-pub fn about() -> Markup {
+/// How the system works, in plain language. `on_node` adds a pointer to
+/// running a commons.
+pub fn about(on_node: bool) -> Markup {
     html! {
         header class="intro" { h1 { "How this works" } p class="lede" { "A federated commons for creative data — govern the models, not only the data." } }
         section class="prose" {
@@ -17,6 +18,10 @@ pub fn about() -> Markup {
             p { "Each version carries a Creative Commons license and CC signals — machine-readable preferences for how models and datasets may learn from your work." }
             h2 class="section-h" { "Federation" }
             p { "A node sends a signed copy of a profile to a commons, which checks the signature before listing it. The messages are shaped like ActivityStreams, but this isn't yet full ActivityPub: other fediverse servers can't follow it." }
+            @if on_node {
+                h2 class="section-h" { "Hosting a commons" }
+                p { "Anyone can run a commons for their workshop, class or collective, alongside their own node. " a href="/run-a-commons" { "Run your own commons" } " answers the common questions and lets you try a practice one." }
+            }
         }
     }
 }

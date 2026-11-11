@@ -12,8 +12,11 @@ mod common;
 
 mod accounts;
 mod basics;
+mod guide;
 mod publishing;
+mod ramp;
 mod sharing;
 mod steward;
+mod stories;
 mod vouching;
 mod waiting;

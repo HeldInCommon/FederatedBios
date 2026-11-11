@@ -90,6 +90,10 @@ pub struct HandleRec {
     /// The node checks them and records a [`Notice`] when that changes.
     #[serde(default)]
     pub waiting_on: Vec<String>,
+    /// True once the member has downloaded a backup (or chose "Not now"), so
+    /// the profile stops suggesting it as the next step (decision record 0022).
+    #[serde(default)]
+    pub backup_done: bool,
 }
 
 impl HandleRec {
@@ -117,6 +121,7 @@ impl HandleRec {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            backup_done: false,
             waiting_on: Vec::new(),
         }
     }

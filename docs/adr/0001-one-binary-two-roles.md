@@ -13,7 +13,7 @@ One program, `hic-commons`, runs as either. The role is saved in `instance.json`
 A node's folder holds its members' private keys; a commons' folder holds other people's shared copies. If a setting could quietly turn one into the other, a node's members could suddenly find their sign-up page on a public commons, or a commons could start minting identities. Fixing the role to the folder makes that impossible.
 
 ## Consequences
-Running the other role means a new data folder. Older hosted commons that relied on guessing the role from their name still work, with a warning, until they set `HIC_ROLE`.
+Running the other role means a new data folder. The desktop app can run both, each in its own folder, side by side ([0019](0019-node-and-commons-side-by-side.md)). Older hosted commons that relied on guessing the role from their name still work, with a warning, until they set `HIC_ROLE`.
 
 ## Alternatives considered
 A setting that can change at any time (rejected: too easy to get wrong); two programs (rejected: double maintenance).

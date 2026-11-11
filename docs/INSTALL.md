@@ -45,7 +45,7 @@ The first time you open the app it asks **what you want to run**. Choose
 Then **name it**, for example "Studio laptop". People see this name next to your
 profile on every commons you share to; if you use Held in Common on more than
 one computer, give each its own name. You can rename it later from the menu
-bar: **Node → Rename…**.
+bar: **Go → Rename your node…**.
 
 ### 4. Create your handle — and keep your recovery code
 
@@ -109,6 +109,23 @@ Members-only profiles are never shared: they stay encrypted on your computer.
    **Decline**. **Make an invite** gives you a code to send, with an
    **Email this invite** button.
 
+**Already have a node?** You don't need a second computer. Choose
+**Go → Set up a commons…** (or the button on **Run your own commons**, linked
+at the bottom of every node page). The commons runs beside your node, and the
+buttons in the corner of the window move between them. **Hosting a commons
+and want your own profile in it?** Choose **Go → Add your own node…**, then
+share to your commons like anyone else.
+
+**Running a workshop?** Members can write a short **story** on their node
+(**Stories → Write a story**; the prompt is "Listen to your street for a
+minute. Write a small story from what you hear."). It stays on their computer
+until they press **Share**, and goes to a commons where they're listed. They
+can **Withdraw** it from there at any time, and **Export** it as a text file.
+
+**Want to try it first?** **Go → Open a practice commons** starts a commons only
+this computer can reach. Share your profile to it, approve yourself, make an
+invite. **Go → Remove practice commons…** deletes it when you're done.
+
 To host on a server or in Docker instead, see [commons/README.md](../commons/README.md).
 
 ---
@@ -134,6 +151,9 @@ Open **http://localhost:8080**. Your data lives in the `hic-node` volume.
   vouch for you, ask its steward, or share again with an invite code. Press
   **Check now** on your profile to see if you've been listed.
 - **Linux AppImage won't run:** `chmod +x` it, and install `libfuse2`.
+- **Linux window is blank or gray:** the app already turns off the graphics
+  path that fails on NVIDIA drivers (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). If
+  you set that variable yourself, the app uses your value instead.
 - **Reporting a problem:** send the log file with a short description. On a
   Mac it's `~/Library/Logs/org.heldincommon.node/held-in-common.log` (Finder →
   **Go → Go to Folder…** → paste `~/Library/Logs/org.heldincommon.node`). It

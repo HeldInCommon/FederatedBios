@@ -17,6 +17,8 @@
 //! | `invites.rs` | invite codes made by a member or the steward |
 //! | `federated.rs` | a profile shared in from another node |
 //! | `about.rs` | how this works |
+//! | `guide.rs` | run your own commons: questions and answers, and a practice commons |
+//! | `stories.rs` | the writing form, story lists, one story |
 
 use crate::model::RemoteEntry;
 use crate::web::layout::host_label;
@@ -25,23 +27,27 @@ mod about;
 mod account;
 mod directory;
 mod federated;
+mod guide;
 mod invites;
 mod owner;
 mod profile;
 mod publish;
 mod sharing;
 mod signin;
+mod stories;
 
 pub use about::about;
 pub use account::{key_change, recovery_code, restore_form};
-pub use directory::{directory, Card, StewardView, Viewer};
+pub use directory::{directory, your_next, Card, SignedIn, StewardView, Viewer, YourNext};
 pub use federated::federated;
+pub use guide::{run_a_commons, steward_node_note};
 pub use invites::{invite_code, steward_invite};
 pub use owner::OwnerPanel;
 pub use profile::profile;
 pub use publish::publish_form;
 pub use sharing::{shared, shared_pending, vouched, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
+pub use stories::{commons_stories, held_story, node_stories, own_story, story_form, StoryOutcome, StoryOwner};
 
 /// The host a shared profile says it came from, or its node's name if it
 /// sent no usable address. Both are the sender's own claims.

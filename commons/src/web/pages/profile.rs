@@ -2,19 +2,37 @@
 
 use maud::{html, Markup};
 
-use super::owner::{owner_panel, OwnerPanel};
+use super::owner::{next_step_block, profile_actions, tab_nav, tab_panel, OwnerPanel};
 use crate::canonical::short;
 use crate::model::{display_name_or_handle, HandleRec, Profile, Version};
+use crate::ramp::Tab;
 use crate::web::layout::{gov_row, reach_badge};
 
 /// A member's profile page. `readable` is the profile the viewer may read
-/// (for members-only versions, only if it decrypted for them).
+/// (for members-only versions, only if it decrypted for them). The owner
+/// also gets their next step and tabs (see [`crate::ramp`]).
 pub fn profile(
     rec: &HandleRec,
     version: Option<&Version>,
     readable: Option<&Profile>,
     owner: Option<&OwnerPanel>,
 ) -> Markup {
+    let Some(o) = owner else { return profile_content(rec, version, readable) };
+    let on_profile = o.active() == Tab::Profile;
+    html! {
+        @if on_profile { (next_step_block(&rec.handle, o)) }
+        (tab_nav(&rec.handle, o))
+        @if on_profile {
+            (profile_content(rec, version, readable))
+            (profile_actions(o))
+        } @else {
+            (tab_panel(&rec.handle, o))
+        }
+    }
+}
+
+/// The profile itself: what anyone allowed to read it sees.
+fn profile_content(rec: &HandleRec, version: Option<&Version>, readable: Option<&Profile>) -> Markup {
     html! {
         @match version {
             None => {
@@ -46,7 +64,6 @@ pub fn profile(
                 }
             }
         }
-        @if let Some(o) = owner { (owner_panel(&rec.handle, o)) }
     }
 }
 

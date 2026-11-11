@@ -1,6 +1,6 @@
 //! `POST /inbox`: what a commons receives from nodes. A share (listed,
-//! refused, or put on the waiting list), a vouch, a withdrawal, or an identity
-//! change (recovery key, key rotation).
+//! refused, or put on the waiting list), a vouch, a withdrawal, an identity
+//! change (recovery key, key rotation), or a story and its withdrawal.
 
 use std::net::SocketAddr;
 
@@ -14,6 +14,7 @@ use crate::envelope::Signed;
 use crate::federation::{self, Admission, Holders};
 use crate::identity::{self, Identity};
 use crate::model::{PendingShare, RemoteEntry};
+use crate::story::{self, HeldStory, StoryAdmission};
 use crate::vouching::{self, Intro};
 use crate::{keys, now};
 
@@ -43,8 +44,11 @@ pub async fn inbox(
     let Ok(activity) = serde_json::from_str::<serde_json::Value>(&body) else {
         return reply(StatusCode::BAD_REQUEST, "invalid json");
     };
-    if activity.get("type").and_then(|t| t.as_str()) == Some("Withdraw") {
-        return receive_withdraw(&st, &activity);
+    match activity.get("type").and_then(|t| t.as_str()) {
+        Some("Withdraw") => return receive_withdraw(&st, &activity),
+        Some("StoryShare") => return receive_story(&st, &activity),
+        Some("StoryWithdraw") => return receive_story_withdraw(&st, &activity),
+        _ => {}
     }
     if activity.get("envelope").is_some() {
         return receive_identity_change(&st, &activity);
@@ -169,7 +173,7 @@ fn vouch_ctx<'a>(
     intros: &'a [Intro],
 ) -> vouching::Ctx<'a> {
     vouching::Ctx {
-        my_url: &st.config.base_url,
+        my_hosts: &st.own_hosts,
         now: now(),
         member_keys: members,
         used_codes: used,
@@ -284,7 +288,7 @@ fn receive_identity_change(st: &AppState, activity: &serde_json::Value) -> Respo
 /// Handle a signed withdrawal: remove the key's shared profile and record a
 /// tombstone (so the handle stays theirs and the old copy can't be replayed).
 fn receive_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
-    let w = match federation::verify_withdraw(activity, &st.config.base_url) {
+    let w = match federation::verify_withdraw(activity, &st.own_hosts) {
         Ok(w) => w,
         Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };
@@ -293,8 +297,59 @@ fn receive_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
         Ok(t) => t,
         Err(e) => return reply(StatusCode::CONFLICT, e),
     };
-    if let Err(e) = st.store.save_tombstone(&tomb).and_then(|_| st.store.delete_remote(&keys::keyid(&w.ed_pub))) {
+    // Someone who leaves takes their stories with them.
+    let removed = st
+        .store
+        .save_tombstone(&tomb)
+        .and_then(|_| st.store.delete_remote(&keys::keyid(&w.ed_pub)))
+        .and_then(|_| st.store.delete_stories_by(&w.ed_pub));
+    if let Err(e) = removed {
         return store_failed(&e);
     }
     reply(StatusCode::OK, "withdrawn")
+}
+
+/// A story shared to this commons: checked, then kept if its author is
+/// listed here under its handle (see [`story::admit`]).
+fn receive_story(st: &AppState, activity: &serde_json::Value) -> Response {
+    if !st.site.is_commons() {
+        return reply(StatusCode::NOT_FOUND, "this is a node, not a commons");
+    }
+    let (s, signed) = match story::verify_share(activity) {
+        Ok(v) => v,
+        Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
+    };
+    let _g = st.write.lock().unwrap();
+    let held = st.store.held_stories();
+    match story::admit(&s, &signed, &st.store.remotes(), &held, &st.store.story_tombstones()) {
+        StoryAdmission::NotListed => reply(
+            StatusCode::FORBIDDEN,
+            "stories can be shared here once you're listed: share your profile to this commons first",
+        ),
+        StoryAdmission::Stale => {
+            reply(StatusCode::CONFLICT, "this commons already holds a newer version of that story, or it was withdrawn")
+        }
+        StoryAdmission::Accept => match st.store.save_held_story(&HeldStory { story: s, signed, received_at: now() }) {
+            Ok(()) => reply(StatusCode::OK, "story shared"),
+            Err(e) => store_failed(&e),
+        },
+    }
+}
+
+/// A story's withdrawal from this commons.
+fn receive_story_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
+    let w = match story::verify_withdraw(activity, &st.own_hosts) {
+        Ok(w) => w,
+        Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
+    };
+    let _g = st.write.lock().unwrap();
+    let tomb = match story::apply_withdraw(&w, &st.store.held_stories(), &st.store.story_tombstones()) {
+        Ok(t) => t,
+        Err(e) => return reply(StatusCode::CONFLICT, e),
+    };
+    let removed = st.store.save_story_tombstone(&tomb).and_then(|_| st.store.delete_held_story(&w.author, &w.id));
+    match removed {
+        Ok(()) => reply(StatusCode::OK, "story withdrawn"),
+        Err(e) => store_failed(&e),
+    }
 }

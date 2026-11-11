@@ -7,7 +7,7 @@ use super::origin_host;
 use crate::canonical::short;
 use crate::keys::keyid;
 use crate::model::{display_name_or_handle, HandleRec, PendingShare, Reach, RemoteEntry, Version};
-use crate::web::layout::{reach_badge, reach_bar_class, Site};
+use crate::web::layout::{host_label, reach_badge, reach_bar_class, Site};
 
 /// A member's card: the record and the version shown (with its readable
 /// profile, if the viewer may read it).
@@ -22,6 +22,86 @@ pub struct StewardView {
     pub csrf: String,
     /// The founding invite, while it is unused.
     pub founding: Option<String>,
+    /// Suggest the steward runs their own node too (in the desktop app, on
+    /// a real commons: see `pages::steward_node_note`).
+    pub offer_node: bool,
+}
+
+/// The main button a signed-in member sees on their node's front page. For
+/// them "Add your profile" would make a second identity, so it becomes the
+/// next thing for the profile they have; a new profile is the secondary link.
+#[derive(Debug, PartialEq, Eq)]
+pub enum YourNext {
+    /// Nothing published yet.
+    Publish,
+    /// Share it to this commons, in one click.
+    Share(String),
+    /// Shareable, but there's no commons to suggest.
+    ChooseCommons,
+    /// Shared, and waiting to be listed on this commons.
+    Waiting(String),
+    /// Listed on `commons`; `profile_url` is their page there.
+    Listed { commons: String, profile_url: String },
+    /// Members-only: it stays on the node.
+    Private,
+}
+
+/// A signed-in member, for the front page.
+pub struct SignedIn {
+    pub handle: String,
+    pub csrf: String,
+    pub next: YourNext,
+}
+
+/// Decide [`YourNext`]: listed beats waiting beats sharing.
+pub fn your_next(
+    published: bool,
+    shareable: bool,
+    ed_pub: &str,
+    known: &[String],
+    shared_to: &[String],
+    waiting_on: &[String],
+) -> YourNext {
+    if !published {
+        return YourNext::Publish;
+    }
+    if let Some(c) = shared_to.iter().find(|c| !waiting_on.contains(c)) {
+        return YourNext::Listed { commons: c.clone(), profile_url: format!("{c}/federated/{}", keyid(ed_pub)) };
+    }
+    if let Some(c) = waiting_on.first() {
+        return YourNext::Waiting(c.clone());
+    }
+    if !shareable {
+        return YourNext::Private;
+    }
+    known.first().map(|c| YourNext::Share(c.clone())).unwrap_or(YourNext::ChooseCommons)
+}
+
+/// The front page's buttons for a signed-in member.
+fn signed_in_actions(m: &SignedIn) -> Markup {
+    let h = &m.handle;
+    html! {
+        div class="actions" {
+            @match &m.next {
+                YourNext::Publish => { a class="primary" href="/new" { "Publish your profile" } }
+                YourNext::Share(c) => {
+                    form method="post" action="/share" class="inline-form" {
+                        input type="hidden" name="handle" value=(h);
+                        input type="hidden" name="csrf" value=(m.csrf);
+                        input type="hidden" name="commons_url" value=(c);
+                        button class="primary" type="submit" { "Share your profile to " (host_label(c)) }
+                    }
+                }
+                YourNext::ChooseCommons => { a class="primary" href={ "/@" (h) "?tab=sharing" } { "Share your profile to a commons" } }
+                YourNext::Waiting(c) => { a class="primary" href={ "/@" (h) } { "Waiting to be listed on " (host_label(c)) } }
+                YourNext::Listed { commons, profile_url } => {
+                    a class="primary" href=(profile_url) { "See your profile on " (host_label(commons)) " \u{2197}" }
+                }
+                YourNext::Private => { a class="primary" href={ "/@" (h) } { "Your profile" } }
+            }
+            a class="secondary-link" href="/join" { "Create another profile for a new commons" }
+        }
+    }
 }
 
 /// Who is looking at a commons' page.
@@ -41,6 +121,7 @@ pub fn directory(
     remotes: &[RemoteEntry],
     pending: &[PendingShare],
     viewer: &Viewer,
+    me: Option<&SignedIn>,
 ) -> Markup {
     let steward = match viewer {
         Viewer::Steward(v) => Some(*v),
@@ -100,12 +181,10 @@ pub fn directory(
             }
         }
         @if !pending.is_empty() { (pending_list(pending, steward)) }
-        div class="actions" {
-            @if site.is_commons() {
-                a class="primary" href="/join" { "Run a node to join" }
-            } @else {
-                a class="primary" href="/join" { "Add your profile" }
-            }
+        @match (site.is_commons(), me) {
+            (true, _) => { div class="actions" { a class="primary" href="/join" { "Run a node to join" } } }
+            (false, Some(m)) => { (signed_in_actions(m)) }
+            (false, None) => { div class="actions" { a class="primary" href="/join" { "Add your profile" } } }
         }
     }
 }
@@ -124,6 +203,7 @@ fn steward_panel(v: &StewardView) -> Markup {
                 input type="hidden" name="csrf" value=(v.csrf);
                 button class="secondary" type="submit" { "Make an invite" }
             }
+            @if v.offer_node { (super::steward_node_note()) }
         }
     }
 }
@@ -157,5 +237,36 @@ fn pending_list(pending: &[PendingShare], steward: Option<&StewardView>) -> Mark
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_signed_in_member_is_offered_their_own_next_thing() {
+        let room = vec!["http://room:8081".to_string()];
+        assert_eq!(your_next(false, true, "k", &room, &[], &[]), YourNext::Publish);
+        assert_eq!(your_next(true, true, "k", &room, &[], &[]), YourNext::Share("http://room:8081".into()));
+        assert_eq!(your_next(true, true, "k", &[], &[], &[]), YourNext::ChooseCommons);
+        assert_eq!(your_next(true, true, "k", &room, &room, &room), YourNext::Waiting("http://room:8081".into()));
+        assert_eq!(your_next(true, false, "k", &room, &[], &[]), YourNext::Private);
+        match your_next(true, true, "k", &room, &room, &[]) {
+            YourNext::Listed { commons, profile_url } => {
+                assert_eq!(commons, "http://room:8081");
+                assert!(profile_url.starts_with("http://room:8081/federated/"));
+            }
+            other => panic!("expected Listed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_new_profile_link_is_secondary_for_members() {
+        let m = SignedIn { handle: "ada".into(), csrf: "c".into(), next: YourNext::Share("http://room:8081".into()) };
+        let html = signed_in_actions(&m).into_string();
+        assert!(html.contains("Share your profile to room:8081"));
+        assert!(html.contains("Create another profile for a new commons"));
+        assert!(!html.contains("Add your profile"));
     }
 }

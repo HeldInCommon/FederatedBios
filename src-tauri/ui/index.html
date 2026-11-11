@@ -7,9 +7,11 @@
 
   <!-- First launch: what does this computer run? -->
   <main class="choose" id="chooser" hidden>
-    <p class="eyebrow">Held in Common · first launch</p>
+    <img class="logo" src="logo.png" alt="Held in Common" width="173" height="46" />
+    <p class="eyebrow">First launch</p>
     <h1>What do you want to run<span class="dot">?</span></h1>
-    <p class="sub">Your choice is saved on this computer. Most people run a node.</p>
+    <p class="sub">Most people run a node. You can add the other later from the <b>Go</b> menu, and run both side by side.</p>
+    <p class="learn">New to Held in Common? <a href="https://heldincommon.org">Read about the project ↗</a></p>
     <div class="choices">
       <button class="choice node" id="pick-node" type="button" data-role="node">
         <span class="tag">For most people</span>
@@ -54,6 +56,7 @@
     <h1>What should we call this <span id="naming-role">node</span><span class="dot">?</span></h1>
     <p class="sub">People see this name next to your profile on every commons you share to. If you run Held in Common on more than one computer, give each its own name, like &ldquo;Studio laptop&rdquo; or &ldquo;Home desktop&rdquo;.</p>
     <p class="note" id="naming-why" hidden>Earlier versions used this computer's account name. From now on they'll use the name you choose here.</p>
+    <p class="note" id="naming-reach" hidden></p>
     <form class="name-form" id="name-form">
       <label for="node-name" class="name-label">Name</label>
       <input id="node-name" name="name" type="text" maxlength="60" placeholder="Studio laptop" autocomplete="off" required />
@@ -65,8 +68,21 @@
     <p class="err" id="name-err" role="alert"></p>
   </main>
 
+  <!-- Remove the practice commons (Go → Remove practice commons…) -->
+  <main class="choose" id="remove" hidden>
+    <p class="eyebrow">Held in Common · practice commons</p>
+    <h1>Remove the practice commons<span class="dot">?</span></h1>
+    <p class="sub">Everything shared to it, approved on it or made on it is deleted. Your node and any real commons stay exactly as they are. You can open a new practice commons from the Go menu any time.</p>
+    <div class="row">
+      <button class="btn" id="remove-go" type="button">Remove it</button>
+      <button class="link" id="remove-back" type="button">Cancel</button>
+    </div>
+    <p class="err" id="remove-err" role="alert"></p>
+  </main>
+
   <!-- Loading: the server is starting -->
   <div class="box" id="loading" hidden>
+    <img class="logo" src="logo.png" alt="Held in Common" width="173" height="46" />
     <div class="loader" aria-hidden="true">
       <span class="ring"></span><span class="ring"></span><span class="ring"></span>
       <span class="core"></span>

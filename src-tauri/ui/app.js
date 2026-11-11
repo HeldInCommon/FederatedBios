@@ -1,14 +1,23 @@
-// The desktop app's own screens: the first-launch chooser (node or commons)
-// and the loading screen shown while the server starts.
+// The desktop app's own screens: the first-launch chooser (node or commons),
+// naming, the loading screen shown while a server starts, and, in the small
+// setup window the Go menu opens, adding, renaming or removing a server.
+//
+// The setup window says what to do in its address (?do=…&role=…):
+//   do=add&role=node|commons      run the other role too: name it, start it
+//   do=rename&role=node|commons   rename it
+//   do=remove-practice            confirm removing the practice commons
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
-//   setup_state  -> { role, name, lan_url }   chosen and named yet?
-//   choose_role  (role, name)           save the choice and name, start the server
-//   set_name     (name)                 name (or rename) this computer's node;
-//                                       the menu's Node → Rename… opens this page in a small window
-//   close_rename                        close that window (its Back button)
-//   node_up      -> bool                is *our* server answering yet?
-//   restart_node                        start (or restart) the server
+//   setup_state  -> { role, name, node_name, commons_name, practice, lan_url }
+//   choose_role  (role, name)           first launch: save the choice and name, start it
+//   add_role     (role, name)           add the other role and start it
+//   set_name     (role, name)           name (or rename) the node or commons
+//   remove_practice_now                 delete the practice commons
+//   close_setup                         close the setup window
+//   node_up      (which) -> bool        is *our* server of that kind answering yet?
+//   server_url   (which) -> string      where the window goes to show it
+//   restart_node (which)                start (or restart) it
+// `which` is "node", "commons" or "practice"; left out, the first-launch role.
 // When opened in an ordinary browser (no Tauri), it just waits for the server.
 
 // The local server's address. 127.0.0.1 rather than "localhost": a node
@@ -23,14 +32,15 @@ const MSGS = {
   commons: ['Warming up the commons…', 'Opening the directory…', 'Getting ready for visitors…']
 };
 let msgs = MSGS.node, n = 0, done = false;
-// A commons opens in its steward view (approve people, make invites).
-let startPage = '/';
+// Which server the loading screen waits for (undefined: the first-launch
+// role), and what to do once it answers: go there, or close this setup window.
+let waitFor, whenUp = 'go';
 
 // Is the server listening? Prefer the host-side command (a fetch to
 // http://localhost from this secure origin is blocked as mixed content). Fall
 // back to fetch when running outside the app (e.g. opened in a browser).
 async function isUp(){
-  if (invoke){ try { return await invoke('node_up'); } catch(e){ return false; } }
+  if (invoke){ try { return await invoke('node_up', { which: waitFor }); } catch(e){ return false; } }
   try { const r = await fetch(url + '/health', {cache:'no-store'}); return r.ok; } catch(e){ return false; }
 }
 
@@ -40,7 +50,7 @@ async function restart(){
   const b = $('start'); b.disabled = true;
   const was = b.textContent; b.textContent = 'Starting…';
   $('s').textContent = 'Starting…';
-  try { await invoke('restart_node'); }
+  try { await invoke('restart_node', { which: waitFor }); }
   catch(e){ $('err').textContent = ('' + e) || 'Could not start.'; }
   setTimeout(() => { b.disabled = false; b.textContent = was; }, 1200);
 }
@@ -50,7 +60,7 @@ async function poll(){
   if (done) return;
   n++;
   if (n <= msgs.length * 3) $('s').textContent = msgs[Math.min(((n/3)|0), msgs.length-1)];
-  if (await isUp()){ done = true; location.href = url + startPage; return; }
+  if (await isUp()){ done = true; await arrive(); return; }
   // ~12s of patience, then reveal the manual Start button + fallback link.
   if (n > 20){
     $('s').textContent = 'Taking longer than usual.';
@@ -59,10 +69,21 @@ async function poll(){
   setTimeout(poll, 600);
 }
 
-function showLoading(role){
+// The server is up: show it here, or (in the setup window, where the main
+// window switches to it by itself) close this window.
+async function arrive(){
+  if (whenUp === 'close'){ invoke('close_setup'); return; }
+  let to = url + '/';
+  if (invoke){ try { to = await invoke('server_url', { which: waitFor }); } catch(e){} }
+  location.href = to;
+}
+
+// `which` is the kind to wait for (undefined: the first-launch role, whose
+// role is `role`).
+function showLoading(role, which){
   const what = role === 'commons' ? 'commons' : 'node';
   msgs = MSGS[what];
-  startPage = what === 'commons' ? '/steward' : '/';
+  waitFor = which;
   $('loading-title').firstChild.textContent = 'Starting your ' + what;
   $('start').textContent = 'Start the ' + what;
   $('chooser').hidden = true;
@@ -74,8 +95,9 @@ function showLoading(role){
 // `naming` is { role, mode } where mode is:
 //   'first'   first launch: the role isn't saved yet (choose_role saves both)
 //   'migrate' installed before names existed: name it once (set_name)
-//   'rename'  opened from the Node → Rename… menu (set_name)
-let naming = null;
+//   'rename'  opened from Go → Rename… (set_name)
+//   'add'     opened from Go, or a page's link, to run the other role too (add_role)
+let naming = null, lanUrl = null;
 
 const NAMING_TEXT = {
   first:   { eyebrow: 'Held in Common · first launch', note: '', go: 'Start' },
@@ -83,6 +105,12 @@ const NAMING_TEXT = {
              note: "Earlier versions used this computer's account name. From now on they'll use the name you choose here." },
   rename:  { eyebrow: 'Held in Common · rename', go: 'Save name',
              note: 'Commons that already have your profile show the new name the next time you share to them.' },
+  add:     { eyebrow: 'Held in Common · add to this computer', go: 'Start', note: '' },
+};
+
+const ADD_NOTE = {
+  node: 'Your node runs beside your commons, with its own folder and keys. Share your profile from it to your commons, like anyone else would.',
+  commons: 'Your commons runs beside your node. Your node, its keys and your sign-in stay as they are.',
 };
 
 function choose(role){
@@ -95,8 +123,21 @@ function showNaming(role, mode, current){
   const t = NAMING_TEXT[mode];
   $('naming-role').textContent = role === 'commons' ? 'commons' : 'node';
   $('naming-eyebrow').textContent = t.eyebrow;
-  $('naming-why').textContent = t.note;
-  $('naming-why').hidden = !t.note;
+  const note = mode === 'add' ? ADD_NOTE[role] : t.note;
+  $('naming-why').textContent = note;
+  $('naming-why').hidden = !note;
+  // Adding a room commons: say where people will reach it.
+  const reach = $('naming-reach');
+  reach.hidden = !(mode === 'add' && role === 'commons');
+  if (!reach.hidden){
+    reach.textContent = '';
+    if (lanUrl){
+      reach.append('People on the same Wi-Fi or network will share to ');
+      const c = document.createElement('code'); c.textContent = lanUrl; reach.append(c, '.');
+    } else {
+      reach.textContent = "We couldn't find this computer's network address. Connect to Wi-Fi first, or people won't be able to reach your commons.";
+    }
+  }
   $('name-go').textContent = t.go;
   $('name-back').hidden = mode === 'migrate';
   $('node-name').value = current || '';
@@ -107,7 +148,7 @@ function showNaming(role, mode, current){
 }
 
 $('name-back').addEventListener('click', () => {
-  if (naming && naming.mode === 'rename'){ invoke('close_rename'); return; }
+  if (naming && (naming.mode === 'rename' || naming.mode === 'add')){ invoke('close_setup'); return; }
   $('naming').hidden = true;
   $('chooser').hidden = false;
 });
@@ -120,17 +161,30 @@ $('name-form').addEventListener('submit', async e => {
   $('name-go').disabled = true;
   try {
     if (naming.mode === 'first') await invoke('choose_role', { role: naming.role, name });
-    else await invoke('set_name', { name });
-    if (naming.mode === 'rename') return;   // the app closes this window and reopens the node
+    else if (naming.mode === 'add') await invoke('add_role', { role: naming.role, name });
+    else await invoke('set_name', { role: naming.mode === 'rename' ? naming.role : undefined, name });
+    if (naming.mode === 'rename') return;   // the app closes this window and reopens the server
     $('naming').hidden = true;
-    showLoading(naming.role);
+    if (naming.mode === 'add'){ whenUp = 'close'; showLoading(naming.role, naming.role); }
+    else showLoading(naming.role);
   } catch(err){
     $('name-err').textContent = ('' + err) || 'Could not start.';
     $('name-go').disabled = false;
   }
 });
 
-function showChooser(lanUrl){
+function showRemove(){
+  $('remove').hidden = false;
+  $('remove-back').addEventListener('click', () => invoke('close_setup'));
+  $('remove-go').addEventListener('click', async () => {
+    $('remove-go').disabled = true;
+    $('remove-err').textContent = '';
+    try { await invoke('remove_practice_now'); }
+    catch(err){ $('remove-err').textContent = ('' + err) || 'Could not remove it.'; $('remove-go').disabled = false; }
+  });
+}
+
+function showChooser(){
   if (lanUrl){
     const d = $('room-detail');
     d.textContent = 'People on the same Wi-Fi or network share to ';
@@ -159,9 +213,16 @@ async function init(){
   if (!invoke){ showLoading('node'); return; }
   let st = null;
   try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node', name: 'node' }; }
-  if (st.renaming && st.role) showNaming(st.role, 'rename', st.name);   // the Node → Rename… window
+  lanUrl = st.lan_url;
+  // The setup window (opened from the Go menu or a page's link).
+  const q = new URLSearchParams(location.search);
+  const todo = q.get('do'), role = q.get('role') === 'commons' ? 'commons' : 'node';
+  if (todo === 'add') showNaming(role, 'add', '');
+  else if (todo === 'rename') showNaming(role, 'rename', role === 'commons' ? st.commons_name : st.node_name);
+  else if (todo === 'remove-practice') showRemove();
+  // The main window.
   else if (st.role && st.name) showLoading(st.role);
   else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed
-  else showChooser(st.lan_url);
+  else showChooser();
 }
 init();

@@ -76,8 +76,14 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
 - **First launch:** choose **a node** or **a commons**, then **name it**
   ("Studio laptop"). The name shows in the coloured bar and travels, signed,
   with every share; it is never the computer's account name. Rename any time
-  with **Node → Rename…**. Role and name are saved in `<app data>/app.json`;
-  each role has its own data folder (`node-data/`, `commons-data/`).
+  from the **Go** menu. Roles and names are saved in `<app data>/app.json`;
+  each has its own data folder (`node-data/`, `commons-data/`, `practice-data/`).
+- **Side by side:** the other role can be added later, and a practice commons
+  (only this computer can reach it) opened to learn on. The first-launch role
+  keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
+  row of buttons on each page move between them; a node's
+  **Run your own commons** page links into the app with `hic-app://open/…`
+  ([0019](adr/0019-node-and-commons-side-by-side.md)).
 - **Running the server:** the app starts the bundled `hic-commons` as a
   sidecar with a per-launch token, and opens a page only when `/health`
   echoes that token ([0008](adr/0008-app-trusts-only-its-server.md)). If the
@@ -257,6 +263,8 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_OPEN_COMMONS` | *(off)* | `1`: no vouching |
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
+| `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
+| `HIC_PRACTICE` | *(off)* | `1`: a practice commons; its pages say so |
 
 ---
 

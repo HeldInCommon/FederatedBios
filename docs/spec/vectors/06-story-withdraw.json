@@ -1,0 +1,37 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"commons\":\"room.example:8081\",\"story\":\"0123456789abcdef\"},\"created_at\":1700000400,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"StoryWithdraw\"}",
+  "cid": "1ba775e62946b77a1e0fade778e9bc47a166e3cbce86e03b236d03a12d4c1b4f",
+  "description": "A StoryWithdraw: removes one story from one commons (named by host).",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "commons": "room.example:8081",
+      "story": "0123456789abcdef"
+    },
+    "created_at": 1700000400,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "StoryWithdraw"
+  },
+  "name": "06-story-withdraw.json",
+  "signed": {
+    "cid": "1ba775e62946b77a1e0fade778e9bc47a166e3cbce86e03b236d03a12d4c1b4f",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "commons": "room.example:8081",
+        "story": "0123456789abcdef"
+      },
+      "created_at": 1700000400,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "StoryWithdraw"
+    },
+    "sig": "ab06364c02e12e9948db6787803d671e8fca0aad6bbb30a8ac5e16b9d5f56b78c3f75c24e018cf83df75397d24e8a8b2491036f7eccdf1074dee8feb398c000b"
+  },
+  "signing_input": "hic/v1/StoryWithdraw\n1ba775e62946b77a1e0fade778e9bc47a166e3cbce86e03b236d03a12d4c1b4f",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

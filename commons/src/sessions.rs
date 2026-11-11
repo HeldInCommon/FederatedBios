@@ -15,9 +15,6 @@ use axum::http::{header, HeaderMap};
 /// How long a session lasts, in seconds (one day).
 pub const SESSION_TTL: u64 = 86_400;
 
-/// The cookie name.
-const COOKIE: &str = "hic_session";
-
 /// One signed-in session.
 #[derive(Clone, Debug)]
 pub struct Session {
@@ -67,24 +64,27 @@ pub fn random_hex(n: usize) -> String {
     hex::encode(b)
 }
 
-/// The session token from a request's `Cookie` header, if present.
-pub fn token_from(headers: &HeaderMap) -> Option<String> {
+/// The session token in the cookie called `name`
+/// ([`crate::config::Config::session_cookie`]), if the request has one.
+pub fn token_from(headers: &HeaderMap, name: &str) -> Option<String> {
     let raw = headers.get(header::COOKIE)?.to_str().ok()?;
-    raw.split(';').map(str::trim).find_map(|p| p.strip_prefix("hic_session=")).map(String::from)
+    raw.split(';')
+        .map(str::trim)
+        .find_map(|p| p.split_once('=').filter(|(k, _)| *k == name).map(|(_, v)| v.to_string()))
 }
 
 /// The `Set-Cookie` value that stores `token`. `HttpOnly` and `SameSite=Lax`
 /// always; `Secure` only when served over https (see
 /// [`crate::config::Config::secure_cookie`]).
-pub fn set_cookie(token: &str, secure: bool) -> String {
+pub fn set_cookie(name: &str, token: &str, secure: bool) -> String {
     let sec = if secure { "; Secure" } else { "" };
-    format!("{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age={SESSION_TTL}")
+    format!("{name}={token}; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age={SESSION_TTL}")
 }
 
 /// The `Set-Cookie` value that clears the session cookie.
-pub fn clear_cookie(secure: bool) -> String {
+pub fn clear_cookie(name: &str, secure: bool) -> String {
     let sec = if secure { "; Secure" } else { "" };
-    format!("{COOKIE}=; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=0")
+    format!("{name}=; Path=/; HttpOnly; SameSite=Lax{sec}; Max-Age=0")
 }
 
 /// Limits wrong passphrases per handle: after [`AttemptLimiter::MAX_FAILURES`]
@@ -149,15 +149,18 @@ mod tests {
     #[test]
     fn token_is_read_from_cookie_header() {
         let mut h = HeaderMap::new();
-        h.insert(header::COOKIE, HeaderValue::from_static("a=1; hic_session=abc; b=2"));
-        assert_eq!(token_from(&h).as_deref(), Some("abc"));
+        h.insert(header::COOKIE, HeaderValue::from_static("a=1; hic_session=abc; hic_session_8081=def"));
+        assert_eq!(token_from(&h, "hic_session").as_deref(), Some("abc"));
+        assert_eq!(token_from(&h, "hic_session_8081").as_deref(), Some("def"));
+        assert_eq!(token_from(&h, "hic_session_8082"), None);
     }
 
     #[test]
     fn cookie_flags() {
-        assert!(set_cookie("t", true).contains("; Secure"));
-        assert!(!set_cookie("t", false).contains("Secure"));
-        assert!(clear_cookie(false).contains("Max-Age=0"));
+        assert!(set_cookie("hic_session", "t", true).contains("; Secure"));
+        assert!(!set_cookie("hic_session", "t", false).contains("Secure"));
+        assert!(set_cookie("hic_session_8081", "t", false).starts_with("hic_session_8081=t;"));
+        assert!(clear_cookie("hic_session", false).contains("Max-Age=0"));
     }
 
     #[test]

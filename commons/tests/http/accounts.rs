@@ -38,7 +38,7 @@ async fn damaged_identity_is_never_overwritten_by_sign_up() {
 async fn backup_restores_the_same_identity_on_another_node() {
     let (a, astore) = server(Role::Node);
     let sid = join_and_publish(&a, "tega", "public").await;
-    let csrf = csrf_in(&send(&a, get("/@tega", Some(&sid))).await.text);
+    let csrf = csrf_in(&send(&a, get("/@tega?tab=account", Some(&sid))).await.text);
 
     let wrong =
         send(&a, post_form("/backup", &format!("handle=tega&csrf={csrf}&passphrase=nopenope"), Some(&sid))).await;

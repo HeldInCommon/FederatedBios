@@ -2,7 +2,7 @@
 
 use maud::{html, Markup};
 
-use crate::governance::{LICENSES, SIGNALS};
+use crate::governance::{license_terms, LICENSES, SIGNALS};
 use crate::model::{Profile, Reach};
 
 /// The publish form, prefilled from the current version.
@@ -79,7 +79,7 @@ fn profile_fields(p: &Profile) -> Markup {
     }
 }
 
-fn reach_and_governance(sel: Reach, sel_license: &str, sel_sig: &[String]) -> Markup {
+pub(super) fn reach_and_governance(sel: Reach, sel_license: &str, sel_sig: &[String]) -> Markup {
     html! {
         fieldset class="reach-options" {
             legend class="field-label" { "Who can see this" }
@@ -98,10 +98,25 @@ fn reach_and_governance(sel: Reach, sel_license: &str, sel_sig: &[String]) -> Ma
             }
         }
         fieldset class="gov-options" {
-            legend class="field-label" { "License" }
-            select name="license" class="license-select" {
+            legend class="field-label" { "Licence: how people may reuse it" }
+            p class="hint" { "A Creative Commons licence tells people what they may do with your work without asking you first." }
+            div class="license-grid" {
                 @for (key, name, _) in LICENSES {
-                    option value=(key) selected[*key == sel_license] { (name) }
+                    @let t = license_terms(key);
+                    label class="license-card" {
+                        span class="license-head" {
+                            input type="radio" name="license" value=(key) checked[*key == sel_license];
+                            span class="license-name" { (name) }
+                        }
+                        span class="license-summary" { (t.summary) }
+                        span class="license-facts" {
+                            span { "Credit \u{b7} " (t.credit) }
+                            span { "Adapt \u{b7} " (t.adapt) }
+                            span class={ "license-commercial " (if t.commercial { "is-yes" } else { "is-no" }) } {
+                                "Commercial use \u{b7} " (if t.commercial { "yes" } else { "no" })
+                            }
+                        }
+                    }
                 }
             }
         }

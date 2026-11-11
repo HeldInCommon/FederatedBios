@@ -57,7 +57,7 @@ pub fn withdrawn(handle: &str, commons_label: &str) -> Markup {
     html! {
         header class="intro" {
             h1 { "Withdrawn" }
-            p class="lede" { (commons_label) " has removed its copy of @" (handle) ". You can share again whenever you like." }
+            p class="lede" { (commons_label) " has removed your profile, and any stories you shared there. It keeps only a note that @" (handle) " is yours, so nobody else can take the name there. You can share again whenever you like." }
         }
         div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
