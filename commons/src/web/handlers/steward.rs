@@ -1,23 +1,22 @@
-//! The steward view of a commons (decision records 0017 and 0023).
+//! The steward view of a commons (decision record 0017).
 //!
 //! A commons has no member sign-in, so its steward (whoever runs it) proves
 //! who they are one of two ways:
-//! - the **desktop app** opens `/steward?launch=…` with the private token it
-//!   started this server with, or
-//! - the **steward link** the commons prints in its log when it starts
+//! - by opening `/steward` **at the commons' own computer** (the desktop
+//!   app's commons window counts), or
+//! - with the **steward link** the commons prints in its log when it starts
 //!   (`/steward?key=…`), for a commons in Docker or on a server.
-//!
-//! Being "at this computer" is *not* proof (ADR 0023): behind a reverse proxy
-//! or tunnel such as Tailscale Funnel, every visitor arrives from this
-//! computer.
 //!
 //! Either starts a steward session. The steward can then approve or decline
 //! people waiting for a vouch, and make invite codes. Every form carries the
 //! session's CSRF token, so another website can't press these buttons.
 
-use axum::extract::{Query, State};
+use std::net::SocketAddr;
+
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
+use axum::Extension;
 use serde::Deserialize;
 
 use crate::app::{AppState, Shared};
@@ -45,19 +44,25 @@ fn authorised_steward(st: &AppState, headers: &HeaderMap, f: &Form) -> Option<Se
     steward_session(st, headers).filter(|s| keys::ct_eq(&s.csrf, &f.one("csrf")))
 }
 
+/// True when the request comes from this computer.
+pub(crate) fn from_this_computer(peer: &Option<Extension<ConnectInfo<SocketAddr>>>) -> bool {
+    peer.as_ref().is_some_and(|Extension(ConnectInfo(a))| a.ip().is_loopback())
+}
+
 /// The query string of `GET /steward`.
 #[derive(Deserialize)]
 pub struct OpenQ {
-    /// The steward link's key.
+    /// The steward link's key, when opened from another computer.
     pub key: Option<String>,
-    /// The desktop app's launch token, when the app opens the steward view.
-    pub launch: Option<String>,
 }
 
-/// `GET /steward` — start a steward session (with the steward link's key, or
-/// the desktop app's launch token), then show the commons page in steward
-/// view.
-pub async fn open(State(st): State<Shared>, Query(q): Query<OpenQ>) -> Response {
+/// `GET /steward` — start a steward session (at this computer, or with the
+/// steward link's key), then show the commons page in steward view.
+pub async fn open(
+    State(st): State<Shared>,
+    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
+    Query(q): Query<OpenQ>,
+) -> Response {
     if !st.site.is_commons() {
         return not_found(&st.site, None);
     }
@@ -66,9 +71,7 @@ pub async fn open(State(st): State<Shared>, Query(q): Query<OpenQ>) -> Response 
         Err(e) => return server_error(&st.site, &e),
     };
     let key_ok = matches!((&q.key, &stored), (Some(given), Some(k)) if keys::ct_eq(given.trim(), k));
-    let launch_ok =
-        matches!((&q.launch, &st.config.launch_token), (Some(given), Some(t)) if keys::ct_eq(given.trim(), t));
-    if !(key_ok || launch_ok) {
+    if !(from_this_computer(&peer) || key_ok) {
         return error_page(
             &st.site,
             "That steward link isn't right. The commons prints the right one in its log when it starts.",

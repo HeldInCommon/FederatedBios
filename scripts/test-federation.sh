@@ -20,14 +20,11 @@ curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/he
 # A new commons makes a one-time founding invite for its first member (ADR 0011).
 FOUND1=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons/founding-invite.json" 2>/dev/null)
 [ -n "$FOUND1" ] && ok "commons made a founding invite" || no "no founding invite"
-# The steward view (ADR 0017, 0023): only with the steward link the commons
-# prints in its log. Being at the commons' computer isn't enough, since a
-# proxy such as Tailscale Funnel makes every visitor look local.
+# The steward view (ADR 0017): opened at the commons' own computer, or with the
+# steward link the commons prints in its log.
 grep -q "steward link (keep private): http://localhost:8091/steward?key=" "$T/commons.log" && ok "commons printed a steward link" || no "no steward link in the log"
-SLINK=$(grep -oE 'http://localhost:8091/steward\?key=[0-9a-f]+' "$T/commons.log" | head -1)
-curl -s -i http://localhost:8091/steward | tr -d '\r' | grep -qi '^set-cookie' && no "a bare /steward from this computer got a session" || ok "a bare /steward from this computer is refused"
-curl -s http://localhost:8091/ | grep -q "Open the steward view" && no "visitors are still offered the steward view" || ok "visitors aren't offered the steward view"
-STEWARD=$(curl -s -i "$SLINK" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+curl -s http://localhost:8091/ | grep -q "Open the steward view" && ok "someone at the commons' computer is offered the steward view" || no "no steward view link locally"
+STEWARD=$(curl -s -i http://localhost:8091/steward | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 SPAGE=$(curl -s http://localhost:8091/ -H "Cookie: hic_session=$STEWARD")
 printf '%s' "$SPAGE" | grep -q "hic-founding-" && ok "steward view shows the founding invite" || no "steward view missing the founding invite"
 SCSRF=$(printf '%s' "$SPAGE" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')

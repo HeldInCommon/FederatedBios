@@ -17,15 +17,12 @@ use crate::governance::license_url;
 use crate::handle;
 use crate::model::{HandleRec, Reach, Version};
 
-/// `GET /health` — liveness, the service name and version. When the request
-/// carries this server's launch token (`X-HIC-Launch`, sent only by the
-/// desktop app that started it), it also says `"ours": true`. The token itself
-/// is never sent back: it opens the steward view (ADR 0023).
-pub async fn health(State(st): State<Shared>, headers: axum::http::HeaderMap) -> Json<Value> {
+/// `GET /health` — liveness, the service name and version, and (when the
+/// desktop app started this server) its launch token.
+pub async fn health(State(st): State<Shared>) -> Json<Value> {
     let mut j = json!({ "status": "ok", "service": "hic-commons", "version": env!("CARGO_PKG_VERSION") });
-    let given = headers.get("x-hic-launch").and_then(|v| v.to_str().ok()).unwrap_or("");
-    if st.config.launch_token.as_deref().is_some_and(|t| !given.is_empty() && crate::keys::ct_eq(t, given)) {
-        j["ours"] = json!(true);
+    if let Some(t) = &st.config.launch_token {
+        j["launch"] = json!(t);
     }
     Json(j)
 }
