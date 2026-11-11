@@ -1,6 +1,6 @@
 ---
 name: house-style
-description: How code in Held in Common (FederatedBios) is written, structured and tested. Use before writing or changing any Rust, HTML (maud), CSS, JavaScript or test in this repo, before adding a page or route, and before opening a pull request.
+description: How code in Held in Common (FederatedBios) is written, structured and tested, including design (MVC, traits, states), errors, naming, accessibility, dependencies, logging and when to ask before deciding. Use before writing or changing any Rust, HTML (maud), CSS, JavaScript or test in this repo, before adding a page, route or dependency, and before opening a pull request.
 ---
 
 # Held in Common house style
@@ -102,6 +102,32 @@ display. Here is how that looks in Rust and in this repo.
   change. A new format needs a new schema version and a spec entry
   (`docs/spec/`, ADR 0009).
 
+### Errors
+
+- **Errors are typed enums** that say what went wrong (see `StoreError`),
+  returned in a `Result` and handled with `?` and `match`. The repo uses
+  neither `anyhow` nor `thiserror` today. Ask before adding either.
+- **No `unwrap()` outside tests.** There is one accepted exception:
+  `mutex.lock().unwrap()`, because a poisoned lock means another thread
+  already panicked.
+- **`expect("…")` only where failure is impossible**, and the message says
+  why it is impossible: `expect("argon2 with default settings cannot fail")`.
+  If you can't write that sentence honestly, return an error instead.
+- **Failures people see** are plain sentences that say what happened and
+  what to do next. Never show a raw error or a stack trace.
+
+### Naming
+
+- **Use full words, not abbreviations:** `member`, not `mbr`. Short names
+  are fine for tiny closures and loop counters.
+- **Use the domain's words, consistently:** node, commons, handle, member,
+  steward, listing, share, vouch, withdraw, tombstone. Don't invent a
+  synonym for one of these. If a new concept needs a word, define it once in
+  `docs/ARCHITECTURE.md` and use it everywhere.
+- **Names say what happens** (§1): a read sounds like a read, and a write
+  says what it writes.
+- **Booleans read as questions:** `is_listed`, `has_avatar`.
+
 ## 4. Structure: split early, one file per page or behaviour
 
 Split a file by page or behaviour as soon as it starts collecting several,
@@ -127,6 +153,16 @@ the same pull request.
 **When you make a decision** that would be expensive to reverse, touches
 security or the signed format, or someone will ask "why?" about, write a new
 ADR. Copy an existing one's layout. Don't rewrite an accepted ADR; supersede it.
+
+**Size prompts.** These are not hard limits; when one is reached, look for a
+seam:
+
+- A file passing **about 400 lines** probably holds more than one page or
+  behaviour. Split it (today's largest, `federation.rs` and `store.rs`, are
+  about 600).
+- A function passing **about 50 lines**, or nesting more than three levels,
+  probably hides named steps. Pull them out as small functions, pure ones
+  where possible.
 
 ## 5. CSS and front end
 
@@ -156,6 +192,25 @@ frame or screens, page parts, and small screens.
   390px). Report any differences.
 - **Keep JavaScript small**, and only where the server can't do the job. It
   toggles attributes and classes rather than writing styles.
+
+### Accessibility
+
+Every page should work for someone using a keyboard, a screen reader or a
+large text size:
+
+- **Semantic HTML first.** Use `button` for actions and `a` for navigation,
+  with real headings in order, `main`, `nav` and lists. Use `aria-*` only
+  where HTML has no element for the job.
+- **Every input has a visible `label`.** Placeholder text is not a label.
+- **Keep the focus ring visible.** If a style removes the outline (for
+  example `all: unset`), put it back with the `--focus` token.
+- **Colour contrast** meets WCAG AA (4.5:1 for body text). Colour is never
+  the only signal: pair it with text or an icon.
+- **Images have `alt`.** Use `alt=""` when the image is decoration (avatars
+  next to a name).
+- **Pages work without JavaScript.** Forms post to the server, and
+  JavaScript only adds polish.
+- **Text sizes are in rem**, so the page follows the reader's font size.
 
 ## 6. Testing
 
@@ -216,3 +271,57 @@ python3 scripts/check_spec_vectors.py
 - **Cite sources** for factual claims (RFCs, docs), and mark anything you
   haven't verified. Never invent references.
 - **Assume teammates will read everything.**
+
+## 9. Dependencies
+
+- **Few and well known.** Before adding a crate or npm package, check
+  whether the standard library or an existing dependency already does the
+  job. A new dependency needs a reason in the PR description.
+- **Cryptography comes from established crates** (the RustCrypto family and
+  `ed25519-dalek`, as now). Never write our own.
+- **Pin tool versions** with a lockfile, as in `tools/css-lint/`. Use exact
+  versions for CI and scripts; never pull `latest` from the network.
+- **Don't pipe remote scripts into a shell** (`curl … | sh`), and don't run
+  unknown installers with `sudo`.
+
+## 10. Logging and privacy
+
+- **Never log or print secrets or personal data.** That covers passphrases,
+  private keys, session tokens, recovery keys, backup contents and profile
+  fields.
+- **One deliberate exception:** at start-up, `main.rs` prints one-time links
+  (the founding invite and the steward link) to the operator's own terminal.
+  Keep it that way, and don't copy that output anywhere else.
+- **Messages** should be useful to an operator: what happened and which
+  handle or commons, not the data involved.
+- **No analytics or tracking**, and no third-party requests beyond those an
+  ADR already accepts (for example ADR 0013, Google Fonts).
+- **Personal data never goes in URLs.** It goes in the request body, behind
+  the session.
+
+## 11. When to ask and when to decide
+
+**Ask first** (stop, explain the options in plain language, recommend one)
+before:
+
+- changing the signed format, `canonical.rs`, the spec or the golden
+  vectors
+- touching the security-sensitive files (§7) in a way that changes
+  behaviour, not just layout
+- changing anything a member sees as policy: who can join, what is shared,
+  withdrawal, recovery
+- changing user-facing wording that carries meaning (consent, warnings,
+  steward actions)
+- adding a dependency, a third-party request, or a new ADR-level decision
+- deleting data, rewriting git history, pushing to `main`, or handling
+  signing secrets (never handle those in chat)
+
+**Decide, then report what you did** for:
+
+- refactors that keep behaviour the same (splitting files, extracting
+  functions, renaming locals)
+- adding tests and fixing lint
+- doc fixes, and CSS changes that only use existing tokens and patterns
+- bug fixes with a test that shows the bug
+
+When unsure, make the smallest reversible change and say what you'd do next.
