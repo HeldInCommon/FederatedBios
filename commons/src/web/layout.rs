@@ -30,6 +30,7 @@ pub struct Site {
 }
 
 impl Site {
+    /// True when this server is a commons (not a node).
     pub fn is_commons(&self) -> bool {
         self.role == Role::Commons
     }
@@ -230,6 +231,7 @@ pub fn not_found(site: &Site, me: Option<&str>) -> Response {
     render(site, Page::new("Not found", me, body).status(StatusCode::NOT_FOUND))
 }
 
+/// A page with one heading and one message, sent with `status`: the base of the error pages.
 fn message_page(site: &Site, title: &str, heading: &str, msg: &str, status: StatusCode) -> Response {
     let body = html! {
         header class="intro" { h1 { (heading) } p class="lede" { (msg) } }
@@ -267,6 +269,7 @@ pub fn host_label(url: &str) -> String {
 mod tests {
     use super::*;
 
+    /// A site in `role`, for these tests.
     fn site(role: Role) -> Site {
         Site {
             role,

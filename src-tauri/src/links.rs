@@ -54,7 +54,9 @@ pub fn kind_on(saved: &Saved, port: u16) -> Option<Kind> {
 /// One switcher button.
 #[derive(Serialize, Debug, PartialEq, Eq)]
 pub struct Place {
+    /// What the button says.
     pub label: String,
+    /// Where it goes: that server's page in this window.
     pub url: String,
     /// The colour of the role bar on that server's pages.
     pub tone: &'static str,
@@ -111,6 +113,7 @@ pub fn switcher_js(places: &[Place]) -> String {
 mod tests {
     use super::*;
 
+    /// What a computer with a node called "Laptop" runs, plus a commons and practice if asked.
     fn saved(other: Option<&str>, practice: bool) -> Saved {
         Saved { role: Some("node".into()), name: Some("Laptop".into()), other_name: other.map(String::from), practice }
     }

@@ -12,7 +12,9 @@ use crate::web::layout::{host_label, reach_badge, reach_bar_class, Site};
 /// A member's card: the record and the version shown (with its readable
 /// profile, if the viewer may read it).
 pub struct Card {
+    /// The member's record.
     pub rec: HandleRec,
+    /// The version shown on the card.
     pub version: Version,
 }
 
@@ -48,8 +50,11 @@ pub enum YourNext {
 
 /// A signed-in member, for the front page.
 pub struct SignedIn {
+    /// Their handle.
     pub handle: String,
+    /// The session's CSRF token, for a one-click share.
     pub csrf: String,
+    /// What their button offers.
     pub next: YourNext,
 }
 

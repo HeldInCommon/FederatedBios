@@ -49,6 +49,7 @@ pub fn publish_form(
     }
 }
 
+/// The "About you" fields: photo, name, pronouns, role, bio, where you work.
 fn profile_fields(p: &Profile) -> Markup {
     let place = p.places.first();
     html! {

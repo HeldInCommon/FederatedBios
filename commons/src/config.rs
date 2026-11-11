@@ -149,6 +149,7 @@ mod tests {
     use crate::role::Role;
     use std::collections::HashMap;
 
+    /// A config built only from `vars`, as if they were the environment.
     fn cfg(vars: &[(&str, &str)]) -> Config {
         let m: HashMap<String, String> = vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         Config::from_lookup(|k| m.get(k).cloned())

@@ -113,10 +113,12 @@ pub(crate) fn with_cookie(mut resp: Response, cookie: String) -> Response {
 
 /// Small extension so a page response can carry a different status.
 pub(crate) trait WithStatus {
+    /// This response with `status` instead of its own.
     fn into_response_with(self, status: StatusCode) -> Response;
 }
 
 impl WithStatus for Response {
+    /// Replaces the status and returns the same response.
     fn into_response_with(mut self, status: StatusCode) -> Response {
         *self.status_mut() = status;
         self

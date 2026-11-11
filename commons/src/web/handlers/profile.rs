@@ -14,6 +14,7 @@ use crate::web::pages::{self, OwnerPanel};
 /// `?tab=` on a member's own profile.
 #[derive(serde::Deserialize)]
 pub struct TabQ {
+    /// `sharing`, `people` or `account`; anything else is the profile.
     pub tab: Option<String>,
 }
 

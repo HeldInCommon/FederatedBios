@@ -93,6 +93,7 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
                     1 => "Shared to 1 commons".to_string(),
                     n => format!("Shared to {n} commons"),
                 };
+                // `bool::then`: `Some(link)` when it's the viewer's own story, else `None`.
                 @let edit = (me == Some(s.story.handle.as_str())).then(|| format!("/story/{}/rights", s.story.id));
                 (card(&format!("/story/{}", s.story.id), &s.story, tone_for(s.story.reach()), html! { (where_) }, edit.as_deref()))
             }
@@ -141,6 +142,7 @@ mod tests {
     use crate::keys;
     use crate::story::{new_story, sign};
 
+    /// A story shared to a commons, for these tests.
     fn held(title: &str) -> HeldStory {
         let k = keys::generate();
         let s =

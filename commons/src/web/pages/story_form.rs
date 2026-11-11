@@ -89,6 +89,7 @@ mod tests {
     use super::*;
     use crate::story::new_story;
 
+    /// A story listed in the commons, for these tests.
     fn story() -> Story {
         new_story("0123456789abcdef", "ada", "Night bus", "Words.", "commons", "cc-by", &["credit".into()]).unwrap()
     }

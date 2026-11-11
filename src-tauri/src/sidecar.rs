@@ -31,6 +31,7 @@ pub struct AppConfig {
 /// after a crash.
 #[derive(Default)]
 pub struct Sidecar {
+    /// The running process, while there is one.
     child: Mutex<Option<CommandChild>>,
     /// Bumped each time the server is started or deliberately stopped, so an
     /// old process ending can be told apart from the current one crashing.
@@ -42,8 +43,11 @@ pub struct Sidecar {
 /// One [`Sidecar`] per kind of server.
 #[derive(Default)]
 pub struct Servers {
+    /// The node's server.
     node: Sidecar,
+    /// The commons' server.
     commons: Sidecar,
+    /// The practice commons' server.
     practice: Sidecar,
 }
 
@@ -312,6 +316,7 @@ mod tests {
         assert!(!should_restart(5, 5, 0, Some(2)), "refused its settings: restarting won't help");
     }
 
+    /// The settings a server of `kind` on `port` starts with, as a lookup table.
     fn env_of(kind: Kind, port: u16) -> std::collections::HashMap<&'static str, String> {
         server_env(kind, port, "Name", None, "https://c.example", Some("http://192.168.1.5:8081".into()))
             .into_iter()
