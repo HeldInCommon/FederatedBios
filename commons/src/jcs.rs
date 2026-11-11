@@ -29,6 +29,8 @@ pub fn to_vec(v: &Value) -> Result<Vec<u8>, String> {
     Ok(out.into_bytes())
 }
 
+/// Append the canonical form of `v` to `out`: object keys sorted, no
+/// whitespace, integers only (within the range JavaScript can hold exactly).
 fn write(v: &Value, out: &mut String) -> Result<(), String> {
     match v {
         Value::Null => out.push_str("null"),
@@ -72,6 +74,9 @@ fn write(v: &Value, out: &mut String) -> Result<(), String> {
     Ok(())
 }
 
+/// Append `s` as a JSON string, escaped as RFC 8785 asks: the short escapes
+/// (`\n`, `\t` …) where JSON has them, `\u00XX` for other control characters,
+/// and everything else as it is.
 fn write_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
@@ -95,6 +100,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// The canonical form of `v`, as text, for comparing in tests.
     fn canon(v: Value) -> String {
         String::from_utf8(to_vec(&v).unwrap()).unwrap()
     }

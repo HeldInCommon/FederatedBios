@@ -43,6 +43,7 @@ pub struct Reply {
     pub text: String,
 }
 
+/// Send `req` through the router in process (no network) and collect the reply.
 pub async fn send(app: &Router, req: Request<Body>) -> Reply {
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
@@ -51,6 +52,7 @@ pub async fn send(app: &Router, req: Request<Body>) -> Reply {
     Reply { status, headers, text: String::from_utf8_lossy(&bytes).into_owned() }
 }
 
+/// A `GET` request, signed in when `cookie` holds a session token.
 pub fn get(uri: &str, cookie: Option<&str>) -> Request<Body> {
     let mut b = Request::get(uri);
     if let Some(c) = cookie {
@@ -59,6 +61,7 @@ pub fn get(uri: &str, cookie: Option<&str>) -> Request<Body> {
     b.body(Body::empty()).unwrap()
 }
 
+/// A form `POST`, signed in when `cookie` holds a session token.
 pub fn post_form(uri: &str, body: &str, cookie: Option<&str>) -> Request<Body> {
     let mut b = Request::post(uri).header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
     if let Some(c) = cookie {
@@ -67,6 +70,7 @@ pub fn post_form(uri: &str, body: &str, cookie: Option<&str>) -> Request<Body> {
     b.body(Body::from(body.to_string())).unwrap()
 }
 
+/// A JSON `POST`, as one server sends to another.
 pub fn post_json(uri: &str, body: &serde_json::Value) -> Request<Body> {
     Request::post(uri).header(header::CONTENT_TYPE, "application/json").body(Body::from(body.to_string())).unwrap()
 }
@@ -130,6 +134,8 @@ pub fn person(h: &str) -> hic_commons::model::HandleRec {
     hic_commons::model::HandleRec::new(h, h, 0, hic_commons::keys::generate(), String::new(), String::new())
 }
 
+/// The JSON a node sends to share `rec`'s public profile to a commons, with
+/// an invite code when one is given.
 pub fn share_of(rec: &hic_commons::model::HandleRec, invite: Option<&str>) -> serde_json::Value {
     use hic_commons::{federation, model, publishing};
     let draft = publishing::Draft {

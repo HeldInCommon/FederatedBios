@@ -20,9 +20,13 @@ use crate::model::{MemberBox, Profile};
 /// A new set of keys for a handle, all hex-encoded.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct NewKeys {
+    /// Ed25519 public key: signs, and is the portable identity.
     pub ed_pub: String,
+    /// Ed25519 private key. Never leaves the node.
     pub ed_priv: String,
+    /// X25519 public key: others encrypt members-only profiles to it.
     pub box_pub: String,
+    /// X25519 private key. Never leaves the node.
     pub box_priv: String,
 }
 

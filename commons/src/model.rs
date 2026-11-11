@@ -57,6 +57,7 @@ impl Reach {
 pub struct HandleRec {
     pub handle: String,
     pub display_name: String,
+    /// When the handle was made here, in Unix seconds.
     pub created_at: u64,
     /// Ed25519 public key, hex. Signs every version.
     pub ed_pub: String,
@@ -69,6 +70,7 @@ pub struct HandleRec {
     /// Passphrase hash. Either a PHC string (`$argon2id$…`) or, for handles
     /// created before November 2026, a hex SHA-256 paired with `secret_salt`.
     pub secret_salt: String,
+    /// The hash itself (see `secret_salt` above).
     pub secret_hash: String,
     /// The `cid` of the version currently shown, if any has been published.
     pub current_cid: Option<String>,
@@ -214,12 +216,16 @@ pub struct MemberBox {
 /// One published version. Immutable once written: `versions/<cid>.json`.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Version {
+    /// The content id: hex SHA-256 of the canonical version (`canonical.rs`).
     pub cid: String,
     pub handle: String,
     /// `public`, `commons` or `members` (see [`Reach`]).
     pub visibility: String,
+    /// A licence id such as `cc-by` (see `governance.rs`).
     pub license: String,
+    /// Signal ids such as `credit`: wishes, not licence terms.
     pub signals: Vec<String>,
+    /// When it was signed, in Unix seconds. Newer replaces older.
     pub created_at: u64,
     /// Hex Ed25519 signature over the `cid` string.
     pub signature: String,
@@ -243,6 +249,7 @@ impl Version {
 pub struct RemoteEntry {
     /// The sender's Ed25519 public key: the portable identity.
     pub ed_pub: String,
+    /// The sender's X25519 key, so members-only versions can be encrypted to them.
     pub box_pub: String,
     pub handle: String,
     pub display_name: String,
@@ -257,6 +264,7 @@ pub struct RemoteEntry {
     pub signals: Vec<String>,
     pub created_at: u64,
     pub profile: Profile,
+    /// Hex Ed25519 signature over `cid`, by `ed_pub`.
     pub signature: String,
     /// When this commons received it.
     pub received_at: u64,

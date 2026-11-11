@@ -24,8 +24,13 @@ use serde_json::{json, Value};
 use crate::envelope::{self, Envelope, Signed};
 use crate::keys::NewKeys;
 
+/// The envelope `type` that declares a handle's recovery key.
 pub const RECOVERY_KEY: &str = "RecoveryKey";
+/// The envelope `type` that moves a handle to a new main key, signed by the
+/// current one.
 pub const KEY_ROTATION: &str = "KeyRotation";
+/// The envelope `type` that, signed by the recovery key, moves a handle to a
+/// new main key and sets a new recovery key (when the main key is lost or stolen).
 pub const RECOVERY_ROTATION: &str = "RecoveryRotation";
 
 /// How far ahead of the commons' clock a rotation may be dated (one day).
@@ -110,6 +115,10 @@ pub fn recover(
 // Applying them (on a commons)
 // ---------------------------------------------------------------------------
 
+/// The string field `key` of a signed change's body, or a "missing …" error.
+///
+/// Learner note: `'a` says the returned `&str` borrows from `body`, so it
+/// lives as long as `body` does and no copy is made.
 fn body_str<'a>(body: &'a Value, key: &str) -> Result<&'a str, String> {
     body.get(key).and_then(|v| v.as_str()).ok_or_else(|| format!("missing {key}"))
 }
@@ -190,10 +199,12 @@ mod tests {
         recovery: (String, String),
     }
 
+    /// A new owner: a main key pair and a separate recovery key.
     fn owner() -> Owner {
         Owner { main: keys::generate(), recovery: keys::generate_signing() }
     }
 
+    /// A commons' identity record for `o`, with their recovery key declared.
     fn registered(o: &Owner) -> Identity {
         let id = Identity::new("tega", &o.main.ed_pub, &o.main.box_pub);
         let d = declare_recovery("tega", &o.main.ed_pub, &o.main.ed_priv, &o.recovery.0, 10).unwrap();

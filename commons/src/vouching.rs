@@ -25,7 +25,9 @@ use crate::envelope::{self, Envelope, Signed};
 use crate::keys::ct_eq;
 use crate::web::layout::host_label;
 
+/// The envelope `type` of a member's signed invite.
 pub const INVITE: &str = "Invite";
+/// The envelope `type` of a member's signed vouch for someone waiting.
 pub const VOUCH: &str = "Vouch";
 
 /// How long an invite code stays valid (14 days).
@@ -43,11 +45,13 @@ pub const STEWARD_INVITE_PREFIX: &str = "hic-invite-";
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Intro {
     pub handle: String,
+    /// Their Ed25519 public key, hex.
     pub key: String,
     /// `"invite"`, `"vouch"` or `"founding"`.
     pub route: String,
     /// The member who vouched (their key), or `None` for the founding invite.
     pub voucher: Option<String>,
+    /// When they were listed, in Unix seconds.
     pub at: u64,
     /// The signed invite or vouch, kept as the record.
     pub proof: Option<Signed>,
@@ -55,9 +59,9 @@ pub struct Intro {
 
 /// What a commons knows when checking a vouch.
 pub struct Ctx<'a> {
-    /// This commons' public address.
     /// The hosts this commons counts as itself (`Config::own_hosts`).
     pub my_hosts: &'a [String],
+    /// The time to check against, in Unix seconds.
     pub now: u64,
     /// Keys of current members (people with a profile listed here).
     pub member_keys: &'a [String],
@@ -70,10 +74,13 @@ pub struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
+    /// True when `key` belongs to a member of this commons.
     fn is_member(&self, key: &str) -> bool {
         self.member_keys.iter().any(|k| k == key)
     }
 
+    /// True when `voucher` has brought in fewer than the weekly limit of people
+    /// in the last seven days.
     fn under_limit(&self, voucher: &str) -> bool {
         let recent =
             self.intros.iter().filter(|i| i.voucher.as_deref() == Some(voucher) && i.at + WEEK > self.now).count();
@@ -201,6 +208,12 @@ mod tests {
 
     const URL: &str = "http://commons.example";
 
+    /// The commons' view for a test: its members, used invite codes and intros,
+    /// at time `now`, with a limit of two a week.
+    ///
+    /// Learner note: `Box::leak` gives up ownership of a value so it lives for
+    /// the rest of the program and can be borrowed as `'static`. Fine in a test;
+    /// in real code it would be a memory leak.
     fn ctx<'a>(members: &'a [String], used: &'a [String], intros: &'a [Intro], now: u64) -> Ctx<'a> {
         let hosts: &'static [String] = Box::leak(vec![host_label(URL)].into_boxed_slice());
         Ctx { my_hosts: hosts, now, member_keys: members, used_codes: used, intros, limit: 2 }

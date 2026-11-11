@@ -112,6 +112,7 @@ pub struct OwnStory {
     pub story: Story,
     /// The signed object: what gets sent to a commons, and proof of authorship.
     pub signed: Signed,
+    /// The commons it is shared to now (their addresses).
     #[serde(default)]
     pub shared_to: Vec<String>,
     /// When it was last shared to each commons in `shared_to`.

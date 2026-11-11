@@ -72,6 +72,7 @@ mod tests {
     use super::*;
     use crate::model::Place;
 
+    /// A profile with every field filled, for the canonical-bytes tests.
     fn sample() -> Profile {
         Profile {
             name: "Tega Brain".into(),

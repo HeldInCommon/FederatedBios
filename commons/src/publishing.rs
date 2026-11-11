@@ -48,11 +48,13 @@ pub fn sign_version(rec: &HandleRec, d: Draft, recipients: &[(String, String)]) 
 mod tests {
     use super::*;
 
+    /// A member record with fresh keys.
     fn rec() -> HandleRec {
         let k = keys::generate();
         HandleRec::new("tega", "Tega", 0, k, String::new(), String::new())
     }
 
+    /// A profile draft with the given reach.
     fn draft(reach: Reach) -> Draft {
         Draft {
             profile: Profile { name: "Tega".into(), ..Default::default() },

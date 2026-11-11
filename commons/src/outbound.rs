@@ -130,6 +130,7 @@ pub async fn client_for(url: &str, p: Policy) -> Result<reqwest::Client, String>
 mod tests {
     use super::*;
 
+    /// Parse an address written in a test.
     fn ip(s: &str) -> IpAddr {
         s.parse().unwrap()
     }

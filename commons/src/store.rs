@@ -53,6 +53,7 @@ pub enum StoreError {
 }
 
 impl fmt::Display for StoreError {
+    /// Say what went wrong and which file, for logs and the operator.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StoreError::Io(p, e) => write!(f, "{}: {e}", p.display()),
@@ -128,6 +129,8 @@ impl Store {
 
     // ---- generic helpers -------------------------------------------------
 
+    /// Read one JSON file. `Ok(None)` when it doesn't exist; an error when it
+    /// can't be read or doesn't parse.
     fn read<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, StoreError> {
         match std::fs::read(path) {
             Ok(bytes) => serde_json::from_slice(&bytes).map(Some).map_err(|e| StoreError::Corrupt(path.into(), e)),
@@ -136,6 +139,7 @@ impl Store {
         }
     }
 
+    /// Write one value as pretty JSON, atomically (see [`write_atomic`]).
     fn write<T: Serialize>(path: &Path, value: &T) -> Result<(), StoreError> {
         let bytes = serde_json::to_vec_pretty(value).expect("stored types serialise");
         write_atomic(path, &bytes).map_err(|e| StoreError::Io(path.into(), e))
@@ -160,6 +164,7 @@ impl Store {
 
     // ---- handles (a node's members) ----------------------------------------
 
+    /// Where a member's record lives. Callers check the handle is valid first.
     fn handle_path(&self, h: &str) -> PathBuf {
         self.root.join("handles").join(format!("{h}.json"))
     }
@@ -197,6 +202,7 @@ impl Store {
 
     // ---- versions --------------------------------------------------------
 
+    /// Where a version lives. Callers check the `cid` is well formed first.
     fn version_path(&self, cid: &str) -> PathBuf {
         self.root.join("versions").join(format!("{cid}.json"))
     }
@@ -227,6 +233,7 @@ impl Store {
 
     // ---- remote (profiles shared to a commons) -----------------------------
 
+    /// Where a shared profile lives. Callers check the key id first.
     fn remote_path(&self, kid: &str) -> PathBuf {
         self.root.join("remote").join(format!("{kid}.json"))
     }
@@ -271,6 +278,7 @@ impl Store {
 
     // ---- stories ------------------------------------------------------------
 
+    /// Where a story written on this node lives. Callers check the id first.
     fn own_story_path(&self, id: &str) -> PathBuf {
         self.root.join("my-stories").join(format!("{id}.json"))
     }
@@ -298,6 +306,7 @@ impl Store {
         out
     }
 
+    /// The file name for a held story: the author's key id, then the story id.
     fn held_story_name(author: &str, id: &str) -> String {
         format!("{}-{id}.json", keyid(author))
     }
@@ -366,6 +375,7 @@ impl Store {
         self.read_all("tombstones")
     }
 
+    /// Where the withdrawal record for a key lives, named by its key id.
     fn tombstone_path(&self, ed_pub: &str) -> PathBuf {
         self.root.join("tombstones").join(format!("{}.json", keyid(ed_pub)))
     }
@@ -383,6 +393,7 @@ impl Store {
 
     // ---- identities (who holds each handle, on a commons) -------------------
 
+    /// Where a handle's identity record lives. Callers check the handle first.
     fn identity_path(&self, h: &str) -> PathBuf {
         self.root.join("identities").join(format!("{h}.json"))
     }
@@ -405,6 +416,7 @@ impl Store {
 
     // ---- vouching (commons) ------------------------------------------------
 
+    /// Delete a file. One that is already gone is not an error, so a retry is safe.
     fn remove_if_present(p: PathBuf) -> Result<(), StoreError> {
         match std::fs::remove_file(&p) {
             Ok(()) => Ok(()),
@@ -476,6 +488,7 @@ impl Store {
 
     // ---- notices (nodes) ---------------------------------------------------
 
+    /// The node's notices file (one file holding the whole list).
     fn notices_path(&self) -> PathBuf {
         self.root.join("notices.json")
     }
@@ -525,6 +538,8 @@ impl Store {
         Self::write(&self.root.join("steward.json"), &serde_json::json!({ "key": key }))
     }
 
+    /// Where an invite code's record lives. The file is named by a hash of the
+    /// code, so the code itself never appears in a file name.
     fn commons_invite_path(&self, code: &str) -> PathBuf {
         self.root.join("commons-invites").join(format!("{}.json", keyid(code)))
     }
@@ -593,6 +608,8 @@ mod tests {
     use super::*;
     use crate::model::Profile;
 
+    /// A store in a new, empty folder of its own under the system temp folder,
+    /// so tests running at the same time don't share files.
     fn temp_store() -> Store {
         let dir = std::env::temp_dir().join(format!(
             "hic-store-test-{}-{}",
@@ -602,6 +619,7 @@ mod tests {
         Store::open(dir).unwrap()
     }
 
+    /// A member record with placeholder keys (the store never checks them).
     fn rec(h: &str) -> HandleRec {
         HandleRec {
             handle: h.into(),

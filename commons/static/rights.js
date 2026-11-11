@@ -6,11 +6,13 @@
   var form = document.querySelector('.rights-form');
   if (!form) return;
 
+  // The plain-words label of the first input matching `selector`, if any.
   function label(selector) {
     var input = form.querySelector(selector);
     return input ? input.getAttribute('data-label') : null;
   }
 
+  // Put `text` in the summary cell for `key`. Empty text leaves it as it was.
   function set(key, text) {
     var cell = form.querySelector('[data-summary="' + key + '"]');
     if (cell && text) cell.textContent = text;

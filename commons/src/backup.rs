@@ -110,6 +110,7 @@ pub fn open(text: &str, passphrase: &str) -> Result<(HandleRec, Option<Version>)
 mod tests {
     use super::*;
 
+    /// A member record with fresh keys, to back up and restore.
     fn rec() -> HandleRec {
         let k = crate::keys::generate();
         HandleRec {

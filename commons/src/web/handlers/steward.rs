@@ -49,8 +49,10 @@ pub(crate) fn from_this_computer(peer: &Option<Extension<ConnectInfo<SocketAddr>
     peer.as_ref().is_some_and(|Extension(ConnectInfo(a))| a.ip().is_loopback())
 }
 
+/// The query string of `GET /steward`.
 #[derive(Deserialize)]
 pub struct OpenQ {
+    /// The steward link's key, when opened from another computer.
     pub key: Option<String>,
 }
 
@@ -79,6 +81,7 @@ pub async fn open(
     redirect_with("/", Some(sessions::set_cookie(&st.config.session_cookie, &token, st.config.secure_cookie())))
 }
 
+/// A steward form that names one person by their key.
 #[derive(Deserialize)]
 struct KeyForm {
     key: String,
