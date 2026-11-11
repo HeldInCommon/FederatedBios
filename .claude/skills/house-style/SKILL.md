@@ -37,7 +37,54 @@ signature should be able to tell what it changes.
 - **Allowed exceptions, documented:** shared in-memory state behind a lock
   (sessions, rate limits) and logging.
 
-## 2. Rust patterns we use
+## 2. Design: layers, interfaces, composition and states
+
+Phoenix leans towards abstraction, interfaces (in the C# sense), composition,
+MVC-style layering and explicit states, with a clean line between data and
+display. Here is how that looks in Rust and in this repo.
+
+- **Keep data and display apart (MVC).**
+  - *Model:* `model.rs`, `member.rs`, `identity.rs`, `federation.rs` and
+    friends hold the data and the rules. They contain no HTML and no HTTP.
+  - *View:* `web/pages/` takes data and returns markup. It never reads the
+    store and never decides a rule. If a page needs a decision, the handler
+    or model makes it and passes the answer in, for example the `Viewer`
+    enum in `pages/directory.rs`.
+  - *Controller:* `web/handlers/` reads the request, asks the model, applies
+    changes through the store and picks the view. Keep handlers thin; when one
+    grows logic, move that logic into the model and unit-test it there.
+  - *Persistence:* `store.rs` (the repository) sits behind the model.
+
+  The desktop app follows the same split: Rust decides, `src-tauri/ui/` shows.
+- **Make states explicit.** When something can be in several states, model it
+  as an enum with one variant per state. Each variant carries only the data
+  that is valid in that state. `Viewer::Steward(&StewardView)` is an example:
+  only the steward state has steward data.
+  - Write transitions as pure functions that take the current state and an
+    event and return the next state, or an error for a move that isn't
+    allowed.
+  - Prefer this to combinations of `bool` flags (`pending && !approved`), so
+    impossible states can't be written down at all. Other examples:
+    `Admission`, `waiting::Outcome`, `Role`.
+- **Interfaces are traits.** A Rust trait is close to a C# interface: a set of
+  methods a type promises to provide. The differences worth knowing:
+  - Traits carry no data, and there is no inheritance.
+  - You can implement a trait for a type you didn't write.
+  - `impl Trait` and generics are resolved at compile time. `dyn Trait`
+    works like holding an interface reference in C#, resolved at run time.
+- **Abstract at real seams.** Add a trait where there are two
+  implementations, or where a test needs a stand-in: storage, outbound HTTP,
+  the clock, randomness. Today the store is a concrete type, and the only
+  trait is `WithStatus` in `web/handlers/mod.rs`. Don't add a trait for a
+  single implementation "in case": while the team is learning Rust, each
+  trait is one more hop to follow. When you do add one, document what an
+  implementation must guarantee.
+- **Compose, don't inherit.** Rust has no inheritance. Build bigger types out
+  of smaller ones (`AppState` holds `Config`, `Store`, `Sessions` and the
+  limiters). Share behaviour through traits and plain functions, and pass
+  the pieces a function needs rather than the whole world.
+
+## 3. Rust patterns we use
 
 - **Enums for outcomes**, not booleans or strings. For example, `Admission`
   says why a listing was accepted or refused. Callers `match` on every case.
@@ -55,7 +102,7 @@ signature should be able to tell what it changes.
   change. A new format needs a new schema version and a spec entry
   (`docs/spec/`, ADR 0009).
 
-## 3. Structure: split early, one file per page or behaviour
+## 4. Structure: split early, one file per page or behaviour
 
 Split a file by page or behaviour as soon as it starts collecting several,
 before it gets long. "It will rapidly get huge as the site grows outward."
@@ -72,7 +119,7 @@ Don't extend an existing file with an unrelated page.
 **Every module** starts with a `//!` comment saying what it is for. **Every
 public function** has a `///` comment. Each `mod.rs` keeps its table of files
 up to date. In those tables, write file names as plain code (`` `notices.rs` ``),
-not intra-doc links, which break the `cargo doc` check (§5).
+not intra-doc links, which break the `cargo doc` check (§6).
 
 **When structure changes**, update `docs/CODEMAP.md` and `CONTRIBUTING.md` in
 the same pull request.
@@ -81,7 +128,7 @@ the same pull request.
 security or the signed format, or someone will ask "why?" about, write a new
 ADR. Copy an existing one's layout. Don't rewrite an accepted ADR; supersede it.
 
-## 4. CSS and front end
+## 5. CSS and front end
 
 There are two stylesheets:
 
@@ -110,7 +157,7 @@ frame or screens, page parts, and small screens.
 - **Keep JavaScript small**, and only where the server can't do the job. It
   toggles attributes and classes rather than writing styles.
 
-## 5. Testing
+## 6. Testing
 
 Every change comes with tests at the right level:
 
@@ -144,7 +191,7 @@ python3 scripts/check_spec_vectors.py
 ./scripts/lint-css.sh                                  # if any CSS changed
 ```
 
-## 6. Git and pull requests
+## 7. Git and pull requests
 
 - Work in the org repo **HeldInCommon/FederatedBios**. Never push to a
   personal fork.
@@ -160,7 +207,7 @@ python3 scripts/check_spec_vectors.py
 - **Secrets never go in chat, code or CI config.** That covers signing keys,
   passwords and team IDs (`docs/MAINTAINER.md`).
 
-## 7. Writing (comments, docs, PRs)
+## 8. Writing (comments, docs, PRs)
 
 - **Plain language, short sentences, British spelling** ("colour",
   "organised").
