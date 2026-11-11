@@ -4,10 +4,18 @@
 //! on macOS) holds:
 //!
 //! ```text
-//! app.json        {"role": "node" | "commons", "name": "Studio laptop"}
-//! node-data/      the server's data folder when running a node
-//! commons-data/   the server's data folder when running a commons
+//! app.json        {"role": "node" | "commons", "name": "Studio laptop",
+//!                  "other_name": "Room 4", "practice": true}
+//! node-data/      the node's data folder
+//! commons-data/   the commons' data folder
+//! practice-data/  the practice commons' data folder, while there is one
 //! ```
+//!
+//! One computer can run up to three servers side by side (see [`Kind`]): the
+//! role chosen at first launch (`role`, `name`), the other role if it was
+//! added later (`other_name`), and a practice commons for learning
+//! (`practice`). The first role keeps port 8080, so nothing changes for
+//! anyone who set up the app before this was possible.
 //!
 //! The **name** is what this computer's node or commons is called: it shows in
 //! the coloured bar on every page and travels with shares as the node's name,
@@ -24,20 +32,146 @@ use serde::{Deserialize, Serialize};
 /// Longest name allowed, in characters.
 pub const NAME_MAX: usize = 60;
 
+/// The port of the role chosen at first launch.
+pub const FIRST_PORT: u16 = 8080;
+/// The port of the other role, once added.
+pub const SECOND_PORT: u16 = 8081;
+/// The practice commons' port.
+pub const PRACTICE_PORT: u16 = 8082;
+
+/// What the practice commons is called.
+pub const PRACTICE_NAME: &str = "Practice commons";
+
+/// A server the app can run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kind {
+    /// The person's own node.
+    Node,
+    /// A commons for their room.
+    Commons,
+    /// A commons only this computer can reach, for learning.
+    Practice,
+}
+
+impl Kind {
+    /// Every kind, in the order menus list them.
+    pub const ALL: [Kind; 3] = [Kind::Node, Kind::Commons, Kind::Practice];
+
+    /// The server role it runs (`HIC_ROLE`).
+    pub fn role(self) -> &'static str {
+        match self {
+            Kind::Node => "node",
+            Kind::Commons | Kind::Practice => "commons",
+        }
+    }
+
+    /// Its name in links, commands and menu ids.
+    pub fn key(self) -> &'static str {
+        match self {
+            Kind::Node => "node",
+            Kind::Commons => "commons",
+            Kind::Practice => "practice",
+        }
+    }
+
+    /// Read [`Kind::key`] back.
+    pub fn parse(s: &str) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|k| k.key() == s)
+    }
+
+    /// How the app's buttons and menus name it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Kind::Node => "Your node",
+            Kind::Commons => "Your commons",
+            Kind::Practice => PRACTICE_NAME,
+        }
+    }
+}
+
 /// The contents of `app.json`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Saved {
-    /// "node" or "commons", once chosen.
+    /// "node" or "commons": the role chosen at first launch. It opens when
+    /// the app starts and keeps port 8080.
     pub role: Option<String>,
-    /// What this node or commons is called, once named.
+    /// What that node or commons is called, once named.
     #[serde(default)]
     pub name: Option<String>,
+    /// The name of the other role, once it has been added too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_name: Option<String>,
+    /// True while there is a practice commons.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub practice: bool,
 }
 
 impl Saved {
     /// True when both the role and the name are known, so the server can start.
     pub fn ready(&self) -> bool {
         self.role.is_some() && self.name.is_some()
+    }
+
+    /// The kind chosen at first launch.
+    pub fn first(&self) -> Option<Kind> {
+        self.role.as_deref().and_then(Kind::parse)
+    }
+
+    /// What `kind` is called, if this computer runs it.
+    pub fn name_of(&self, kind: Kind) -> Option<&str> {
+        match kind {
+            Kind::Practice => self.practice.then_some(PRACTICE_NAME),
+            k if self.first() == Some(k) => self.name.as_deref(),
+            _ => self.other_name.as_deref().filter(|_| self.ready()),
+        }
+    }
+
+    /// Does this computer run `kind`?
+    pub fn runs(&self, kind: Kind) -> bool {
+        self.name_of(kind).is_some()
+    }
+
+    /// Every kind this computer runs, first-launch role first.
+    pub fn running(&self) -> Vec<Kind> {
+        let first = self.first().filter(|_| self.ready());
+        first.into_iter().chain(Kind::ALL.into_iter().filter(|k| Some(*k) != first && self.runs(*k))).collect()
+    }
+
+    /// Where the window goes when it has nowhere better: the node if there
+    /// is one, else the first-launch role.
+    pub fn home(&self) -> Option<Kind> {
+        if self.runs(Kind::Node) {
+            Some(Kind::Node)
+        } else {
+            self.first().filter(|_| self.ready())
+        }
+    }
+
+    /// The port `kind` listens on.
+    pub fn port_of(&self, kind: Kind) -> u16 {
+        port_for(self.role.as_deref(), kind)
+    }
+}
+
+/// The port for `kind` when `first` is the first-launch role: the
+/// first-launch role keeps 8080 (so existing nodes and room commons keep
+/// their addresses), the other role gets 8081, and practice 8082.
+pub fn port_for(first: Option<&str>, kind: Kind) -> u16 {
+    match kind {
+        Kind::Practice => PRACTICE_PORT,
+        k if first.is_none_or(|r| r == k.role()) => FIRST_PORT,
+        _ => SECOND_PORT,
+    }
+}
+
+/// The sign-in cookie name for a server on `port` (`HIC_SESSION_COOKIE`).
+/// Browsers share cookies between ports of one host, so each server needs
+/// its own. 8080 keeps the old name, so nobody is signed out by an update.
+pub fn cookie_name(port: u16) -> String {
+    if port == FIRST_PORT {
+        "hic_session".into()
+    } else {
+        format!("hic_session_{port}")
     }
 }
 
@@ -61,10 +195,14 @@ pub fn clean_name(typed: &str) -> Result<String, String> {
     Ok(name)
 }
 
-/// The server's data folder for `role`. `node-data` is the folder earlier
-/// versions used, so existing nodes keep their data.
-pub fn data_dir_for(base: &Path, role: &str) -> PathBuf {
-    base.join(if role == "commons" { "commons-data" } else { "node-data" })
+/// The data folder for `kind`. `node-data` is the folder earlier versions
+/// used, so existing nodes keep their data.
+pub fn data_dir_for(base: &Path, kind: Kind) -> PathBuf {
+    base.join(match kind {
+        Kind::Node => "node-data",
+        Kind::Commons => "commons-data",
+        Kind::Practice => "practice-data",
+    })
 }
 
 /// The role to use, from what is saved and what is on disk:
@@ -94,6 +232,8 @@ pub fn load(base: &Path) -> (Saved, bool) {
     let saved = Saved {
         role: decide_role(file.role.clone(), has_members),
         name: file.name.as_deref().and_then(|n| clean_name(n).ok()),
+        other_name: file.other_name.as_deref().and_then(|n| clean_name(n).ok()),
+        practice: file.practice,
     };
     let changed = saved != file;
     (saved, changed)
@@ -127,10 +267,71 @@ mod tests {
     }
 
     #[test]
-    fn folders_per_role() {
+    fn folders_per_kind() {
         let b = Path::new("/x");
-        assert_eq!(data_dir_for(b, "node"), Path::new("/x/node-data"));
-        assert_eq!(data_dir_for(b, "commons"), Path::new("/x/commons-data"));
+        assert_eq!(data_dir_for(b, Kind::Node), Path::new("/x/node-data"));
+        assert_eq!(data_dir_for(b, Kind::Commons), Path::new("/x/commons-data"));
+        assert_eq!(data_dir_for(b, Kind::Practice), Path::new("/x/practice-data"));
+    }
+
+    #[test]
+    fn the_first_role_keeps_8080() {
+        assert_eq!(port_for(Some("node"), Kind::Node), 8080);
+        assert_eq!(port_for(Some("node"), Kind::Commons), 8081);
+        assert_eq!(port_for(Some("commons"), Kind::Commons), 8080);
+        assert_eq!(port_for(Some("commons"), Kind::Node), 8081);
+        assert_eq!(port_for(None, Kind::Commons), 8080, "first launch: whatever is chosen gets 8080");
+        assert_eq!(port_for(Some("node"), Kind::Practice), 8082);
+    }
+
+    #[test]
+    fn each_port_has_its_own_cookie() {
+        assert_eq!(cookie_name(8080), "hic_session");
+        assert_eq!(cookie_name(8081), "hic_session_8081");
+        assert_ne!(cookie_name(8081), cookie_name(8082));
+    }
+
+    #[test]
+    fn what_a_computer_runs() {
+        let node_only = Saved { role: Some("node".into()), name: Some("Laptop".into()), ..Default::default() };
+        assert_eq!(node_only.running(), vec![Kind::Node]);
+        assert!(!node_only.runs(Kind::Commons));
+        assert_eq!(node_only.home(), Some(Kind::Node));
+
+        let both = Saved { other_name: Some("Room 4".into()), practice: true, ..node_only.clone() };
+        assert_eq!(both.running(), vec![Kind::Node, Kind::Commons, Kind::Practice]);
+        assert_eq!(both.name_of(Kind::Commons), Some("Room 4"));
+        assert_eq!(both.name_of(Kind::Practice), Some(PRACTICE_NAME));
+
+        let steward = Saved {
+            role: Some("commons".into()),
+            name: Some("Room 4".into()),
+            other_name: Some("Laptop".into()),
+            practice: false,
+        };
+        assert_eq!(steward.running(), vec![Kind::Commons, Kind::Node], "the first-launch role comes first");
+        assert_eq!(steward.home(), Some(Kind::Node));
+        assert_eq!(steward.port_of(Kind::Node), 8081);
+    }
+
+    #[test]
+    fn kinds_round_trip() {
+        for k in Kind::ALL {
+            assert_eq!(Kind::parse(k.key()), Some(k));
+        }
+        assert_eq!(Kind::parse("other"), None);
+    }
+
+    #[test]
+    fn app_json_without_the_new_fields_still_reads_and_old_apps_can_read_ours() {
+        let s: Saved = serde_json::from_str(r#"{"role":"node","name":"Laptop"}"#).unwrap();
+        assert_eq!(s.other_name, None);
+        assert!(!s.practice);
+        // An app from before this change reads only role and name.
+        let json = serde_json::to_string(&Saved { other_name: Some("Room".into()), practice: true, ..s }).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["role"], "node");
+        assert_eq!(v["name"], "Laptop");
     }
 
     #[test]
@@ -152,7 +353,7 @@ mod tests {
     #[test]
     fn old_app_json_without_a_name_still_reads() {
         let s: Saved = serde_json::from_str(r#"{"role":"node"}"#).unwrap();
-        assert_eq!(s, Saved { role: Some("node".into()), name: None });
+        assert_eq!(s, Saved { role: Some("node".into()), name: None, ..Default::default() });
         assert!(!s.ready());
     }
 }

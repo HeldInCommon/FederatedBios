@@ -16,6 +16,12 @@ use hic_commons::store::Store;
 
 /// A server in `role` with a fresh data folder.
 pub fn server(role: Role) -> (Router, Store) {
+    server_with(role, &[])
+}
+
+/// A server in `role` with a fresh data folder and these extra settings.
+pub fn server_with(role: Role, extra: &[(&str, &str)]) -> (Router, Store) {
+    let extra: Vec<(String, String)> = extra.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
     let dir =
         std::env::temp_dir().join(format!("hic-http-{}-{}", std::process::id(), hic_commons::sessions::random_hex(6)));
     let store = Store::open(&dir).unwrap();
@@ -24,7 +30,7 @@ pub fn server(role: Role) -> (Router, Store) {
         "HIC_INSTANCE" => Some("Test".into()),
         // Most tests exercise other features; vouching has its own tests below.
         "HIC_OPEN_COMMONS" => Some("1".into()),
-        _ => None,
+        _ => extra.iter().find(|(name, _)| name == k).map(|(_, v)| v.clone()),
     });
     let state = Arc::new(AppState::new(config, role, store.clone()));
     (router(state), store)

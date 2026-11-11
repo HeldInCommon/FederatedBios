@@ -18,10 +18,11 @@
 //! | `inbox.rs` | `POST /inbox`: what a commons receives from nodes |
 //! | `backup.rs` | `POST /backup`, `/restore` |
 //! | `federated.rs` | `GET /federated/{keyid}` |
-//! | `about.rs` | `GET /about` |
+//! | `about.rs` | `GET /about`, `GET /run-a-commons` |
 //! | `account.rs` | recovery key, replacing and recovering a key |
 //! | `membership.rs` | invite codes and vouches, from a member's node |
 //! | `steward.rs` | the steward view of a commons |
+//! | `stories.rs` | stories: write, read, export, share and withdraw (node); list and read (commons) |
 
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
@@ -42,13 +43,14 @@ mod profile;
 mod publish;
 mod share;
 mod signin;
+mod stories;
 
 pub mod account;
 pub mod membership;
 pub mod steward;
 
-pub use about::about;
-pub use backup::{backup, restore_form, restore_submit};
+pub use about::{about, run_a_commons};
+pub use backup::{backup, backup_later, restore_form, restore_submit};
 pub use directory::directory;
 pub use federated::federated;
 pub use inbox::inbox;
@@ -59,10 +61,11 @@ pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
 pub(crate) use share::{post_to_commons, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};
+pub use stories::{held_story, own_story, stories, story_create, story_form, story_share, story_text, story_withdraw};
 
 /// The signed-in session for this request, if any.
 pub(crate) fn session(st: &AppState, headers: &HeaderMap) -> Option<Session> {
-    sessions::token_from(headers).and_then(|t| st.sessions.get(&t, now()))
+    sessions::token_from(headers, &st.config.session_cookie).and_then(|t| st.sessions.get(&t, now()))
 }
 
 /// True when the request is signed in as `handle` and carries that session's

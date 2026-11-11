@@ -334,9 +334,9 @@ pub struct Withdrawal {
     pub created_at: u64,
 }
 
-/// Check a received withdrawal: well-formed, addressed to this server
-/// (`my_base_url`), and signed by the key it names.
-pub fn verify_withdraw(v: &Value, my_base_url: &str) -> Result<Withdrawal, String> {
+/// Check a received withdrawal: well-formed, addressed to this server (one
+/// of `my_hosts`, see `Config::own_hosts`), and signed by the key it names.
+pub fn verify_withdraw(v: &Value, my_hosts: &[String]) -> Result<Withdrawal, String> {
     let actor = v.get("actor").ok_or("missing actor")?;
     let object = v.get("object").ok_or("missing object")?;
     let ed_pub = str_at(actor, "ed25519PublicKey").ok_or("missing key")?;
@@ -345,7 +345,7 @@ pub fn verify_withdraw(v: &Value, my_base_url: &str) -> Result<Withdrawal, Strin
         return Err("invalid handle".into());
     }
     let audience = str_at(object, "audience").ok_or("missing audience")?;
-    if audience != host_label(my_base_url) {
+    if !my_hosts.iter().any(|h| h == audience) {
         return Err("this withdrawal was addressed to a different commons".into());
     }
     let created_at = object.get("createdAt").and_then(|x| x.as_u64()).ok_or("missing createdAt")?;
@@ -406,6 +406,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            backup_done: false,
             waiting_on: vec![],
         };
         let v = Version {
@@ -504,6 +505,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            backup_done: false,
             waiting_on: vec![],
         }
     }
@@ -512,7 +514,7 @@ mod tests {
     fn withdrawal_round_trip() {
         let rec = rec_with_keys("tega");
         let w = build_withdraw(&rec, "https://c.example/", 50).unwrap();
-        let v = verify_withdraw(&w, "https://c.example").unwrap();
+        let v = verify_withdraw(&w, &["c.example".to_string()]).unwrap();
         assert_eq!(v, Withdrawal { handle: "tega".into(), ed_pub: rec.ed_pub.clone(), created_at: 50 });
     }
 
@@ -520,7 +522,7 @@ mod tests {
     fn withdrawal_for_another_commons_is_refused() {
         let rec = rec_with_keys("tega");
         let w = build_withdraw(&rec, "https://other.example", 50).unwrap();
-        assert!(verify_withdraw(&w, "https://c.example").unwrap_err().contains("different commons"));
+        assert!(verify_withdraw(&w, &["c.example".to_string()]).unwrap_err().contains("different commons"));
     }
 
     #[test]
@@ -528,7 +530,7 @@ mod tests {
         let rec = rec_with_keys("tega");
         let mut w = build_withdraw(&rec, "https://c.example", 50).unwrap();
         w["object"]["createdAt"] = json!(99);
-        assert!(verify_withdraw(&w, "https://c.example").is_err());
+        assert!(verify_withdraw(&w, &["c.example".to_string()]).is_err());
     }
 
     #[test]

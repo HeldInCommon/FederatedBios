@@ -87,6 +87,7 @@
   --measure: 70ch; /* longest comfortable line of text */
   --panel-width: 640px;
   --page-width: 1180px;
+  --logo-height: 2.875rem; /* 46px, as on heldincommon.org */
 
   /* Icons */
   --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23111111' stroke-width='1.8'/%3E%3C/svg%3E");
@@ -380,8 +381,8 @@ fieldset {
   padding: var(--space-8) clamp(20px, 5vw, 72px) var(--space-9);
 }
 
-/* The coloured bar on every page: your node (jade) or a shared commons
-   (violet), so nobody confuses the two. */
+/* The coloured bar on every page: your node (jade), a shared commons
+   (violet) or a practice commons (blue), so nobody confuses them. */
 .role-bar {
   display: flex;
   align-items: center;
@@ -399,6 +400,10 @@ fieldset {
 
 .role-commons {
   --tone: var(--violet);
+}
+
+.role-practice {
+  --tone: var(--blue);
 }
 
 .role-dot {
@@ -455,11 +460,15 @@ fieldset {
 }
 
 .wordmark {
-  font: 700 1.25rem var(--font-mono);
-  letter-spacing: -0.01em;
-  text-transform: uppercase;
-  color: var(--ink);
+  display: block;
   text-decoration: none;
+}
+
+/* The logo, at the height heldincommon.org uses. */
+.wordmark-logo {
+  display: block;
+  width: auto;
+  height: var(--logo-height);
 }
 
 .dot {
@@ -540,6 +549,12 @@ fieldset {
 .empty-note {
   font: italic 500 var(--text-xl) var(--font-serif);
   color: var(--text-muted);
+}
+
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
 }
 
 .prose {
@@ -868,9 +883,6 @@ fieldset {
   font-size: var(--text-lg);
 }
 
-.license-select {
-  max-width: 360px;
-}
 
 .signal-grid {
   display: grid;
@@ -1146,6 +1158,299 @@ fieldset {
 
 .vouch-form .actions {
   margin-top: var(--space-4);
+}
+
+/* Run your own commons: the "try it" panel */
+.try-commons {
+  --tone: var(--blue);
+}
+
+.try-commons .commons-actions {
+  align-items: center;
+  margin: var(--space-4) 0 0;
+}
+
+/* Stories: the writing box, a story's terms and text */
+.story-input {
+  line-height: 1.65;
+}
+
+.story-actions {
+  margin-top: var(--space-5);
+}
+
+.story-preview {
+  font-style: italic;
+}
+
+.story-terms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.story-text {
+  margin-top: var(--space-6);
+}
+
+.story-proof {
+  margin-top: var(--space-6);
+}
+
+/* Ramp: the member's next step and tabs (decision record 0022) */
+
+/* Buttons from heldincommon.org: ink, outline, and the pair used on a pink
+   block (white, and white outline). */
+:where(.btn-ink, .btn-line, .btn-solid, .btn-outline) {
+  display: inline-block;
+  padding: 14px 20px;
+  border: 0;
+  border-radius: 0;
+  font: 700 var(--text-xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-ink {
+  background: var(--ink);
+  color: var(--white);
+}
+
+.btn-ink:hover {
+  background: var(--accent);
+}
+
+.btn-line {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.btn-line:hover {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.btn-solid {
+  background: var(--white);
+  color: var(--pink);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--white);
+  box-shadow: inset 0 0 0 1.5px var(--white);
+}
+
+/* The one next step: the site's pink call-to-action block. */
+.next-step {
+  margin: var(--space-4) 0 var(--space-7);
+  padding: var(--space-7) clamp(20px, 4vw, 52px);
+  background: var(--pink);
+  color: var(--white);
+}
+
+.next-step-label,
+.status-label,
+.flash-label {
+  margin: 0 0 var(--space-3);
+  font: 700 var(--text-xs) var(--font-mono);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+}
+
+.next-step h2 {
+  max-width: 20ch;
+  margin: 0;
+  font: 700 clamp(1.75rem, 4vw, 2.75rem) / 1.05 var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+.next-step-lede {
+  max-width: 44ch;
+  margin: var(--space-4) 0 0;
+  font: italic 500 var(--text-lede) / 1.35 var(--font-serif);
+}
+
+.next-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.next-step-actions form {
+  margin: 0;
+}
+
+.next-step-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.next-step-form input {
+  width: auto;
+  min-width: 14rem;
+  border: 0;
+}
+
+/* Waiting to be listed: a status, not an action (blue bar). */
+.status-block {
+  margin: var(--space-4) 0 var(--space-7);
+  padding: var(--space-6);
+  border-top: 8px solid var(--blue);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.status-label {
+  color: var(--blue);
+}
+
+.status-block h2 {
+  margin: 0 0 var(--space-3);
+  font: 700 var(--text-xl) var(--font-mono);
+}
+
+.cmd {
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink);
+  color: var(--white);
+  font: var(--text-sm) / 1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* Tabs: the site's navigation links, the current one underlined in pink. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: var(--space-6) 0 var(--space-6);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--rule);
+  font: var(--text-sm) var(--font-mono);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+}
+
+.tab {
+  padding-bottom: 3px;
+  color: var(--ink);
+  text-decoration: none;
+  opacity: 0.65;
+}
+
+.tab:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.tab[aria-current="page"] {
+  border-bottom: 2px solid var(--accent);
+  opacity: 1;
+}
+
+/* Licence cards: what each licence allows, in plain words. */
+.license-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.license-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  cursor: pointer;
+}
+
+.license-card:has(input:checked) {
+  background: var(--ink);
+  color: var(--white);
+}
+
+.license-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.license-name {
+  font: 700 var(--text-base) var(--font-mono);
+}
+
+.license-summary {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.license-facts {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: var(--rule-soft);
+  font: var(--text-xs) / 1.7 var(--font-mono);
+}
+
+.license-commercial.is-yes {
+  color: var(--accent);
+}
+
+.license-card:has(input:checked) .license-commercial.is-yes {
+  color: var(--white);
+}
+
+/* Stories: how it travels, and what just happened */
+.travel-options {
+  margin-top: var(--space-6);
+}
+
+.reach-soon {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.soon-tag {
+  margin-left: var(--space-2);
+  padding: 2px 6px;
+  font: 700 var(--text-2xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.flash {
+  margin: var(--space-4) 0 var(--space-6);
+  padding: var(--space-5);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.flash p {
+  margin: 0;
+}
+
+.flash-done {
+  border-top: 8px solid var(--jade);
+}
+
+.flash-done .flash-label {
+  color: var(--jade-ink);
+}
+
+.flash-withdrawn {
+  border-top: 8px solid var(--ink);
 }
 
 /* 6. Small screens --------------------------------------------------------- */

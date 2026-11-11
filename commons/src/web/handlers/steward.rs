@@ -76,7 +76,7 @@ pub async fn open(
         );
     }
     let token = st.sessions.start(STEWARD, now());
-    redirect_with("/", Some(sessions::set_cookie(&token, st.config.secure_cookie())))
+    redirect_with("/", Some(sessions::set_cookie(&st.config.session_cookie, &token, st.config.secure_cookie())))
 }
 
 #[derive(Deserialize)]

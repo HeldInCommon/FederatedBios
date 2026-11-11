@@ -122,6 +122,31 @@ h1 {
   transition: opacity 0.3s;
 }
 
+/* The logo, at the height heldincommon.org uses. */
+.logo {
+  display: block;
+  width: auto;
+  height: 2.875rem;
+  margin-bottom: var(--space-6);
+}
+
+.box .logo {
+  margin-inline: auto;
+}
+
+/* "New to Held in Common? Read about the project" (opens in the browser). */
+.learn {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--gray);
+}
+
+.learn a {
+  color: var(--ink);
+  border-bottom: 1.5px solid var(--pink);
+  text-decoration: none;
+}
+
 .note {
   margin: var(--space-4) 0 0;
   font-size: var(--text-sm);

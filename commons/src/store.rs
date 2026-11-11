@@ -15,6 +15,9 @@
 //!   steward.json             the steward key in the steward link (commons)
 //!   commons-invites/<id>.json invite codes made by the steward (commons)
 //!   notices.json             things members should hear about (nodes)
+//!   my-stories/<id>.json     stories members wrote here (nodes)
+//!   stories/<keyid>-<id>.json stories shared in from other nodes (commons)
+//!   story-tombstones/<keyid>-<id>.json what remains after a story is withdrawn (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -37,6 +40,7 @@ use crate::handle;
 use crate::identity::Identity;
 use crate::keys::{is_keyid, keyid};
 use crate::model::{HandleRec, Notice, PendingShare, RemoteEntry, Tombstone, Version};
+use crate::story::{is_story_id, HeldStory, OwnStory, StoryTombstone};
 use crate::vouching::Intro;
 
 /// A failure reading or writing the data folder.
@@ -108,6 +112,9 @@ impl Store {
             "pending",
             "used-invites",
             "commons-invites",
+            "my-stories",
+            "stories",
+            "story-tombstones",
         ] {
             std::fs::create_dir_all(root.join(sub))?;
         }
@@ -260,6 +267,91 @@ impl Store {
         }
         *self.remotes_cache.lock().unwrap() = None;
         Self::remove_if_present(self.remote_path(kid))
+    }
+
+    // ---- stories ------------------------------------------------------------
+
+    fn own_story_path(&self, id: &str) -> PathBuf {
+        self.root.join("my-stories").join(format!("{id}.json"))
+    }
+
+    /// A story written on this node. `Ok(None)` if absent or `id` is malformed.
+    pub fn own_story(&self, id: &str) -> Result<Option<OwnStory>, StoreError> {
+        if !is_story_id(id) {
+            return Ok(None);
+        }
+        Self::read(&self.own_story_path(id))
+    }
+
+    /// Save a story written on this node.
+    pub fn save_own_story(&self, s: &OwnStory) -> Result<(), StoreError> {
+        if !is_story_id(&s.story.id) {
+            return Err(StoreError::Io(self.root.join("my-stories"), std::io::ErrorKind::InvalidInput.into()));
+        }
+        Self::write(&self.own_story_path(&s.story.id), s)
+    }
+
+    /// Every story written on this node, newest first.
+    pub fn own_stories(&self) -> Vec<OwnStory> {
+        let mut out: Vec<OwnStory> = self.read_all("my-stories");
+        out.sort_by_key(|s| std::cmp::Reverse(s.created_at()));
+        out
+    }
+
+    fn held_story_name(author: &str, id: &str) -> String {
+        format!("{}-{id}.json", keyid(author))
+    }
+
+    /// A story shared to this commons, by its author's [`keyid`] and its id.
+    pub fn held_story(&self, kid: &str, id: &str) -> Result<Option<HeldStory>, StoreError> {
+        if !is_keyid(kid) || !is_story_id(id) {
+            return Ok(None);
+        }
+        Self::read(&self.root.join("stories").join(format!("{kid}-{id}.json")))
+    }
+
+    /// Save a story shared to this commons, replacing that author's earlier version.
+    pub fn save_held_story(&self, h: &HeldStory) -> Result<(), StoreError> {
+        if !is_story_id(&h.story.id) {
+            return Err(StoreError::Io(self.root.join("stories"), std::io::ErrorKind::InvalidInput.into()));
+        }
+        Self::write(&self.root.join("stories").join(Self::held_story_name(h.author(), &h.story.id)), h)
+    }
+
+    /// Every story shared to this commons, most recently received first.
+    pub fn held_stories(&self) -> Vec<HeldStory> {
+        let mut out: Vec<HeldStory> = self.read_all("stories");
+        out.sort_by_key(|h| std::cmp::Reverse(h.received_at));
+        out
+    }
+
+    /// Remove a shared story. Removing one that isn't there is not an error.
+    pub fn delete_held_story(&self, author: &str, id: &str) -> Result<(), StoreError> {
+        if !is_story_id(id) {
+            return Ok(());
+        }
+        Self::remove_if_present(self.root.join("stories").join(Self::held_story_name(author, id)))
+    }
+
+    /// Remove every story by `author` (when they withdraw their profile here).
+    pub fn delete_stories_by(&self, author: &str) -> Result<(), StoreError> {
+        for h in self.held_stories().iter().filter(|h| h.author() == author) {
+            self.delete_held_story(author, &h.story.id)?;
+        }
+        Ok(())
+    }
+
+    /// Save the record of a story's withdrawal.
+    pub fn save_story_tombstone(&self, t: &StoryTombstone) -> Result<(), StoreError> {
+        if !is_story_id(&t.id) {
+            return Err(StoreError::Io(self.root.join("story-tombstones"), std::io::ErrorKind::InvalidInput.into()));
+        }
+        Self::write(&self.root.join("story-tombstones").join(Self::held_story_name(&t.author, &t.id)), t)
+    }
+
+    /// Every story withdrawal recorded here.
+    pub fn story_tombstones(&self) -> Vec<StoryTombstone> {
+        self.read_all("story-tombstones")
     }
 
     // ---- tombstones (withdrawals on a commons) ------------------------------
@@ -476,7 +568,9 @@ impl Store {
     }
 
     /// Move everything this server holds for `old_key` to `new_key` (after a
-    /// key rotation): the shared profile and any withdrawal record.
+    /// key rotation): the shared profile and any withdrawal record. Stories
+    /// are signed by the key itself, so they can't move: they're taken down,
+    /// and the member's node re-signs them if they're shared again.
     pub fn rekey(&self, old_key: &str, new_key: &str, new_box_key: &str) -> Result<(), StoreError> {
         if let Some(mut r) = self.remote(&keyid(old_key))? {
             r.ed_pub = new_key.to_string();
@@ -489,6 +583,7 @@ impl Store {
             self.save_tombstone(&t)?;
             self.delete_tombstone(old_key)?;
         }
+        self.delete_stories_by(old_key)?;
         Ok(())
     }
 }
@@ -523,6 +618,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            backup_done: false,
             waiting_on: vec![],
         }
     }

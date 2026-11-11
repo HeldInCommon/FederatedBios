@@ -17,7 +17,7 @@ use crate::{handle, identity, keys, now};
 /// `GET /join` — the sign-up form (a commons shows its gate page instead).
 pub async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session(&st, &headers).map(|s| s.handle);
-    let body = if st.site.is_commons() { pages::commons_gate(&st.site) } else { pages::join_form() };
+    let body = if st.site.is_commons() { pages::commons_gate(&st.site) } else { pages::join_form(me.as_deref()) };
     render(&st.site, Page::new(if st.site.is_commons() { "Shared commons" } else { "Join" }, me.as_deref(), body))
 }
 
@@ -99,7 +99,7 @@ pub async fn join_submit(State(st): State<Shared>, body: String) -> Response {
             pages::recovery_code(&h, &keys::recovery_code(&recovery_priv), "/new"),
         ),
     );
-    with_cookie(page, sessions::set_cookie(&token, st.config.secure_cookie()))
+    with_cookie(page, sessions::set_cookie(&st.config.session_cookie, &token, st.config.secure_cookie()))
 }
 
 /// `GET /login` — the sign-in form (a commons shows its gate page instead).
@@ -147,13 +147,16 @@ pub async fn login_submit(State(st): State<Shared>, body: String) -> Response {
     }
     st.attempts.succeeded(&h);
     let token = st.sessions.start(&h, t);
-    redirect_with(&format!("/@{h}"), Some(sessions::set_cookie(&token, st.config.secure_cookie())))
+    redirect_with(
+        &format!("/@{h}"),
+        Some(sessions::set_cookie(&st.config.session_cookie, &token, st.config.secure_cookie())),
+    )
 }
 
 /// `POST /logout` — end the session.
 pub async fn logout(State(st): State<Shared>, headers: HeaderMap) -> Response {
-    if let Some(t) = sessions::token_from(&headers) {
+    if let Some(t) = sessions::token_from(&headers, &st.config.session_cookie) {
         st.sessions.end(&t);
     }
-    redirect_with("/", Some(sessions::clear_cookie(st.config.secure_cookie())))
+    redirect_with("/", Some(sessions::clear_cookie(&st.config.session_cookie, st.config.secure_cookie())))
 }

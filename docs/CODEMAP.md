@@ -44,6 +44,8 @@ Writes happen in clearly named places that say what they change.
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |
 | `backup.rs` | Encrypted identity backups (seal and open). | yes, except salt/nonce generation |
 | `federation.rs` | Build and verify shares and withdrawals; `admit()` a share or not; `apply_withdraw()`. | yes |
+| `ramp.rs` | The member's next step and which profile tabs they see (decision record 0022). | yes |
+| `story.rs` | Stories (decision record 0020): check a written story, sign it, verify a shared one, `admit()` it on a commons (author must be listed), withdrawals. | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
@@ -57,6 +59,7 @@ Writes happen in clearly named places that say what they change.
 | `web/handlers/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
 | `web/handlers/membership.rs` | Bringing people in: invite codes and vouches. | no |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
+| `web/handlers/stories.rs` | Stories: write, read, export, share and withdraw on a node; list and read on a commons. | no |
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css`, `avatar.js` and `password.js`, compiled into the binary. | — |
@@ -97,13 +100,14 @@ interleave) → redirect to the profile.
 
 | File | One job |
 |---|---|
-| `src/lib.rs` | Wires the modules together; injects the "Back to your node" button. |
-| `src/settings.rs` | `app.json` (the chosen role and name) and the per-role data folders. |
-| `src/network.rs` | Is *our* server answering (launch token check)? This computer's LAN address. |
-| `src/sidecar.rs` | Start and stop the server process; restart it after a crash (up to 3 times). |
-| `src/commands.rs` | What the app's screens can call: `setup_state`, `choose_role`, `set_name`, `close_rename`, `node_up`, `restart_node`. |
-| `src/lib.rs` (also) | The main window (hands `mailto:` links to the mail app), the **Node → Rename…** menu, the log file. |
-| `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser and loading screen. |
+| `src/lib.rs` | Wires the modules together; adds the switcher to each server page. |
+| `src/settings.rs` | `app.json` (what this computer runs and the names); each `Kind`'s port, cookie name and data folder. |
+| `src/network.rs` | Is *our* server on a port answering (launch token check)? This computer's LAN address. |
+| `src/sidecar.rs` | Start and stop the servers (one per `Kind`, side by side); restart one after a crash (up to 3 times). |
+| `src/links.rs` | `hic-app://open/<kind>` links and the switcher's buttons (pure). |
+| `src/commands.rs` | What the screens, the Go menu and links can do: `open` a server (setting it up if needed), `remove_practice`; commands `setup_state`, `choose_role`, `add_role`, `set_name`, `close_setup`, `node_up`, `server_url`, `restart_node`, `remove_practice_now`. |
+| `src/lib.rs` (also) | The main window (hands `mailto:` to the mail app, `hic-app://` to `commands::open`), the **Go** menu, the log file. |
+| `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser, loading screen, and the setup window (add, rename, remove practice). |
 | `capabilities/default.json` | What the screens may call (core APIs only). |
 | `tauri.conf.json` | Window, bundle, and the screens' Content-Security-Policy. |
 

@@ -11,6 +11,9 @@ use crate::governance::{license_name, license_url, signal_name};
 use crate::model::Reach;
 use crate::role::Role;
 
+/// The project's own site, linked from every page's footer.
+pub const PROJECT_URL: &str = "https://heldincommon.org";
+
 /// What every page needs to know about this server.
 #[derive(Clone, Debug)]
 pub struct Site {
@@ -21,6 +24,10 @@ pub struct Site {
     pub base_url: String,
     /// The default commons a node shares to (blank if none).
     pub share_default: String,
+    /// A practice commons, for learning (`HIC_PRACTICE=1`).
+    pub practice: bool,
+    /// Started by the desktop app, so pages may offer its actions.
+    pub in_app: bool,
 }
 
 impl Site {
@@ -75,12 +82,18 @@ impl<'a> Page<'a> {
 }
 
 /// The coloured bar at the top of every page, saying whether this is
-/// someone's node or a shared commons, so nobody confuses the two.
+/// someone's node, a shared commons or a practice commons, so nobody confuses
+/// them.
 fn role_banner(site: &Site) -> Markup {
+    let (class, label) = match (site.is_commons(), site.practice) {
+        (true, true) => ("role-practice", "Practice commons"),
+        (true, false) => ("role-commons", "Shared commons"),
+        (false, _) => ("role-node", "Your node"),
+    };
     html! {
-        div class={ "role-bar " (if site.is_commons() { "role-commons" } else { "role-node" }) } {
+        div class={ "role-bar " (class) } {
             span class="role-dot" {}
-            span class="role-label" { (if site.is_commons() { "Shared commons" } else { "Your node" }) }
+            span class="role-label" { (label) }
             @if !site.instance.is_empty() { span class="role-instance" { "· " (site.instance) } }
             @if !site.is_commons() && !site.share_default.is_empty() {
                 a class="role-link" href=(site.share_default) { "Visit the commons \u{2197}" }
@@ -111,9 +124,12 @@ fn frame(site: &Site, page: &Page) -> Markup {
                 (role_banner(site))
                 main class="page" {
                     nav class="topbar" {
-                        a class="wordmark" href="/" { "Held in Common" span class="dot" { "." } }
+                        a class="wordmark" href="/" {
+                            img class="wordmark-logo" src="/logo.png" alt="Held in Common" width="173" height="46";
+                        }
                         span class="topbar-links" {
                             a href="/" { "Directory" }
+                            a href="/stories" { "Stories" }
                             @if page.me == Some("@steward") {
                                 a href="/" { "Steward view" }
                                 form method="post" action="/logout" class="inline-form" {
@@ -144,7 +160,11 @@ fn frame(site: &Site, page: &Page) -> Markup {
                     (page.body)
                     footer class="site-foot" {
                         span { "A federated commons for creative data." }
-                        a href="/about" { "How this works" }
+                        span class="foot-links" {
+                            @if !site.is_commons() { a href="/run-a-commons" { "Run your own commons" } }
+                            a href="/about" { "How this works" }
+                            a href=(PROJECT_URL) { "About the project \u{2197}" }
+                        }
                     }
                 }
                 script src="/password.js" {}
@@ -263,7 +283,14 @@ mod tests {
     use super::*;
 
     fn site(role: Role) -> Site {
-        Site { role, instance: "Test".into(), base_url: "http://c".into(), share_default: String::new() }
+        Site {
+            role,
+            instance: "Test".into(),
+            base_url: "http://c".into(),
+            share_default: String::new(),
+            practice: false,
+            in_app: false,
+        }
     }
 
     #[test]
@@ -279,6 +306,31 @@ mod tests {
         let m = frame(&site(Role::Commons), &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Nodes share to"));
         assert!(m.contains("Shared commons"));
+    }
+
+    #[test]
+    fn practice_commons_says_so() {
+        let site = Site { practice: true, ..site(Role::Commons) };
+        let m = frame(&site, &Page::new("t", None, html! {})).into_string();
+        assert!(m.contains("Practice commons"));
+        assert!(!m.contains("Shared commons"));
+    }
+
+    #[test]
+    fn only_a_node_links_to_the_commons_guide() {
+        let node = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
+        let commons = frame(&site(Role::Commons), &Page::new("t", None, html! {})).into_string();
+        assert!(node.contains("/run-a-commons"));
+        assert!(!commons.contains("/run-a-commons"));
+    }
+
+    #[test]
+    fn every_page_has_the_logo_and_the_project_link() {
+        for role in [Role::Node, Role::Commons] {
+            let m = frame(&site(role), &Page::new("t", None, html! {})).into_string();
+            assert!(m.contains("src=\"/logo.png\""));
+            assert!(m.contains(PROJECT_URL));
+        }
     }
 
     #[test]

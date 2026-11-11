@@ -92,7 +92,54 @@ fn cases() -> Vec<(&'static str, &'static str, Envelope, Vec<&'static str>)> {
             ),
             vec![],
         ),
+        (
+            "05-story.json",
+            "A Story: a short piece of writing shared to a commons, with its terms.",
+            Envelope::new(
+                "Story",
+                &a,
+                1_700_000_300,
+                None,
+                json!({
+                    "id": "0123456789abcdef",
+                    "handle": "tega",
+                    "title": "Night bus",
+                    "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+                    "visibility": "commons",
+                    "license": "cc-by-nc",
+                    "signals": ["credit", "open"],
+                }),
+            ),
+            vec![],
+        ),
+        (
+            "06-story-withdraw.json",
+            "A StoryWithdraw: removes one story from one commons (named by host).",
+            Envelope::new(
+                "StoryWithdraw",
+                &a,
+                1_700_000_400,
+                None,
+                json!({ "story": "0123456789abcdef", "commons": "room.example:8081" }),
+            ),
+            vec![],
+        ),
     ]
+}
+
+/// The story vectors are what this implementation's story code accepts.
+#[test]
+fn story_vectors_are_accepted() {
+    let read = |name: &str| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(vectors_dir().join(name)).unwrap()).unwrap()
+    };
+    let share = json!({ "type": "StoryShare", "schema": "hic/v1", "story": read("05-story.json")["signed"] });
+    let (story, _) = hic_commons::story::verify_share(&share).unwrap();
+    assert_eq!(story.title, "Night bus");
+    let withdraw =
+        json!({ "type": "StoryWithdraw", "schema": "hic/v1", "withdraw": read("06-story-withdraw.json")["signed"] });
+    let w = hic_commons::story::verify_withdraw(&withdraw, &["room.example:8081".to_string()]).unwrap();
+    assert_eq!(w.id, "0123456789abcdef");
 }
 
 /// Build the vector file contents for one case.

@@ -127,6 +127,7 @@ mod tests {
             recovery_pub: None,
             recovery_decl: None,
             pending_rotation: None,
+            backup_done: true,
             waiting_on: vec![],
         }
     }

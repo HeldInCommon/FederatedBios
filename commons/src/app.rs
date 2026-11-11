@@ -25,6 +25,8 @@ use crate::{api, web::ROBOTS_TXT};
 /// Everything a request handler can reach.
 pub struct AppState {
     pub config: Config,
+    /// The hosts this server counts as itself ([`Config::own_hosts`]).
+    pub own_hosts: Vec<String>,
     pub site: Site,
     pub store: Store,
     pub sessions: Sessions,
@@ -50,8 +52,11 @@ impl AppState {
             instance: config.instance.clone(),
             base_url: config.base_url.clone(),
             share_default: config.share_default.clone(),
+            practice: config.practice,
+            in_app: config.in_app(),
         };
         AppState {
+            own_hosts: config.own_hosts(),
             config,
             site,
             store,
@@ -102,6 +107,7 @@ pub fn router(state: Shared) -> Router {
         // Pages
         .route("/", get(handlers::directory))
         .route("/about", get(handlers::about))
+        .route("/run-a-commons", get(handlers::run_a_commons))
         .route("/join", get(handlers::join_form).post(handlers::join_submit))
         .route("/login", get(handlers::login_form).post(handlers::login_submit))
         .route("/logout", post(handlers::logout))
@@ -119,7 +125,15 @@ pub fn router(state: Shared) -> Router {
         .route("/steward/decline", post(steward::decline))
         .route("/steward/invite", post(steward::invite))
         .route("/backup", post(handlers::backup))
+        .route("/backup/later", post(handlers::backup_later))
         .route("/restore", get(handlers::restore_form).post(handlers::restore_submit))
+        .route("/stories", get(handlers::stories))
+        .route("/stories/new", get(handlers::story_form).post(handlers::story_create))
+        .route("/stories/{kid}/{id}", get(handlers::held_story))
+        .route("/story/{id}", get(handlers::own_story))
+        .route("/story/{id}/text", get(handlers::story_text))
+        .route("/story/share", post(handlers::story_share))
+        .route("/story/withdraw", post(handlers::story_withdraw))
         .route("/@{handle}", get(handlers::profile))
         .route("/federated/{kid}", get(handlers::federated))
         // Federation
@@ -140,6 +154,7 @@ pub fn router(state: Shared) -> Router {
         .route("/style.css", get(|| async { static_file("text/css", web::STYLE_CSS) }))
         .route("/avatar.js", get(|| async { static_file("application/javascript", web::AVATAR_JS) }))
         .route("/password.js", get(|| async { static_file("application/javascript", web::PASSWORD_JS) }))
+        .route("/logo.png", get(|| async { ([(header::CONTENT_TYPE, "image/png")], web::LOGO_PNG).into_response() }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))
         .route("/health", get(api::health))
         .layer(security)

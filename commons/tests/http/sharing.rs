@@ -89,7 +89,7 @@ async fn a_networked_node_refuses_to_share_to_its_own_machine() {
     let config = Config::from_lookup(|k| (k == "HIC_BIND").then(|| "0.0.0.0".to_string()));
     let app = router(Arc::new(AppState::new(config, Role::Node, store)));
     let sid = join_and_publish(&app, "tega", "public").await;
-    let csrf = csrf_in(&send(&app, get("/@tega", Some(&sid))).await.text);
+    let csrf = csrf_in(&send(&app, get("/@tega?tab=account", Some(&sid))).await.text);
     for target in ["http://127.0.0.1:9", "http://169.254.169.254", "http://192.168.1.1", "http://[::1]:9"] {
         let body = format!("handle=tega&csrf={csrf}&commons_url={target}");
         let r = send(&app, post_form("/share", &body, Some(&sid))).await;

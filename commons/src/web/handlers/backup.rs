@@ -38,6 +38,13 @@ pub async fn backup(State(st): State<Shared>, headers: HeaderMap, body: String) 
         Ok(t) => t,
         Err(e) => return server_error(&st.site, &e),
     };
+    // Downloaded: the profile stops suggesting a backup as the next step.
+    if let Err(e) = super::update_member(&st, &h, |mut r| {
+        r.backup_done = true;
+        r
+    }) {
+        eprintln!("warning: backup made, but couldn't record it for @{h}: {e}");
+    }
     let disposition = format!("attachment; filename=\"held-in-common-{h}-backup.json\"");
     (
         [
@@ -48,6 +55,23 @@ pub async fn backup(State(st): State<Shared>, headers: HeaderMap, body: String) 
         file,
     )
         .into_response()
+}
+
+/// `POST /backup/later` — "Not now" on the backup suggestion: stop suggesting
+/// it. Backing up stays on the Account tab.
+pub async fn backup_later(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
+    let f = Form::parse(&body);
+    let h = handle::normalise(&f.one("handle"));
+    if !authorised_as(&st, &headers, &f, &h) {
+        return error_page(&st.site, "Please sign in as this handle.");
+    }
+    match super::update_member(&st, &h, |mut r| {
+        r.backup_done = true;
+        r
+    }) {
+        Ok(()) => crate::web::layout::redirect(&format!("/@{h}")),
+        Err(e) => server_error(&st.site, &e),
+    }
 }
 
 /// `GET /restore` — the form for restoring an identity from a backup.
@@ -96,5 +120,8 @@ pub async fn restore_submit(State(st): State<Shared>, body: String) -> Response 
         }
     }
     let token = st.sessions.start(&rec.handle, now());
-    redirect_with(&format!("/@{}", rec.handle), Some(sessions::set_cookie(&token, st.config.secure_cookie())))
+    redirect_with(
+        &format!("/@{}", rec.handle),
+        Some(sessions::set_cookie(&st.config.session_cookie, &token, st.config.secure_cookie())),
+    )
 }

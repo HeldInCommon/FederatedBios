@@ -56,7 +56,8 @@ pub struct Intro {
 /// What a commons knows when checking a vouch.
 pub struct Ctx<'a> {
     /// This commons' public address.
-    pub my_url: &'a str,
+    /// The hosts this commons counts as itself (`Config::own_hosts`).
+    pub my_hosts: &'a [String],
     pub now: u64,
     /// Keys of current members (people with a profile listed here).
     pub member_keys: &'a [String],
@@ -86,7 +87,8 @@ impl Ctx<'_> {
         if s.envelope.kind != kind {
             return Err(format!("expected {kind}"));
         }
-        if s.envelope.body.get("commons").and_then(|v| v.as_str()) != Some(host_label(self.my_url).as_str()) {
+        let commons = s.envelope.body.get("commons").and_then(|v| v.as_str()).unwrap_or("");
+        if !self.my_hosts.iter().any(|h| h == commons) {
             return Err(format!("this {} is for a different commons", kind.to_lowercase()));
         }
         let voucher = s.envelope.author.clone();
@@ -200,7 +202,8 @@ mod tests {
     const URL: &str = "http://commons.example";
 
     fn ctx<'a>(members: &'a [String], used: &'a [String], intros: &'a [Intro], now: u64) -> Ctx<'a> {
-        Ctx { my_url: URL, now, member_keys: members, used_codes: used, intros, limit: 2 }
+        let hosts: &'static [String] = Box::leak(vec![host_label(URL)].into_boxed_slice());
+        Ctx { my_hosts: hosts, now, member_keys: members, used_codes: used, intros, limit: 2 }
     }
 
     #[test]

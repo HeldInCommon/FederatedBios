@@ -1,0 +1,53 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"handle\":\"tega\",\"id\":\"0123456789abcdef\",\"license\":\"cc-by-nc\",\"signals\":[\"credit\",\"open\"],\"text\":\"The 38 sighs at the stop.\\nA dog answers from a balcony.\",\"title\":\"Night bus\",\"visibility\":\"commons\"},\"created_at\":1700000300,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"Story\"}",
+  "cid": "f583fd65f58b9e99956c330b38d448f3d767fb8d4278747f3f01c83947381c58",
+  "description": "A Story: a short piece of writing shared to a commons, with its terms.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "handle": "tega",
+      "id": "0123456789abcdef",
+      "license": "cc-by-nc",
+      "signals": [
+        "credit",
+        "open"
+      ],
+      "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+      "title": "Night bus",
+      "visibility": "commons"
+    },
+    "created_at": 1700000300,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "Story"
+  },
+  "name": "05-story.json",
+  "signed": {
+    "cid": "f583fd65f58b9e99956c330b38d448f3d767fb8d4278747f3f01c83947381c58",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "handle": "tega",
+        "id": "0123456789abcdef",
+        "license": "cc-by-nc",
+        "signals": [
+          "credit",
+          "open"
+        ],
+        "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+        "title": "Night bus",
+        "visibility": "commons"
+      },
+      "created_at": 1700000300,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "Story"
+    },
+    "sig": "c1f5eb17aec09ec4e477db846b56911c4be3531c7af7efaf4e794a8f4b850d081ed3c66e8060937399ef5959d314f5ad7ff45d167fd5ca3c887d2f2ea3bef30e"
+  },
+  "signing_input": "hic/v1/Story\nf583fd65f58b9e99956c330b38d448f3d767fb8d4278747f3f01c83947381c58",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

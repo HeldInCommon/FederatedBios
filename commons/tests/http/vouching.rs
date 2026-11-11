@@ -120,5 +120,8 @@ async fn member_invite_page_can_be_emailed_and_passphrase_boxes_get_an_eye() {
     assert!(js.text.contains("Show passphrase"));
     // A members-only profile explains why it can't be shared.
     let sid = join_and_publish(&app, "mo", "members").await;
-    assert!(send(&app, get("/@mo", Some(&sid))).await.text.contains("so it stays on your node and is never shared"));
+    assert!(send(&app, get("/@mo?tab=sharing", Some(&sid)))
+        .await
+        .text
+        .contains("so it stays on your node and is never shared"));
 }

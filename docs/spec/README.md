@@ -95,6 +95,8 @@ deterministic, so an implementation MUST reproduce them exactly.
 | `02-ordering-and-escaping.json` | UTF-16 key order, escaping, negative integers, booleans, null, a non-null `prev`. |
 | `03-key-rotation.json` | A real type with a cosignature. |
 | `04-profile.json` | A shared profile, picture included. |
+| `05-story.json` | A story, with its terms. |
+| `06-story-withdraw.json` | Withdrawing a story from one commons. |
 
 Check them:
 
@@ -170,7 +172,49 @@ for this commons, by a current member, within the member's weekly limit
 name the waiting handle and key. Handles already listed, and returning keys,
 need no vouch. Each admission is recorded with its route, voucher and proof.
 
-### 5.4 Planned
+### 5.4 Stories (decision record 0020)
+
+A **story** is a short piece of writing a member makes on their node. A
+node shares it to a commons' `/inbox` as
+
+```json
+{ "type": "StoryShare", "schema": "hic/v1", "story": <signed Story> }
+```
+
+and withdraws it with
+
+```json
+{ "type": "StoryWithdraw", "schema": "hic/v1", "withdraw": <signed StoryWithdraw> }
+```
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `Story` | the member's key | `id` (16 lowercase hex, the same for every version of the story), `handle`, `title` (1–120 characters), `text` (1–12,000 characters), `visibility` (`public` or `commons`), `license`, `signals` |
+| `StoryWithdraw` | the key the story was shared under | `story` (its `id`), `commons` (host) |
+
+A commons:
+
+- MUST refuse a story whose author it doesn't list under the story's
+  `handle` (joining a commons is the gate, section 5.3);
+- MUST refuse `members` visibility, unknown licences and unknown signals;
+- keeps one story per (author, `id`): a version that isn't newer than the
+  one held, or than a recorded withdrawal, MUST be refused, while re-sending
+  the very same object is harmless;
+- on `StoryWithdraw` addressed to it, deletes the story and records the
+  withdrawal, so the withdrawn object can't be replayed;
+- deletes an author's stories when it receives that author's profile
+  withdrawal (section 6), and when that author's key is replaced
+  (section 5.1): a story's signature can't move to a new key.
+
+Members-only stories stay on the node that wrote them.
+
+**Which host is "this commons".** Withdrawals, invites, vouches and story
+withdrawals name the commons they are for by host. A commons MUST accept its
+public host (from its base URL), and SHOULD also accept `127.0.0.1:<port>` and
+`localhost:<port>` for its own port: a node on the commons' own computer
+reaches it that way while the commons announces its network address.
+
+### 5.5 Planned
 
 Dataset listings, rights records, licences, adapters, model versions,
 governance decisions will be added as `hic/v1` types as they are

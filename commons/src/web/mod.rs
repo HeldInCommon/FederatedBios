@@ -27,4 +27,7 @@ pub const AVATAR_JS: &str = include_str!("../../static/avatar.js");
 
 /// Tells search engines to skip the forms. Profiles with the `commons` reach
 /// are marked `noindex` on the page itself.
+/// The Held in Common logo (the same file heldincommon.org uses).
+pub const LOGO_PNG: &[u8] = include_bytes!("../../static/logo.png");
+
 pub const ROBOTS_TXT: &str = "User-agent: *\nDisallow: /join\nDisallow: /login\nDisallow: /new\n";
