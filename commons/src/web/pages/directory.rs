@@ -7,7 +7,7 @@ use super::origin_host;
 use crate::canonical::short;
 use crate::keys::keyid;
 use crate::model::{display_name_or_handle, HandleRec, PendingShare, Reach, RemoteEntry, Version};
-use crate::web::layout::{host_label, reach_badge, reach_bar_class, Site};
+use crate::web::layout::{host_label, reach_badge, reach_bar_class, tone_for_key, Site};
 
 /// A member's card: the record and the version shown (with its readable
 /// profile, if the viewer may read it).
@@ -146,7 +146,7 @@ pub fn directory(
         div class="dir-grid" {
             @for r in remotes {
                 a class="dir-card" href={ "/federated/" (keyid(&r.ed_pub)) } {
-                    span class="dir-bar vis-federated" {}
+                    span class={ "dir-bar " (tone_for_key(&r.ed_pub)) } {}
                     span class="dir-body" {
                         @if !r.profile.avatar.is_empty() { img class="dir-avatar" src=(r.profile.avatar) alt=""; }
                         span class="dir-name" { (display_name_or_handle(&r.profile.name, &r.handle)) }

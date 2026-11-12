@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::http::{header, HeaderName, HeaderValue};
+use axum::http::{header, HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Router;
@@ -92,6 +92,14 @@ fn static_file(mime: &'static str, body: &'static str) -> axum::response::Respon
     ([(header::CONTENT_TYPE, format!("{mime}; charset=utf-8"))], body).into_response()
 }
 
+/// `GET /quilt/{file}`: one of the eight quilt backgrounds (`1.svg` … `8.svg`).
+async fn quilt(axum::extract::Path(file): axum::extract::Path<String>) -> axum::response::Response {
+    match web::quilt_svg(&file) {
+        Some(svg) => static_file("image/svg+xml", svg),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 /// The full route table with security headers and the body limit.
 pub fn router(state: Shared) -> Router {
     let security = tower::ServiceBuilder::new()
@@ -160,6 +168,7 @@ pub fn router(state: Shared) -> Router {
         .route("/password.js", get(|| async { static_file("application/javascript", web::PASSWORD_JS) }))
         .route("/logo.png", get(|| async { ([(header::CONTENT_TYPE, "image/png")], web::LOGO_PNG).into_response() }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))
+        .route("/quilt/{file}", get(quilt))
         .route("/health", get(api::health))
         .layer(security)
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT))

@@ -24,11 +24,11 @@ pub async fn stories(State(st): State<Shared>, headers: HeaderMap) -> Response {
         let withdrawn = story::recent_withdrawals(&st.store.story_tombstones(), &held, &st.store.remotes(), now());
         let noindex = held.iter().any(|h| h.story.reach() == Reach::Commons);
         let body = pages::commons_stories(&st.site.instance, &held, &withdrawn, now());
-        return render(&st.site, Page::new("Stories", me.as_deref(), body).noindex(noindex));
+        return render(&st.site, Page::new("Stories", me.as_deref(), body).noindex(noindex).with_cards());
     }
     let visible: Vec<OwnStory> =
         st.store.own_stories().into_iter().filter(|s| me.is_some() || s.story.reach() != Reach::Members).collect();
-    render(&st.site, Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.as_deref())))
+    render(&st.site, Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.as_deref())).with_cards())
 }
 
 /// `GET /stories/{keyid}/{id}` — a story shared to this commons.
