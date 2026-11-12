@@ -71,7 +71,7 @@ pub async fn open(State(st): State<Shared>, Query(q): Query<OpenQ>) -> Response 
     if !(key_ok || launch_ok) {
         return error_page(
             &st.site,
-            "That steward link isn't right. The commons prints the right one in its log when it starts.",
+            "That steward link isn't right. The commons prints the right one in its log when it starts (in the desktop app: Go → Show steward link…).",
         );
     }
     let token = st.sessions.start(STEWARD, now());

@@ -107,6 +107,7 @@ interleave) → redirect to the profile.
 | `src/settings.rs` | `app.json` (what this computer runs and the names); each `Kind`'s port, cookie name and data folder. |
 | `src/network.rs` | Is *our* server on a port answering (launch token check)? This computer's LAN address. |
 | `src/sidecar.rs` | Start and stop the servers (one per `Kind`, side by side); restart one after a crash (up to 3 times). |
+| `src/steward.rs` | The commons' steward link: hidden from the log, read for **Go → Show steward link…** (ADR 0024). |
 | `src/links.rs` | `hic-app://open/<kind>` links and the switcher's buttons (pure). |
 | `src/commands.rs` | What the screens, the Go menu and links can do: `open` a server (setting it up if needed), `remove_practice`; commands `setup_state`, `choose_role`, `add_role`, `set_name`, `close_setup`, `node_up`, `server_url`, `restart_node`, `remove_practice_now`. |
 | `src/lib.rs` (also) | The main window (hands `mailto:` to the mail app, `hic-app://` to `commands::open`), the **Go** menu, the log file. |
