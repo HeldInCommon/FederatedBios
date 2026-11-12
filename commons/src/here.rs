@@ -350,6 +350,7 @@ mod tests {
             visibility: "public".into(),
             license: "cc-by".into(),
             signals: vec![],
+            held_signals: Default::default(),
             created_at: 0,
             profile: crate::model::Profile::default(),
             signature: String::new(),

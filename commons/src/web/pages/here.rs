@@ -5,8 +5,9 @@
 
 use maud::{html, Markup};
 
-use super::parts::{ago, terms_panel, words};
+use super::parts::{ago, terms_panel, words, Chosen};
 use super::story::story_text;
+use crate::held_signals::HeldSignals;
 use crate::here::HeldCard;
 use crate::keys::keyid;
 use crate::relay::Reading;
@@ -38,6 +39,7 @@ pub fn here_story(held: &HeldCard, reading: &Reading, now: u64) -> Markup {
     let c = &held.card;
     let kid = keyid(held.author());
     let hash_start: String = c.text_sha256.chars().take(12).collect();
+    let none = HeldSignals::default();
     html! {
         div class="story-layout" {
             article class="story-main" {
@@ -50,7 +52,9 @@ pub fn here_story(held: &HeldCard, reading: &Reading, now: u64) -> Markup {
                 }
             }
             aside class="story-side" {
-                (terms_panel(c.reach(), &c.license, &c.signals, false))
+                // A card carries no Held in Common Signals: they travel only
+                // with a copy (decision record 0025).
+                (terms_panel(&Chosen { reach: c.reach(), license: &c.license, signals: &c.signals, held_signals: &none }, false))
                 div class="side-note" {
                     p class="card-label" { "Only while @" (c.handle) " is here" }
                     p { "This commons keeps only a signed card. The words come from @" (c.handle) "'s own computer each time someone reads them, and aren't stored here." }

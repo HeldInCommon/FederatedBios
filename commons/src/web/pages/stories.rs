@@ -67,7 +67,7 @@ fn chips(s: &Preview, edit_terms: Option<&str>) -> Markup {
         Some(href) => {
             let mut terms = vec![license_name(s.license).to_string()];
             terms.extend(s.signals.iter().map(|sig| signal_name(sig).to_string()));
-            terms.extend(held.iter().map(|label| label.to_string()));
+            terms.extend(s.held.iter().map(|label| label.to_string()));
             let label = format!("Change the terms of {}: {}", s.title, terms.join(", "));
             html! { a class="story-chips is-editable" href=(href) aria-label=(label) title="Change its terms" { (inner) } }
         }
@@ -304,7 +304,7 @@ mod tests {
         let mut h = held("Night bus");
         h.story.held_signals =
             crate::held_signals::HeldSignals { withdraw_after_training: true, own_terms: "Words.".into() };
-        let m = commons_stories("Room 4", false, &[h], &[], 10).into_string();
+        let m = commons_stories("Room 4", false, &[h], &[], &[], 10).into_string();
         assert!(m.contains(">Credit<") && m.contains(">Withdraw even after training<") && m.contains(">Own terms<"));
     }
 
