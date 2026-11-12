@@ -37,6 +37,7 @@
 //! | [`ratelimit`] | at most N requests per minute per sender | in-memory state |
 //! | [`sessions`] | signed-in sessions and their cookies | in-memory state |
 //! | [`form`] | parsing form posts | none |
+//! | [`text_links`] | finding web links in a story's text, for display | none |
 //! | [`web`] | HTML pages (pure rendering) and the request handlers | handlers only |
 //! | [`api`] | JSON and ActivityStreams endpoints | handlers only |
 //! | [`app`] | shared state and the route table | none |
@@ -68,6 +69,7 @@ pub mod role;
 pub mod sessions;
 pub mod store;
 pub mod story;
+pub mod text_links;
 pub mod vouching;
 pub mod waiting;
 pub mod web;
