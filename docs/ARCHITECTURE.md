@@ -130,14 +130,19 @@ Sessions live in memory and expire after 24 hours.
 
 <img src="diagrams/publish-federate.svg" width="820" alt="Publish, sign, federate, verify flow" />
 
-1. **Publish** on the node: the profile, its reach, licence and signals.
+1. **Publish** on the node: the profile, its reach, licence, signals and
+   **Held in Common Signals**: the right to withdraw even after a model is
+   trained, and the person's own terms for AI in their own words
+   ([0025](adr/0025-held-in-common-signals.md)).
 2. **Sign:** the version gets a content address (`cid`) and an Ed25519
    signature, and is stored on the node.
 3. **Share:** the node sends a signed **`hic/v1` Profile** to the commons'
    `/inbox`. Every field is signed: the profile (picture included), display
    name, reach, licence, signals, encryption key, and the node's address and
-   name ([spec §5.2](spec/README.md)). Commons that predate `hic/v1` get the
-   older format.
+   name ([spec §5.2](spec/README.md)). With Held in Common Signals chosen it
+   is a **`ProfileV2`**, which signs them too ([spec §5.6](spec/README.md)).
+   A commons that doesn't know a format answers 400 and gets the next older
+   one (`ProfileV2` → `Profile` → version 0).
 4. **Check:** the commons recomputes the content address and checks the
    signature (tampering → 400), then applies its rules:
    - a handle belongs to the first key that used it here; another key → 409

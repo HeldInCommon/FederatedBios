@@ -17,6 +17,7 @@
 //! |---|---|---|
 //! | [`model`] | the data types that are stored and sent | none |
 //! | [`governance`] | the licence and signal vocabularies | none |
+//! | [`held_signals`] | Held in Common Signals: withdraw after training, and own terms for AI | none |
 //! | [`handle`] | rules for what a handle may be | none |
 //! | [`canonical`] | the content address (`cid`) of a profile version (format version 0) | none |
 //! | [`jcs`] | canonical JSON (RFC 8785) | none |
@@ -59,6 +60,7 @@ pub mod federation;
 pub mod form;
 pub mod governance;
 pub mod handle;
+pub mod held_signals;
 pub mod here;
 pub mod identity;
 pub mod jcs;

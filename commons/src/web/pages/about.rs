@@ -116,13 +116,13 @@ const FEDERATE_SVG: &str = r##"<svg class="fig" viewBox="0 0 980 400" aria-hidde
 
 /// "No sign-up. Someone vouches.": share, wait, a vouch or the steward's
 /// approval, listed.
-const JOIN_SVG: &str = r##"<svg class="fig" viewBox="0 0 1000 240" aria-hidden="true">
+const JOIN_SVG: &str = r##"<svg class="fig" viewBox="0 0 1200 240" aria-hidden="true">
   <g class="fig-line">
     <path d="M150 110 H330"/>
     <path d="M410 110 C 480 110, 480 60, 560 60"/>
     <path d="M410 110 C 480 110, 480 160, 560 160"/>
-    <path d="M690 60 C 760 60, 760 110, 820 110"/>
-    <path d="M690 160 C 760 160, 760 110, 820 110"/>
+    <path d="M920 60 C 990 60, 990 110, 1050 110"/>
+    <path d="M920 160 C 990 160, 990 110, 1050 110"/>
   </g>
   <rect class="fig-box fig-box-pink" x="30" y="78" width="120" height="64" rx="12"/>
   <text class="fig-label" x="90" y="116" text-anchor="middle">SHARE</text>
@@ -132,13 +132,13 @@ const JOIN_SVG: &str = r##"<svg class="fig" viewBox="0 0 1000 240" aria-hidden="
   <text class="fig-label" x="370" y="182" text-anchor="middle">WAITING</text>
   <text class="fig-note" x="370" y="206" text-anchor="middle">on the commons</text>
   <circle class="fig-jade" cx="580" cy="60" r="13"/>
-  <text class="fig-label fig-jade-text" x="602" y="66">A MEMBER VOUCHES</text>
+  <text class="fig-label fig-jade-text" x="602" y="67">A MEMBER VOUCHES</text>
   <circle class="fig-violet" cx="580" cy="160" r="13"/>
-  <text class="fig-label fig-violet-text" x="602" y="166">THE STEWARD APPROVES</text>
-  <circle class="fig-ink" cx="850" cy="110" r="18"/>
-  <circle class="fig-jade" cx="850" cy="110" r="7"/>
-  <text class="fig-label" x="850" y="160" text-anchor="middle">LISTED</text>
-  <text class="fig-note" x="850" y="184" text-anchor="middle">in the directory</text>
+  <text class="fig-label fig-violet-text" x="602" y="167">THE STEWARD APPROVES</text>
+  <circle class="fig-ink" cx="1080" cy="110" r="18"/>
+  <circle class="fig-jade" cx="1080" cy="110" r="7"/>
+  <text class="fig-label" x="1080" y="160" text-anchor="middle">LISTED</text>
+  <text class="fig-note" x="1080" y="184" text-anchor="middle">in the directory</text>
 </svg>"##;
 
 #[cfg(test)]

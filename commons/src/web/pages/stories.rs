@@ -23,6 +23,9 @@ struct Preview<'a> {
     license: &'a str,
     /// The signal keys.
     signals: &'a [String],
+    /// The Held in Common Signals chosen, as chip labels (decision record
+    /// 0025). A card has none: they travel only with a copy.
+    held: Vec<&'static str>,
 }
 
 impl<'a> Preview<'a> {
@@ -34,6 +37,7 @@ impl<'a> Preview<'a> {
             first_line: s.first_line(),
             license: &s.license,
             signals: &s.signals,
+            held: s.held_signals.labels(),
         }
     }
 
@@ -45,22 +49,25 @@ impl<'a> Preview<'a> {
             first_line: c.first_line.clone(),
             license: &c.license,
             signals: &c.signals,
+            held: Vec::new(),
         }
     }
 }
 
-/// The licence and signals as small chips. With `edit_terms` (the story is
+/// The licence, signals and Held in Common Signals as small chips. With `edit_terms` (the story is
 /// the viewer's own), the chips are one link to its rights step, named for
 /// screen readers by what it does.
 fn chips(s: &Preview, edit_terms: Option<&str>) -> Markup {
     let inner = html! {
         span class="story-chip" { (license_name(s.license)) }
         @for sig in s.signals { span class="story-chip" { (signal_name(sig)) } }
+        @for label in &s.held { span class="story-chip" { (label) } }
     };
     match edit_terms {
         Some(href) => {
             let mut terms = vec![license_name(s.license).to_string()];
             terms.extend(s.signals.iter().map(|sig| signal_name(sig).to_string()));
+            terms.extend(held.iter().map(|label| label.to_string()));
             let label = format!("Change the terms of {}: {}", s.title, terms.join(", "));
             html! { a class="story-chips is-editable" href=(href) aria-label=(label) title="Change its terms" { (inner) } }
         }
@@ -290,6 +297,15 @@ mod tests {
         assert!(!commons_stories("Room 4", false, &[held("Night bus")], &[], &[], 10)
             .into_string()
             .contains("/rights"));
+    }
+
+    #[test]
+    fn cards_show_held_in_common_signals_beside_the_cc_signals() {
+        let mut h = held("Night bus");
+        h.story.held_signals =
+            crate::held_signals::HeldSignals { withdraw_after_training: true, own_terms: "Words.".into() };
+        let m = commons_stories("Room 4", false, &[h], &[], 10).into_string();
+        assert!(m.contains(">Credit<") && m.contains(">Withdraw even after training<") && m.contains(">Own terms<"));
     }
 
     #[test]

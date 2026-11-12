@@ -756,6 +756,7 @@ mod tests {
             signature: String::new(),
             received_at: 2,
             signed: None,
+            held_signals: Default::default(),
         };
         s.save_remote(&r).unwrap();
         assert_eq!(s.remote(&keyid("abc")).unwrap().unwrap().handle, "tega");

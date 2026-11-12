@@ -7,6 +7,12 @@
 //! signed and addressed to one commons, removes it there and leaves a record
 //! so the same copy can't be replayed back in.
 //!
+//! A story with Held in Common Signals (decision record 0025) is signed as
+//! type `StoryV2`, whose body adds `held_signals`. A commons that predates
+//! it refuses that type; the node then sends the same story as a `Story`,
+//! without them ([`older_copy`]). A story without them is a `Story`, exactly
+//! as before.
+//!
 //! A commons accepts a story only from someone it already lists under that
 //! handle. Joining stays the gate (decision record 0011); stories ride on it.
 //!
@@ -20,11 +26,15 @@ use serde_json::{json, Value};
 use crate::envelope::{self, Envelope, Signed};
 use crate::governance::{license_from_form, signals_from_form, LICENSES, SIGNALS};
 use crate::handle;
+use crate::held_signals::{self, HeldSignals};
 use crate::model::{Reach, RemoteEntry};
 use crate::web::layout::host_label;
 
 /// The `hic/v1` type of a story.
 pub const STORY: &str = "Story";
+/// The `hic/v1` type of a story that carries Held in Common Signals
+/// (decision record 0025): a `Story` body plus `held_signals`.
+pub const STORY_V2: &str = "StoryV2";
 /// The `hic/v1` type of a story's withdrawal from one commons.
 pub const STORY_WITHDRAW: &str = "StoryWithdraw";
 
@@ -53,6 +63,10 @@ pub struct Story {
     pub license: String,
     /// CC signal keys (see `governance::SIGNALS`), sorted, no repeats.
     pub signals: Vec<String>,
+    /// Held in Common Signals (decision record 0025). Left out of the body
+    /// when nothing is chosen, so such a story signs exactly as before.
+    #[serde(default, skip_serializing_if = "HeldSignals::is_empty")]
+    pub held_signals: HeldSignals,
 }
 
 impl Story {
@@ -82,16 +96,35 @@ impl Story {
     /// The same story with a new title and text: its id, author and terms
     /// stay. Checked like a new one.
     pub fn revised(&self, title: &str, text: &str) -> Result<Story, &'static str> {
-        new_story(&self.id, &self.handle, title, text, &self.visibility, &self.license, &self.signals)
+        let revised = new_story(&self.id, &self.handle, title, text, &self.visibility, &self.license, &self.signals)?;
+        Ok(revised.with_held_signals(self.held_signals.clone()))
     }
 
-    /// The same story with new terms: who can see it, licence and signals.
-    pub fn with_terms(&self, visibility: &str, license: &str, signals: &[String]) -> Story {
+    /// The same story with new terms: who can see it, licence, signals and
+    /// Held in Common Signals.
+    pub fn with_terms(&self, visibility: &str, license: &str, signals: &[String], held: HeldSignals) -> Story {
         let mut s = self.clone();
         s.visibility = Reach::parse(visibility).unwrap_or(Reach::Commons).as_str().to_string();
         s.license = license_from_form(license);
         s.signals = signals_from_form(signals);
+        s.held_signals = held;
         s
+    }
+
+    /// The same story with these Held in Common Signals.
+    pub fn with_held_signals(mut self, held: HeldSignals) -> Story {
+        self.held_signals = held;
+        self
+    }
+
+    /// The `hic/v1` type this story is signed as: `StoryV2` when it carries
+    /// Held in Common Signals, otherwise `Story`.
+    pub fn kind(&self) -> &'static str {
+        if self.held_signals.is_empty() {
+            STORY
+        } else {
+            STORY_V2
+        }
     }
 
     /// The story as a plain text file (Export).
@@ -390,13 +423,27 @@ pub fn new_story(
         visibility,
         license: license_from_form(license),
         signals: signals_from_form(signals),
+        held_signals: HeldSignals::default(),
     })
 }
 
-/// Sign a story with its author's key, dated `created_at`.
+/// Sign a story with its author's key, dated `created_at`, as the type
+/// [`Story::kind`] names.
 pub fn sign(story: &Story, author_pub: &str, author_priv: &str, created_at: u64) -> Result<Signed, String> {
     let body = serde_json::to_value(story).map_err(|e| e.to_string())?;
-    envelope::sign(Envelope::new(STORY, author_pub, created_at, None, body), author_priv)
+    envelope::sign(Envelope::new(story.kind(), author_pub, created_at, None, body), author_priv)
+}
+
+/// For a commons that predates `StoryV2` (it answered 400): the same story,
+/// dated the same, signed as a `Story` without its Held in Common Signals.
+/// `None` when `signed` is already a `Story`, so there is nothing older to
+/// try. Signing is deterministic, so this is the same copy every time.
+pub fn older_copy(story: &Story, signed: &Signed, author_priv: &str) -> Result<Option<Signed>, String> {
+    if signed.envelope.kind != STORY_V2 {
+        return Ok(None);
+    }
+    let without = story.clone().with_held_signals(HeldSignals::default());
+    sign(&without, &signed.envelope.author, author_priv, signed.envelope.created_at).map(Some)
 }
 
 /// The message a node posts to a commons' `/inbox` to share a story.
@@ -449,16 +496,22 @@ pub(crate) fn check_terms(
     Ok(())
 }
 
-/// Check a received story share: a valid `Story` signed by its `author`,
-/// with content a commons may list.
+/// Check a received story share: a valid `Story` or `StoryV2` signed by its
+/// `author`, with content a commons may list. A `StoryV2` must carry
+/// well-formed Held in Common Signals, and a `Story` none (see
+/// [`held_signals::from_body`]).
 pub fn verify_share(msg: &Value) -> Result<(Story, Signed), String> {
     let signed: Signed =
         serde_json::from_value(msg.get("story").cloned().ok_or("missing story")?).map_err(|_| "bad story")?;
     envelope::verify(&signed)?;
-    if signed.envelope.kind != STORY {
-        return Err(format!("expected a Story, got {:?}", signed.envelope.kind));
+    let kind = signed.envelope.kind.as_str();
+    if kind != STORY && kind != STORY_V2 {
+        return Err(format!("expected a Story, got {kind:?}"));
     }
+    let held = held_signals::from_body(&signed.envelope.body, kind == STORY_V2)?;
     let story: Story = serde_json::from_value(signed.envelope.body.clone()).map_err(|_| "bad story body")?;
+    // Keep the strictly read answers, not serde's lenient reading of them.
+    let story = story.with_held_signals(held);
     check(&story)?;
     Ok((story, signed))
 }
@@ -602,6 +655,7 @@ mod tests {
             signature: String::new(),
             received_at: 0,
             signed: None,
+            held_signals: HeldSignals::default(),
         }
     }
 
@@ -800,7 +854,7 @@ mod tests {
 
     #[test]
     fn new_terms_are_tidied() {
-        let s = story("ada").with_terms("members", "nonsense", &["open".into(), "x".into()]);
+        let s = story("ada").with_terms("members", "nonsense", &["open".into(), "x".into()], HeldSignals::default());
         assert_eq!(s.visibility, "members");
         assert_eq!(s.license, crate::governance::DEFAULT_LICENSE);
         assert_eq!(s.signals, vec!["open".to_string()]);
@@ -823,6 +877,68 @@ mod tests {
             received_at: 1_050,
         }];
         assert!(recent_withdrawals(&[tomb], &again, &[], &ada, 1_100).is_empty(), "shared again");
+    }
+
+    /// Held in Common Signals with the right to withdraw after training and
+    /// some own terms, for these tests.
+    fn held() -> HeldSignals {
+        HeldSignals { withdraw_after_training: true, own_terms: "Not for voice models.".into() }
+    }
+
+    #[test]
+    fn a_story_without_held_signals_signs_exactly_as_before() {
+        let k = keys::generate();
+        let signed = sign(&story("ada"), &k.ed_pub, &k.ed_priv, 100).unwrap();
+        assert_eq!(signed.envelope.kind, STORY);
+        assert!(signed.envelope.body.get("held_signals").is_none(), "nothing chosen, nothing added");
+    }
+
+    #[test]
+    fn held_signals_are_signed_as_a_story_v2_and_tampering_shows() {
+        let k = keys::generate();
+        let s = story("ada").with_held_signals(held());
+        let signed = sign(&s, &k.ed_pub, &k.ed_priv, 100).unwrap();
+        assert_eq!(signed.envelope.kind, STORY_V2);
+        let (got, _) = verify_share(&share_message(&signed)).unwrap();
+        assert_eq!(got.held_signals, held());
+
+        let mut msg = share_message(&signed);
+        msg["story"]["envelope"]["body"]["held_signals"]["withdraw_after_training"] = json!(false);
+        assert!(verify_share(&msg).is_err(), "a commons can't untick it");
+        let mut msg = share_message(&signed);
+        msg["story"]["envelope"]["body"]["held_signals"]["own_terms"] = json!("Anything goes.");
+        assert!(verify_share(&msg).is_err(), "nor change the words");
+    }
+
+    #[test]
+    fn a_story_type_may_not_carry_held_signals() {
+        let k = keys::generate();
+        let body = serde_json::to_value(story("ada").with_held_signals(held())).unwrap();
+        let wrong = envelope::sign(Envelope::new(STORY, &k.ed_pub, 1, None, body), &k.ed_priv).unwrap();
+        assert!(verify_share(&share_message(&wrong)).unwrap_err().contains("V2"));
+    }
+
+    #[test]
+    fn an_older_commons_gets_the_same_story_without_held_signals() {
+        let k = keys::generate();
+        let s = story("ada").with_held_signals(held());
+        let v2 = sign(&s, &k.ed_pub, &k.ed_priv, 100).unwrap();
+        let older = older_copy(&s, &v2, &k.ed_priv).unwrap().expect("a StoryV2 has an older copy");
+        assert_eq!(older.envelope.kind, STORY);
+        assert_eq!(older.envelope.created_at, 100, "dated the same, so it's the same version");
+        let (got, _) = verify_share(&share_message(&older)).unwrap();
+        assert!(got.held_signals.is_empty());
+        assert_eq!((got.id, got.title), (s.id.clone(), s.title.clone()));
+        let plain = sign(&story("ada"), &k.ed_pub, &k.ed_priv, 100).unwrap();
+        assert!(older_copy(&story("ada"), &plain, &k.ed_priv).unwrap().is_none(), "nothing older to try");
+    }
+
+    #[test]
+    fn editing_keeps_held_signals_and_new_terms_can_clear_them() {
+        let s = story("ada").with_held_signals(held());
+        assert_eq!(s.revised("New title", "New words.").unwrap().held_signals, held());
+        let cleared = s.with_terms("public", "cc-by", &[], HeldSignals::default());
+        assert!(cleared.held_signals.is_empty() && cleared.kind() == STORY);
     }
 
     #[test]

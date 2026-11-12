@@ -42,12 +42,18 @@ RCODE=$(printf '%s\n' "$SIGNUP" | grep -oE '[0-9a-f]{8}(-[0-9a-f]{8}){7}' | head
 CSRF=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 [ -n "$CSRF" ] && ok "got CSRF token" || no "no CSRF token"
 
-PUB=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Artist and researcher working on environmental data." --data-urlencode "visibility=public" --data-urlencode "license=cc-by" --data-urlencode "signals=credit")
-[ "$PUB" = "303" ] && ok "published public profile" || no "publish returned $PUB"
+PUB=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Artist and researcher working on environmental data." --data-urlencode "visibility=public" --data-urlencode "license=cc-by" --data-urlencode "signals=credit" --data-urlencode "withdraw_after_training=yes" --data-urlencode "own_terms=Open research only. <b>Never</b> my voice.")
+[ "$PUB" = "303" ] && ok "published public profile (with Held in Common Signals)" || no "publish returned $PUB"
 
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "invite=$FOUND1" | grep -qi "federated to" && ok "node federated a signed copy (with the founding invite)" || no "share failed"
 grep -rq 'tega' "$T/commons/remote/" 2>/dev/null && ok "commons stored verified remote @tega" || no "no remote entry on commons"
 grep -rq '"schema": "hic/v1"' "$T/commons/remote/" 2>/dev/null && ok "share arrived in format hic/v1 (every field signed)" || no "share not in hic/v1"
+# Held in Common Signals (decision record 0025) travel signed, as a ProfileV2,
+# and the commons shows them, with the person's own words as plain text.
+grep -rq '"type": "ProfileV2"' "$T/commons/remote/" 2>/dev/null && ok "Held in Common Signals arrived signed (ProfileV2)" || no "share not a ProfileV2"
+TKID=$(ls "$T/commons/remote/" | head -1 | sed 's/\.json$//')
+TPAGE=$(curl -s "http://localhost:8091/federated/$TKID")
+printf '%s' "$TPAGE" | grep -q "Withdraw even after training" && printf '%s' "$TPAGE" | grep -q "&lt;b&gt;Never&lt;/b&gt; my voice." && ok "commons shows the Held in Common Signals, escaped" || no "Held in Common Signals not shown on the commons"
 curl -s http://localhost:8091/ | grep -qi "tega" && ok "@tega in commons directory" || no "@tega not in directory"
 curl -s http://localhost:8091/api/directory | grep -q "tega" && no "tega wrongly local on commons" || ok "tega federated, not local"
 
@@ -193,7 +199,8 @@ sharestory(){ curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:80
 [ "$(sharestory)" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Night bus on Lime St<" && ok "a withdrawn, then edited, story can be shared again (new version)" || no "re-sharing an edited story failed"
 # A second story, shared from its rights step ("Share to the room").
 S2=$(curl -s -D - -o /dev/null -X POST http://localhost:8090/stories/new -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "title=Scaffold rain" --data-urlencode "text=The scaffold keeps playing." | grep -i '^location:' | tr -d '\r' | awk '{print $2}' | cut -d/ -f3)
-[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:8090/story/$S2/rights" -H "Cookie: hic_session=$SID" --data-urlencode "csrf=$CSRF" --data-urlencode "visibility=commons" --data-urlencode "license=cc-by" --data-urlencode "signals=credit" --data-urlencode "action=share" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Scaffold rain" && ok "a new story shared from its rights step reaches the commons" || no "sharing from the rights step failed"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:8090/story/$S2/rights" -H "Cookie: hic_session=$SID" --data-urlencode "csrf=$CSRF" --data-urlencode "visibility=commons" --data-urlencode "license=cc-by" --data-urlencode "signals=credit" --data-urlencode "withdraw_after_training=yes" --data-urlencode "action=share" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && curl -s http://localhost:8091/stories | grep -q "Scaffold rain" && ok "a new story shared from its rights step reaches the commons" || no "sharing from the rights step failed"
+curl -s http://localhost:8091/stories | grep -q ">Withdraw even after training<" && ok "the story's Held in Common Signals show on its card (StoryV2)" || no "story card lacks its Held in Common Signals"
 
 # Key rotation (decision record 0010): tega replaces their key; every commons
 # moves @tega to the new key, and the old key stops working there.

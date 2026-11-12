@@ -168,6 +168,64 @@ fn cases() -> Vec<(&'static str, &'static str, Envelope, Vec<&'static str>)> {
             ),
             vec![],
         ),
+        (
+            "09-profile-v2.json",
+            "A ProfileV2 (decision record 0025): a Profile body plus held_signals, the right to withdraw even \
+             after training and the person's own terms for AI. Everything is signed.",
+            Envelope::new(
+                "ProfileV2",
+                &a,
+                1_700_000_500,
+                None,
+                json!({
+                    "handle": "tega",
+                    "display_name": "Tega Brain",
+                    "visibility": "public",
+                    "license": "cc-by-nc",
+                    "signals": ["credit"],
+                    "profile": {
+                        "name": "Tega Brain", "pronouns": "she/her", "role": "Artist",
+                        "bio": "Works with environmental data.",
+                        "places": [],
+                        "avatar": "",
+                    },
+                    "box_key": "cd".repeat(32),
+                    "origin": "https://tega.example",
+                    "origin_label": "Tega's node",
+                    "version_cid": "2f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+                    "held_signals": {
+                        "withdraw_after_training": true,
+                        "own_terms": "Learn from this for open research.\nNot to imitate my voice — ask me first.",
+                    },
+                }),
+            ),
+            vec![],
+        ),
+        (
+            "10-story-v2.json",
+            "A StoryV2 (decision record 0025): a Story body plus held_signals. Here only own terms are given, \
+             so withdraw_after_training is false (not chosen).",
+            Envelope::new(
+                "StoryV2",
+                &a,
+                1_700_000_600,
+                None,
+                json!({
+                    "id": "0123456789abcdef",
+                    "handle": "tega",
+                    "title": "Night bus",
+                    "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+                    "visibility": "commons",
+                    "license": "cc-by-nc",
+                    "signals": ["credit", "open"],
+                    "held_signals": {
+                        "withdraw_after_training": false,
+                        "own_terms": "Fine for a workshop dataset that stays with the room.",
+                    },
+                }),
+            ),
+            vec![],
+        ),
     ]
 }
 
@@ -187,6 +245,24 @@ fn only_while_here_vectors_are_accepted() {
     let relay_msg = json!({ "type": "StoryRelay", "schema": "hic/v1", "relay": read("08-story-relay.json")["signed"] });
     let relay = hic_commons::here::verify_relay(&relay_msg, &hosts, 1_700_000_600).unwrap();
     assert!(hic_commons::here::text_matches(&card, &relay.answers[0].text));
+}
+
+/// The Held in Common Signals vectors (decision record 0025) are what this
+/// implementation's profile and story code accept, with the answers read
+/// back exactly.
+#[test]
+fn held_signals_vectors_are_accepted() {
+    let read = |name: &str| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(vectors_dir().join(name)).unwrap()).unwrap()
+    };
+    let share = json!({ "type": "Share", "schema": "hic/v1", "profile": read("09-profile-v2.json")["signed"] });
+    let entry = hic_commons::federation::verify_any_share(&share, 0).unwrap();
+    assert!(entry.held_signals.withdraw_after_training);
+    assert!(entry.held_signals.own_terms.ends_with("ask me first."));
+    let share = json!({ "type": "StoryShare", "schema": "hic/v1", "story": read("10-story-v2.json")["signed"] });
+    let (story, _) = hic_commons::story::verify_share(&share).unwrap();
+    assert!(!story.held_signals.withdraw_after_training);
+    assert!(story.held_signals.own_terms.starts_with("Fine for a workshop"));
 }
 
 /// The story vectors are what this implementation's story code accepts.

@@ -5,6 +5,7 @@
 //! one-time keys used to encrypt members-only versions.
 
 use crate::canonical::{content_id, hash_body};
+use crate::held_signals::HeldSignals;
 use crate::keys;
 use crate::model::{HandleRec, Profile, Reach, Version};
 
@@ -15,6 +16,9 @@ pub struct Draft {
     pub license: String,
     pub signals: Vec<String>,
     pub created_at: u64,
+    /// Held in Common Signals. Not part of the version-0 `cid` (that format
+    /// can't change); signed when shared (decision record 0025).
+    pub held_signals: HeldSignals,
 }
 
 /// Sign a draft with the member's key. For members-only versions, the profile
@@ -41,6 +45,7 @@ pub fn sign_version(rec: &HandleRec, d: Draft, recipients: &[(String, String)]) 
         signature,
         payload,
         enc,
+        held_signals: d.held_signals,
     })
 }
 
@@ -62,6 +67,7 @@ mod tests {
             license: "cc-by".into(),
             signals: vec![],
             created_at: 5,
+            held_signals: HeldSignals::default(),
         }
     }
 

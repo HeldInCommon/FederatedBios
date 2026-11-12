@@ -6,24 +6,42 @@ use crate::canonical::short;
 use crate::vouch_list::VouchResult;
 use crate::web::layout::host_label;
 
-/// Confirmation after a successful share.
-pub fn shared(handle: &str, commons: &str) -> Markup {
+/// Confirmation after a successful share. `held_signals_left_out` is true
+/// when the commons runs an older version that took the profile without its
+/// Held in Common Signals (decision record 0025).
+pub fn shared(handle: &str, commons: &str, held_signals_left_out: bool) -> Markup {
     html! {
         header class="intro" {
             h1 { "Shared" }
             p class="lede" { "Your profile is now federated to " a href=(commons) { (commons) } ". They have a signed, verifiable copy." }
         }
+        @if held_signals_left_out { (left_out_note(commons)) }
         div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
     }
 }
 
+/// Says that an older commons took a share without its Held in Common
+/// Signals: what it holds, and what still holds.
+fn left_out_note(commons: &str) -> Markup {
+    html! {
+        aside class="caution" {
+            p {
+                strong { "Your Held in Common Signals didn't travel." }
+                " " (host_label(commons)) " runs an older version of Held in Common, so it has your profile, licence and signals, but not your choice about withdrawing after training or your own terms. They'll go with the next share once it's updated."
+            }
+        }
+    }
+}
+
 /// After sharing to a commons that lists newcomers only once vouched for.
-pub fn shared_pending(handle: &str, commons: &str, key: &str, csrf: &str) -> Markup {
+/// `held_signals_left_out` as for [`shared`].
+pub fn shared_pending(handle: &str, commons: &str, key: &str, csrf: &str, held_signals_left_out: bool) -> Markup {
     html! {
         header class="intro" {
             h1 { "Waiting for a vouch" }
             p class="lede" { (host_label(commons)) " has your signed profile, and will list it once a member vouches for you or its steward approves you." }
         }
+        @if held_signals_left_out { (left_out_note(commons)) }
         p { "Ask someone you know there to vouch for you from their node. They'll need your handle and key:" }
         p class="recovery-code mono" { "@" (handle) " · " (short(key)) }
         section class="share-panel" {

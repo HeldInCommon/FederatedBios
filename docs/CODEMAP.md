@@ -44,7 +44,7 @@ Writes happen in clearly named places that say what they change.
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |
 | `backup.rs` | Encrypted identity backups (seal and open). | yes, except salt/nonce generation |
-| `federation.rs` | Build and verify shares and withdrawals; `admit()` a share or not; `apply_withdraw()`. | yes |
+| `federation.rs` | Build and verify shares and withdrawals; `share_attempts()` lists the formats to offer, newest first (`ProfileV2`, `Profile`, version 0); `admit()` a share or not; `apply_withdraw()`. | yes |
 | `ramp.rs` | The member's next step and which profile tabs they see (decision record 0022). | yes |
 | `story.rs` | Stories (decision record 0020): check a written story, sign it, verify a shared one, `admit()` it on a commons (author must be listed), withdrawals. | yes |
 | `here.rs` | "Only while I'm here" (decision record 0021): the signed `StoryCard` (no text, its SHA-256) and `StoryRelay` (a node's poll with its answers); a commons' rules for them (`admit_card`, `text_matches`). | yes |
@@ -52,12 +52,13 @@ Writes happen in clearly named places that say what they change.
 | `relay_node.rs` | A node's side: which commons need a connection, what to answer, the connection's state (`Link`), and the loop that keeps each long poll open. | rules yes; asks commons |
 | `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
+| `held_signals.rs` | Held in Common Signals (decision record 0025): withdraw even after training, and own terms for AI; read from the form (1,000-character limit) and, strictly, from a signed `ProfileV2` or `StoryV2`. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
 | `sessions.rs` | Sessions (expire after 24 h) and the sign-in attempt limit. | cookie helpers yes |
 | `store.rs` | **The only module that touches files.** Atomic writes; "missing" vs "damaged"; the member and shared-profile lists cached in memory, cleared by every write. | no |
 | `web/layout.rs` | The page frame, badges, error pages, redirects. | yes |
-| `web/pages/` | The body of each page, one file per page (`directory.rs`, `profile.rs`, `owner.rs`, `publish.rs`, `signin.rs`, `stories.rs`, `story.rs`, `story_form.rs`, …); `mod.rs` lists them. Shared pieces of the heldincommon.org look (page heading, section label, starburst, terms panel, "2 min ago") are in `parts.rs`; the Sharing and rights fields, used by profiles and stories, in `rights.rs`. | yes |
+| `web/pages/` | The body of each page, one file per page (`directory.rs`, `profile.rs`, `owner.rs`, `publish.rs`, `signin.rs`, `stories.rs`, `story.rs`, `story_form.rs`, …); `mod.rs` lists them. Shared pieces of the heldincommon.org look (page heading, section label, starburst, terms panel, "2 min ago") are in `parts.rs`; the Sharing and rights fields (who can see it, licence, signals, Held in Common Signals; a story adds how it travels), used by profiles and stories, in `rights.rs`. | yes |
 | `web/handlers/` | Request handlers, one file per page or flow: load → decide (pure) → render. `mod.rs` lists each file's routes and holds the shared helpers (session, CSRF check, `update_member`). | no |
 | `web/handlers/inbox.rs` | What a commons receives from nodes: shares, vouches, withdrawals, identity changes. | no |
 | `web/handlers/share.rs` | Sharing to and withdrawing from a commons; sending to a commons' inbox. | no |

@@ -99,6 +99,8 @@ deterministic, so an implementation MUST reproduce them exactly.
 | `06-story-withdraw.json` | Withdrawing a story from one commons. |
 | `07-story-card.json` | An "Only while I'm here" card for the story in 05: no text, its SHA-256. |
 | `08-story-relay.json` | A node's poll answering one request with that text (it must match 07's hash). |
+| `09-profile-v2.json` | A `ProfileV2`: a shared profile with Held in Common Signals (section 5.6). |
+| `10-story-v2.json` | A `StoryV2`: a story with Held in Common Signals, own terms only. |
 
 Check them:
 
@@ -155,8 +157,11 @@ node's own claims; the signature means nobody else changed them.)
 
 A commons MUST refuse `members` visibility, MUST refuse a share that isn't
 newer than the one it holds for that key, and keeps the signed object as
-proof. A node that gets HTTP 400 from a commons SHOULD retry in version 0, so
-sharing keeps working while commons are upgraded.
+proof. A node that gets HTTP 400 from a commons SHOULD retry in the next
+older format (`ProfileV2`, then `Profile`, then version 0), so sharing keeps
+working while commons are upgraded.
+
+The profile MAY instead be signed as a `ProfileV2` (section 5.6).
 
 ### 5.3 Joining a commons (decision record 0011)
 
@@ -216,6 +221,8 @@ A commons:
 
 Members-only stories stay on the node that wrote them.
 
+The story MAY instead be signed as a `StoryV2` (section 5.6).
+
 **Which host is "this commons".** Withdrawals, invites, vouches and story
 withdrawals name the commons they are for by host. A commons MUST accept its
 public host (from its base URL), and SHOULD also accept `127.0.0.1:<port>` and
@@ -273,6 +280,43 @@ A commons that predates this section answers `/here/card` with 404; a node
 SHOULD then tell the member that commons doesn't support "Only while I'm
 here" yet. Vectors 07 and 08 are a card for the story in 05 and a poll
 answering it.
+
+### 5.6 Held in Common Signals (decision record 0025)
+
+Two answers a person can give about AI beyond the CC signals: the right to
+withdraw their work even after a model has been trained on it, and their own
+terms for AI in their own words. They travel signed, in two types:
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `ProfileV2` | the handle's key | everything in a `Profile` body (section 5.2), plus `held_signals` |
+| `StoryV2` | the member's key | everything in a `Story` body (section 5.4), plus `held_signals` |
+
+`held_signals` is an object with exactly two keys:
+
+| Key | Value |
+|---|---|
+| `withdraw_after_training` | `true` when the person keeps the right to withdraw this even after a model is trained on it; `false` when not chosen. |
+| `own_terms` | Their own terms for AI, as plain text (never markup), at most 1,000 characters (Unicode code points). Empty when they wrote none. |
+
+A `ProfileV2` is sent in a `Share` message and a `StoryV2` in a `StoryShare`
+message, exactly as their older types are. Every other rule of the older
+type applies.
+
+- A commons MUST refuse a `ProfileV2` or `StoryV2` without a well-formed
+  `held_signals`, with any other key in it, or with `own_terms` longer than
+  1,000 characters. It MUST refuse a `Profile` or `Story` that carries
+  `held_signals`.
+- A `Profile`, `Story` or version-0 share means "not chosen": `false` and
+  empty.
+- A node SHOULD send a V2 type only when something is chosen, and otherwise
+  the older type, unchanged.
+- A commons that doesn't understand a V2 type answers HTTP 400 (section 4).
+  The node SHOULD then send the older type without `held_signals`: for a
+  story, the same story signed again as a `Story` with the same
+  `created_at`. It SHOULD tell the member that their Held in Common Signals
+  didn't reach that commons.
+- Pages MUST show `own_terms` as text, never as markup.
 
 ### 5.6 Planned
 

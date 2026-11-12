@@ -4,7 +4,7 @@
 
 use maud::{html, Markup};
 
-use super::parts::{ago, terms_panel, words};
+use super::parts::{ago, own_terms_note, terms_panel, words, Chosen};
 use crate::keys::keyid;
 use crate::model::Reach;
 use std::collections::BTreeMap;
@@ -18,6 +18,9 @@ use crate::web::layout::host_label;
 pub enum StoryOutcome {
     /// Shared to this commons (its host).
     Shared(String),
+    /// Shared to this commons (its host), which runs an older version and
+    /// took the story without its Held in Common Signals (decision record 0025).
+    SharedWithoutHeldSignals(String),
     /// Withdrawn from this commons (its host).
     Withdrawn(String),
     /// A new version was saved (text or terms).
@@ -56,6 +59,13 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
             section class="flash flash-done" role="status" {
                 p class="flash-label" { "Shared" }
                 p { strong { "Your story is on " (at) "." } " People there can read it now, signed by you. You can withdraw it any time." }
+            }
+        },
+        StoryOutcome::SharedWithoutHeldSignals(at) => html! {
+            section class="flash flash-done" role="status" {
+                p class="flash-label" { "Shared" }
+                p { strong { "Your story is on " (at) "." } " People there can read it now, signed by you. You can withdraw it any time." }
+                p { strong { "Your Held in Common Signals didn't travel." } " " (at) " runs an older version of Held in Common, so it has your story, licence and signals, but not your choice about withdrawing after training or your own terms. Re-share once it's updated." }
             }
         },
         StoryOutcome::Withdrawn(at) => html! {
@@ -138,7 +148,8 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
             }
             aside class="story-side" {
                 @if let Some(o) = owner { (owner_side(s, o, now)) }
-                (terms_panel(st.reach(), &st.license, &st.signals, false))
+                (terms_panel(&Chosen::of_story(st), false))
+                (own_terms_note(&st.handle, &st.held_signals))
                 // An outline button, like "Edit story": the story screen has
                 // no underlined actions, and plain text wouldn't look pressable.
                 @if owner.is_some() {
@@ -244,7 +255,8 @@ pub fn held_story(h: &HeldStory, now: u64) -> Markup {
                 (story_text(&st.text))
             }
             aside class="story-side" {
-                (terms_panel(st.reach(), &st.license, &st.signals, false))
+                (terms_panel(&Chosen::of_story(st), false))
+                (own_terms_note(&st.handle, &st.held_signals))
                 div class="side-note" {
                     p class="card-label" { "Verified" }
                     p { "Signed by @" (st.handle) "'s key " span class="mono" { (key_start) "\u{2026}" } " and checked when it arrived." }
@@ -342,6 +354,18 @@ mod tests {
         assert!(m.contains("Shared 2 min ago") && m.contains("Withdraw") && m.contains("What withdrawing does"));
         let gone = own_story(&s, None, Some(&StoryOutcome::Withdrawn("room:8081".into())), 10).into_string();
         assert!(gone.contains("Your story is gone from room:8081"));
+        let older = StoryOutcome::SharedWithoutHeldSignals("room:8081".into());
+        assert!(own_story(&s, None, Some(&older), 10).into_string().contains("Held in Common Signals didn't travel"));
+    }
+
+    #[test]
+    fn a_story_shows_its_held_in_common_signals_and_own_terms() {
+        let mut s = own("hi", "public");
+        s.story.held_signals =
+            crate::held_signals::HeldSignals { withdraw_after_training: true, own_terms: "Ask me first.".into() };
+        let m = own_story(&s, None, None, 10).into_string();
+        assert!(m.contains("Withdraw even after training, Own terms"));
+        assert!(m.contains("Terms for AI, in @ada's own words") && m.contains("Ask me first."));
     }
 
     #[test]

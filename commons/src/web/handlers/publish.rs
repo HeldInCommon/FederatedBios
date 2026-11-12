@@ -8,10 +8,11 @@ use super::{authorised_as, readable_profile, session};
 use crate::app::Shared;
 use crate::form::Form;
 use crate::governance::{license_from_form, signals_from_form, DEFAULT_LICENSE};
+use crate::held_signals::HeldSignals;
 use crate::model::{Place, Profile, Reach};
 use crate::publishing::{self, Draft};
 use crate::web::layout::{error_page, redirect, render, server_error, Page, Section};
-use crate::web::pages;
+use crate::web::pages::{self, Chosen};
 use crate::{handle, now};
 
 /// Largest accepted profile picture, as a data URI, in bytes.
@@ -63,9 +64,17 @@ pub async fn publish_form(State(st): State<Shared>, headers: HeaderMap) -> Respo
     let body = match &current {
         Some(v) => {
             let p = readable_profile(&st, v, Some(&s.handle)).unwrap_or_default();
-            pages::publish_form(&s.handle, &s.csrf, &p, v.reach(), &v.license, &v.signals, false)
+            let chosen =
+                Chosen { reach: v.reach(), license: &v.license, signals: &v.signals, held_signals: &v.held_signals };
+            pages::publish_form(&s.handle, &s.csrf, &p, &chosen, false)
         }
-        None => pages::publish_form(&s.handle, &s.csrf, &Profile::default(), Reach::Public, DEFAULT_LICENSE, &[], true),
+        None => {
+            // A first profile starts from good defaults: public, CC BY, no
+            // signals, no Held in Common Signals.
+            let none = HeldSignals::default();
+            let chosen = Chosen { reach: Reach::Public, license: DEFAULT_LICENSE, signals: &[], held_signals: &none };
+            pages::publish_form(&s.handle, &s.csrf, &Profile::default(), &chosen, true)
+        }
     };
     render(&st.site, Page::new("Publish", Some(&s.handle), body).at(Section::You))
 }
@@ -81,6 +90,12 @@ pub async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String)
     let reach = Reach::from_form(&f.one("visibility"));
     let license = license_from_form(&f.one("license"));
     let signals = signals_from_form(&f.many("signals"));
+    // Held in Common Signals (decision record 0025): too-long own terms are
+    // refused with a plain message, never cut.
+    let held_signals = match HeldSignals::from_form(&f.one("withdraw_after_training"), &f.one("own_terms")) {
+        Ok(h) => h,
+        Err(why) => return error_page(&st.site, why),
+    };
     let created_at = now();
 
     let _g = st.write.lock().unwrap();
@@ -90,7 +105,7 @@ pub async fn publish(State(st): State<Shared>, headers: HeaderMap, body: String)
         Err(e) => return server_error(&st.site, &e),
     };
     let recipients: Vec<(String, String)> = st.store.handles().into_iter().map(|m| (m.handle, m.box_pub)).collect();
-    let draft = Draft { profile, reach, license, signals, created_at };
+    let draft = Draft { profile, reach, license, signals, created_at, held_signals };
     let version = match publishing::sign_version(&rec, draft, &recipients) {
         Ok(v) => v,
         Err(e) => return server_error(&st.site, &format!("@{h}: {e}")),
