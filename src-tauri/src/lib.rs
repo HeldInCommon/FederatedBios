@@ -230,8 +230,9 @@ fn log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         .build()
 }
 
-/// Everything fixed for this run of the app.
-fn app_config(base: PathBuf) -> AppConfig {
+/// Everything fixed for this run of the app. Fails only if the operating
+/// system can't give us random bytes for the launch token.
+fn app_config(base: PathBuf) -> Result<AppConfig, rand::Error> {
     let instance_override = std::env::var("HIC_INSTANCE").ok().filter(|s| !s.trim().is_empty());
     // The default commons to pre-fill: a runtime override, else one baked in
     // at build time from the HIC_SHARE_DEFAULT CI variable (never committed).
@@ -240,7 +241,7 @@ fn app_config(base: PathBuf) -> AppConfig {
         .filter(|s| !s.trim().is_empty())
         .or_else(|| option_env!("HIC_SHARE_DEFAULT").map(str::to_string))
         .unwrap_or_default();
-    AppConfig { base, instance_override, share_default, launch_token: network::launch_token() }
+    Ok(AppConfig { base, instance_override, share_default, launch_token: network::launch_token()? })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -272,7 +273,9 @@ pub fn run() {
         .setup(|app| {
             let base = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
             std::fs::create_dir_all(&base).ok();
-            let cfg = app_config(base.clone());
+            // Without a launch token nothing can prove it is this app, so a
+            // broken random source stops start-up with that error.
+            let cfg = app_config(base.clone()).map_err(std::io::Error::other)?;
             let (saved, changed) = settings::load(&base);
             if changed {
                 // An install from before the chooser (or an untidy name): record the result.
