@@ -3,8 +3,8 @@
 //! A thin native wrapper around the bundled `hic-commons` server. On first
 //! launch the person chooses what this computer runs: a **node** (their own
 //! profile and work) or a **commons** (a shared directory other nodes share
-//! to). Later they can add the other one, and a **practice commons** to
-//! learn on; all of them run side by side, and the **Go** menu and a row of
+//! to). Later they can add the other one, and a **local commons** (once called the practice commons) for
+//! a workshop or a session on the same Wi-Fi; all of them run side by side, and the **Go** menu and a row of
 //! buttons on every page move between them. No Docker, no terminal.
 //!
 //! | Module | Job |
@@ -35,7 +35,7 @@ use settings::{Kind, Saved};
 use sidecar::{AppConfig, DefaultCommons, Servers};
 
 /// The Go menu: show each server this computer runs, or set it up; remove
-/// the practice commons; rename the node, commons or practice commons; show
+/// the local commons; rename the node, commons or local commons; show
 /// the commons' steward link; and, always, open the
 /// project's site. Rebuilt whenever what the computer runs changes
 /// ([`refresh_menu`]). Before first launch's choice it holds only the site.
@@ -55,7 +55,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
             (_, true) => k.label().to_string(),
             (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
             (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
-            (Kind::Practice, false) => "Open a practice commons".to_string(),
+            (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),
         };
         go.append(&MenuItem::with_id(app, format!("open:{}", k.key()), text, true, None::<&str>)?)?;
     }
@@ -70,7 +70,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
         go.append(&MenuItem::with_id(app, "steward-link", "Show steward link\u{2026}", true, None::<&str>)?)?;
     }
     if saved.practice {
-        go.append(&MenuItem::with_id(app, "remove-practice", "Remove practice commons\u{2026}", true, None::<&str>)?)?;
+        go.append(&MenuItem::with_id(app, "remove-practice", "Remove local commons\u{2026}", true, None::<&str>)?)?;
     }
     go.append(&PredefinedMenuItem::separator(app)?)?;
     go.append(&about)?;
@@ -108,7 +108,7 @@ fn on_menu(app: &tauri::AppHandle, id: &str) {
         commands::open_setup(app, "do=steward-link", "Steward link");
         Ok(())
     } else if id == "remove-practice" {
-        commands::open_setup(app, "do=remove-practice", "Remove practice commons");
+        commands::open_setup(app, "do=remove-practice", "Remove local commons");
         Ok(())
     } else if id == "about-project" {
         open_in_browser(app, links::PROJECT_URL);

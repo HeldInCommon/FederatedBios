@@ -9,12 +9,12 @@
 //!                  "practice_name": "Tuesday practice"}
 //! node-data/      the node's data folder
 //! commons-data/   the commons' data folder
-//! practice-data/  the practice commons' data folder, while there is one
+//! practice-data/  the local commons' data folder, while there is one
 //! ```
 //!
 //! One computer can run up to three servers side by side (see [`Kind`]): the
 //! role chosen at first launch (`role`, `name`), the other role if it was
-//! added later (`other_name`), and a practice commons for learning
+//! added later (`other_name`), and a local commons that anyone on the same Wi-Fi can reach
 //! (`practice`). The first role keeps port 8080, so nothing changes for
 //! anyone who set up the app before this was possible.
 //!
@@ -37,11 +37,13 @@ pub const NAME_MAX: usize = 60;
 pub const FIRST_PORT: u16 = 8080;
 /// The port of the other role, once added.
 pub const SECOND_PORT: u16 = 8081;
-/// The practice commons' port.
+/// The local commons' port.
 pub const PRACTICE_PORT: u16 = 8082;
 
-/// What the practice commons is called until it is renamed.
-pub const PRACTICE_NAME: &str = "Practice commons";
+/// What the local commons is called until it is renamed. (In code and in
+/// `app.json` it is still the "practice" commons, its first name, so older
+/// installs keep theirs.)
+pub const PRACTICE_NAME: &str = "Local commons";
 
 /// A server the app can run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -102,11 +104,11 @@ pub struct Saved {
     /// The name of the other role, once it has been added too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub other_name: Option<String>,
-    /// True while there is a practice commons.
+    /// True while there is a local commons.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub practice: bool,
-    /// What the practice commons is called, once renamed (Go → Rename
-    /// practice commons…); until then [`PRACTICE_NAME`].
+    /// What the local commons is called, once renamed (Go → Rename
+    /// local commons…); until then [`PRACTICE_NAME`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub practice_name: Option<String>,
     /// The commons' public address, when it is also reachable from outside

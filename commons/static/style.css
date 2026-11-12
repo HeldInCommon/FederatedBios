@@ -875,10 +875,11 @@ a.rail-foot {
   stroke: var(--violet);
 }
 
-/* The reach rings, widest first (online, room, practice). */
+/* The reach rings, widest first (online, local, your node). */
 .fig-ring-jade,
 .fig-ring-blue,
-.fig-ring-violet {
+.fig-ring-violet,
+.fig-ring-pink {
   fill: none;
   stroke-width: 5;
 }
@@ -893,6 +894,10 @@ a.rail-foot {
 
 .fig-ring-violet {
   stroke: var(--violet);
+}
+
+.fig-ring-pink {
+  stroke: var(--pink);
 }
 
 .fig-hub {

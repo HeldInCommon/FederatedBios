@@ -113,7 +113,7 @@ pub const JOIN_SVG: &str = r##"<svg class="fig" viewBox="0 0 1200 240" aria-hidd
   <text class="fig-note" x="1080" y="184" text-anchor="middle">in the directory</text>
 </svg>"##;
 
-/// "Side by side": one computer running your node, a commons and a practice
+/// "Side by side": one computer running your node, a commons and a local
 /// commons, each with its own folder and port; the node shares to the
 /// commons like anyone else's would.
 pub const SIDE_BY_SIDE_SVG: &str = r##"<svg class="fig" viewBox="0 0 1000 300" aria-hidden="true">
@@ -133,26 +133,27 @@ pub const SIDE_BY_SIDE_SVG: &str = r##"<svg class="fig" viewBox="0 0 1000 300" a
   <text class="fig-note" x="422" y="190">signed copies only</text>
   <rect class="fig-box fig-box-violet" x="690" y="100" width="260" height="120" rx="14"/>
   <circle class="fig-violet" cx="724" cy="140" r="12"/>
-  <text class="fig-label" x="746" y="147">PRACTICE</text>
-  <text class="fig-note" x="712" y="190">only you can reach it</text>
+  <text class="fig-label" x="746" y="147">LOCAL COMMONS</text>
+  <text class="fig-note" x="712" y="190">anyone on this Wi-Fi</text>
 </svg>"##;
 
-/// "Where people reach it": three rings, from a practice commons (this
-/// computer) to a room (the same Wi-Fi) to online (a server or tunnel).
+/// "Where people reach it": three rings, from your node (this computer) to a
+/// local commons (the same Wi-Fi) to an online commons (anyone with its
+/// address).
 pub const REACH_SVG: &str = r##"<svg class="fig" viewBox="0 0 1000 330" aria-hidden="true">
   <circle class="fig-ring-jade" cx="200" cy="165" r="150"/>
-  <circle class="fig-ring-blue" cx="200" cy="165" r="100"/>
-  <circle class="fig-ring-violet" cx="200" cy="165" r="50"/>
+  <circle class="fig-ring-violet" cx="200" cy="165" r="100"/>
+  <circle class="fig-ring-pink" cx="200" cy="165" r="50"/>
   <circle class="fig-ink" cx="200" cy="165" r="9"/>
-  <circle class="fig-violet" cx="420" cy="90" r="12"/>
-  <text class="fig-label fig-violet-text" x="444" y="97">PRACTICE</text>
-  <text class="fig-note" x="444" y="121">this computer only: for learning</text>
-  <circle class="fig-blue" cx="420" cy="175" r="12"/>
-  <text class="fig-label fig-blue-text" x="444" y="182">IN THIS ROOM</text>
-  <text class="fig-note" x="444" y="206">the same Wi-Fi, while the app is open</text>
+  <circle class="fig-pink" cx="420" cy="90" r="12"/>
+  <text class="fig-label fig-pink-text" x="444" y="97">YOUR NODE</text>
+  <text class="fig-note" x="444" y="121">this computer only</text>
+  <circle class="fig-violet" cx="420" cy="175" r="12"/>
+  <text class="fig-label fig-violet-text" x="444" y="182">LOCAL COMMONS</text>
+  <text class="fig-note" x="444" y="206">anyone on this Wi-Fi, while the app is open</text>
   <circle class="fig-jade" cx="420" cy="260" r="12"/>
-  <text class="fig-label fig-jade-text" x="444" y="267">ONLINE</text>
-  <text class="fig-note" x="444" y="291">a server, or a tunnel such as Tailscale Funnel</text>
+  <text class="fig-label fig-jade-text" x="444" y="267">ONLINE COMMONS</text>
+  <text class="fig-note" x="444" y="291">anyone with its address: a server, or Tailscale Funnel</text>
 </svg>"##;
 
 #[cfg(test)]

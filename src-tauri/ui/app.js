@@ -5,7 +5,7 @@
 // The setup window says what to do in its address (?do=…&role=…):
 //   do=add&role=node|commons      run the other role too: name it, start it
 //   do=rename&role=node|commons|practice   rename it
-//   do=remove-practice            confirm removing the practice commons
+//   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
@@ -13,7 +13,7 @@
 //   choose_role  (role, name)           first launch: save the choice and name, start it
 //   add_role     (role, name)           add the other role and start it
 //   set_name     (role, name)           name (or rename) the node or commons
-//   remove_practice_now                 delete the practice commons
+//   remove_practice_now                 delete the local commons
 //   steward_links -> [string]           the commons' steward link, per address
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
@@ -132,7 +132,7 @@ function choose(role){
 function showNaming(role, mode, current){
   naming = { role, mode };
   const t = NAMING_TEXT[mode];
-  $('naming-role').textContent = { commons: 'commons', practice: 'practice commons' }[role] || 'node';
+  $('naming-role').textContent = { commons: 'commons', practice: 'local commons' }[role] || 'node';
   $('naming-eyebrow').textContent = t.eyebrow;
   const note = mode === 'add' ? ADD_NOTE[role] : t.note;
   $('naming-why').textContent = note;

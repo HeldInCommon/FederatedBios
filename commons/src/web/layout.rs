@@ -139,12 +139,15 @@ pub fn quilt_for(title: &str) -> usize {
 }
 
 /// What kind of server this is, as the rail names it, and the class that
-/// picks its starburst colour: your node, a shared commons or a practice
-/// commons, so nobody confuses them. A commons is never "your commons":
-/// everyone who visits it sees this rail, and it belongs to its community.
+/// picks its starburst colour: your node, a local commons (anyone on this
+/// Wi-Fi), an online commons (it has a public address, such as a Tailscale
+/// or server one) or a shared commons, so nobody confuses them. A commons is
+/// never "your commons": everyone who visits it sees this rail, and it
+/// belongs to its community.
 fn server_kind(site: &Site) -> (&'static str, &'static str) {
     match (site.is_commons(), site.practice) {
-        (true, true) => ("is-practice", "Practice commons"),
+        (true, true) => ("is-practice", "Local commons"),
+        (true, false) if !site.also_known_as.is_empty() => ("is-commons", "Online commons"),
         (true, false) => ("is-commons", "Shared commons"),
         (false, _) => ("is-node", "Your node"),
     }
@@ -189,8 +192,9 @@ fn rail(site: &Site) -> Markup {
             }
             @if site.is_commons() && site.practice {
                 p class="rail-foot" {
-                    "Only this computer can reach a practice commons. Nothing here is seen by anyone else. Its address: "
+                    "Anyone on this Wi-Fi can share to "
                     code { (site.base_url) }
+                    ". It's here while this computer is awake and the app is open."
                 }
             } @else if site.is_commons() {
                 p class="rail-foot" {
@@ -485,9 +489,9 @@ mod tests {
         let page = frame(&named, &Page::new("t", None, html! {})).into_string();
         assert!(page.contains("Go to the Held in Common Collective Commons"));
         assert!(!page.contains(">hic.example.ts.net<"), "the address isn't shown as text");
-        let practice = Site { practice: true, base_url: "http://127.0.0.1:8082".into(), ..site(Role::Commons) };
-        let page = frame(&practice, &Page::new("t", None, html! {})).into_string();
-        assert!(page.contains("<code>http://127.0.0.1:8082</code>"), "a practice commons shows its local address");
+        let local = Site { practice: true, base_url: "http://192.168.1.20:8082".into(), ..site(Role::Commons) };
+        let page = frame(&local, &Page::new("t", None, html! {})).into_string();
+        assert!(page.contains("<code>http://192.168.1.20:8082</code>"), "a local commons shows its Wi-Fi address");
     }
 
     #[test]
@@ -522,11 +526,15 @@ mod tests {
     }
 
     #[test]
-    fn practice_commons_says_so() {
-        let site = Site { practice: true, ..site(Role::Commons) };
-        let m = frame(&site, &Page::new("t", None, html! {})).into_string();
-        assert!(m.contains("Practice commons"));
-        assert!(!m.contains("Shared commons"));
+    fn a_local_commons_says_so_and_shows_its_wifi_address() {
+        let local = Site { practice: true, base_url: "http://192.168.1.20:8082".into(), ..site(Role::Commons) };
+        let m = frame(&local, &Page::new("t", None, html! {})).into_string();
+        assert!(m.contains("Local commons"));
+        assert!(m.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
+        assert!(!m.contains("Shared commons") && !m.contains("Online commons"));
+        let online = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
+        let m = frame(&online, &Page::new("t", None, html! {})).into_string();
+        assert!(m.contains("Online commons"), "a commons with a public address is the online kind");
     }
 
     #[test]

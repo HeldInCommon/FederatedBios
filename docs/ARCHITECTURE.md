@@ -78,8 +78,10 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
   with every share; it is never the computer's account name. Rename any time
   from the **Go** menu. Roles and names are saved in `<app data>/app.json`;
   each has its own data folder (`node-data/`, `commons-data/`, `practice-data/`).
-- **Side by side:** the other role can be added later, and a practice commons
-  (only this computer can reach it) opened to learn on. The first-launch role
+- **Side by side:** the other role can be added later, and a **local commons**
+  (`practice` in code and folders, its first name) opened for a workshop or a
+  session: anyone on the same Wi-Fi reaches it at this computer's address, and
+  joining needs a vouch as anywhere else. The first-launch role
   keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
   row of buttons on each page move between them; a node's
   **Run your own commons** page links into the app with `hic-app://open/…`
@@ -297,7 +299,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 | `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
-| `HIC_PRACTICE` | *(off)* | `1`: a practice commons; its pages say so |
+| `HIC_PRACTICE` | *(off)* | `1`: a local commons (once "practice"); its pages say so and show its Wi-Fi address |
 | `HIC_RELAY_HOLD`, `HIC_RELAY_WAIT` | `25`, `8` | Seconds a commons holds a node's "Only while I'm here" poll open, and a reader waits for the node (1–60) |
 
 ---

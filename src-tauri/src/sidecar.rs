@@ -1,7 +1,7 @@
 //! Starting and stopping the bundled `hic-commons` servers (the "sidecars").
 //!
 //! The app can run up to three at once, one per [`Kind`]: a node, a commons
-//! and a practice commons, each on its own port with its own data folder
+//! and a local commons, each on its own port with its own data folder
 //! (see [`crate::settings`]). [`Servers`] holds one [`Sidecar`] per kind.
 
 use std::path::PathBuf;
@@ -59,7 +59,7 @@ pub struct Servers {
     node: Sidecar,
     /// The commons' server.
     commons: Sidecar,
-    /// The practice commons' server.
+    /// The local commons' server (`practice` in code).
     practice: Sidecar,
 }
 
@@ -148,12 +148,18 @@ pub fn server_env(
             env.extend(lan.map(|url| ("HIC_BASE_URL", url)));
             env.extend(public.map(|url| ("HIC_ALSO_KNOWN_AS", url)));
         }
-        // Practice: only this computer can reach it, and its pages say so.
-        Kind::Practice => env.extend([
-            ("HIC_BIND", "127.0.0.1".to_string()),
-            ("HIC_BASE_URL", local_url(port)),
-            ("HIC_PRACTICE", "1".to_string()),
-        ]),
+        // A local commons: for a workshop, a class or a session between
+        // friends. Anyone on the same Wi-Fi reaches it at this computer's
+        // network address, and its pages show that address. Joining still
+        // needs a vouch (ADR 0011). With no network, only this computer can
+        // reach it, so it listens only here.
+        Kind::Practice => {
+            match lan {
+                Some(url) => env.push(("HIC_BASE_URL", url)),
+                None => env.extend([("HIC_BIND", "127.0.0.1".to_string()), ("HIC_BASE_URL", local_url(port))]),
+            }
+            env.push(("HIC_PRACTICE", "1".to_string()));
+        }
     }
     env
 }
@@ -169,7 +175,8 @@ fn spawn(
 ) -> Result<CommandChild, String> {
     let data_dir = data_dir_for(&cfg.base, kind);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
-    let lan = if kind == Kind::Commons { network::lan_url(port) } else { None };
+    // A commons or a local commons is reached over the Wi-Fi; a node isn't.
+    let lan = if kind == Kind::Node { None } else { network::lan_url(port) };
     let public = if kind == Kind::Commons { crate::settings::load(&cfg.base).0.public_address } else { None };
     let mut cmd = app
         .shell()
@@ -274,7 +281,7 @@ pub fn title_for(kind: Kind) -> String {
     let name = match kind {
         Kind::Node => "Node",
         Kind::Commons => "Commons",
-        Kind::Practice => "Practice commons",
+        Kind::Practice => "Local commons",
     };
     format!("Held in Common \u{2014} {name}")
 }
@@ -404,11 +411,29 @@ mod tests {
         assert!(!env_of(Kind::Node, 8080).contains_key("HIC_ALSO_KNOWN_AS"), "only a commons has one");
         assert!(!commons.contains_key("HIC_PRACTICE"));
 
-        let practice = env_of(Kind::Practice, 8082);
-        assert_eq!(practice["HIC_ROLE"], "commons");
-        assert_eq!(practice["HIC_BIND"], "127.0.0.1", "only this computer can reach a practice commons");
-        assert_eq!(practice["HIC_BASE_URL"], "http://127.0.0.1:8082");
-        assert_eq!(practice["HIC_PRACTICE"], "1");
-        assert_eq!(practice["HIC_INSTANCE"], "Name");
+        let local = env_of(Kind::Practice, 8082);
+        assert_eq!(local["HIC_ROLE"], "commons");
+        assert!(!local.contains_key("HIC_BIND"), "anyone on the same Wi-Fi can reach a local commons");
+        assert_eq!(local["HIC_BASE_URL"], "http://192.168.1.5:8081", "at this computer's network address");
+        assert_eq!(local["HIC_PRACTICE"], "1");
+        assert_eq!(local["HIC_INSTANCE"], "Name");
+        assert!(!local.contains_key("HIC_ALSO_KNOWN_AS"), "a local commons is not online");
+    }
+
+    #[test]
+    fn a_local_commons_without_a_network_listens_only_here() {
+        let env: std::collections::HashMap<&str, String> = server_env(
+            Kind::Practice,
+            8082,
+            "Name",
+            None,
+            &DefaultCommons::default(),
+            None,
+            Some("https://hic.tail.ts.net".into()),
+        )
+        .into_iter()
+        .collect();
+        assert_eq!(env["HIC_BIND"], "127.0.0.1");
+        assert_eq!(env["HIC_BASE_URL"], "http://127.0.0.1:8082");
     }
 }
