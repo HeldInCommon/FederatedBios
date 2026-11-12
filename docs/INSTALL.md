@@ -21,9 +21,12 @@ From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases
 | Your computer | Download |
 |---|---|
 | **macOS — Apple Silicon (M1–M4)** | `Held-In-Common-macOS-AppleSilicon.dmg` |
-| **Linux — Ubuntu / Debian** | the `.deb` file |
-| **Linux — any distro** | the `.AppImage` file |
-| **Linux — Fedora / RHEL** | the `.rpm` file |
+| **Linux — Ubuntu / Debian** | the `.deb` file: `_amd64` for x86, `_arm64` for ARM |
+| **Linux — any distro** | the `.AppImage` file: `_amd64` for x86, `_aarch64` for ARM |
+| **Linux — Fedora / RHEL** | the `.rpm` file: `x86_64` or `aarch64` |
+
+Not sure which? Run `uname -m`: `x86_64` is x86; `aarch64` is ARM (a DGX
+Spark, a Raspberry Pi 5).
 
 Windows and Intel Macs aren't supported by the app yet; use Docker (Part 4).
 
