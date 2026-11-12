@@ -1,4 +1,5 @@
-//! The steward view of a commons (decision record 0017).
+//! The steward view of a commons (decision records 0017 and 0023: it opens
+//! only with the steward key or the app's launch token).
 
 use crate::common::{closed_commons, get, person, post_form, post_json, send, session_from, share_of, steward_session};
 use axum::http::StatusCode;

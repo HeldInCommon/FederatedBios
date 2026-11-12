@@ -58,7 +58,6 @@
 
   /* No thin lines: an edge that must show is 2px; a divider is space. */
   --rule: 2px solid var(--ink);
-  --rule-soft: 0 solid transparent;
   --focus: 2px solid var(--pink);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --pulse: 2.1s; /* one beat of the loader */
@@ -425,7 +424,6 @@ h1 {
   gap: var(--space-1) var(--space-3);
   padding: 14px var(--space-4);
   background: var(--white);
-  border: var(--rule-soft);
   cursor: pointer;
 }
 

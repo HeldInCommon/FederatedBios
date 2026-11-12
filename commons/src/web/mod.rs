@@ -28,8 +28,6 @@ pub const AVATAR_JS: &str = include_str!("../../static/avatar.js");
 /// Keeps the "What travels with every copy" summary in step with the rights choices.
 pub const RIGHTS_JS: &str = include_str!("../../static/rights.js");
 
-/// Tells search engines to skip the forms. Profiles with the `commons` reach
-/// are marked `noindex` on the page itself.
 /// The eight quilt backgrounds, made by `scripts/make-quilts.py` and served at
 /// `/quilt/1.svg` … `/quilt/8.svg`. Each page shows one, chosen from its title
 /// by [`layout::quilt_for`].
@@ -55,6 +53,7 @@ pub fn quilt_svg(file: &str) -> Option<&'static str> {
 pub const LOGO_PNG: &[u8] = include_bytes!("../../static/logo.png");
 
 /// `/robots.txt`: asks search engines to skip the sign-in and sign-up pages.
+/// Profiles with the `commons` reach are marked `noindex` on the page itself.
 pub const ROBOTS_TXT: &str = "User-agent: *\nDisallow: /join\nDisallow: /login\nDisallow: /new\n";
 
 #[cfg(test)]
