@@ -52,7 +52,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     }
     for k in Kind::ALL {
         let text = match (k, saved.runs(k)) {
-            (_, true) => k.label().to_string(),
+            // Every server says where it is: "Your node (on this computer,
+            // only you)", "Thursday session (local commons, anyone on this Wi-Fi)".
+            (_, true) => format!("{} ({})", saved.shown_name(k), saved.where_is(k)),
             (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
             (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
             (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),
@@ -61,7 +63,10 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     }
     go.append(&PredefinedMenuItem::separator(app)?)?;
     for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
-        let text = format!("Rename {}\u{2026}", k.label().to_lowercase());
+        let text = match k {
+            Kind::Node => "Rename your node\u{2026}".to_string(),
+            _ => format!("Rename {}\u{2026}", saved.shown_name(k)),
+        };
         go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
     }
     // ADR 0024: the steward link isn't in the log, so the menu is where a
@@ -331,6 +336,9 @@ pub fn run() {
             app.manage(cfg);
             app.manage(Chosen(Mutex::new(saved)));
             app.manage(servers);
+            // The router can give this computer a new address; move a
+            // commons or local commons onto it and say so.
+            sidecar::watch_addresses(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())

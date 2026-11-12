@@ -16,7 +16,6 @@ use crate::handle;
 use crate::held_signals::{self, HeldSignals};
 use crate::keys::{self, verify_cid};
 use crate::model::{HandleRec, Profile, Reach, RemoteEntry, Tombstone, Version};
-use crate::web::layout::host_label;
 
 /// Who is sending a share: this node's public address and name.
 pub struct Sender<'a> {
@@ -375,7 +374,7 @@ pub fn withdraw_message(handle: &str, audience: &str, created_at: u64) -> String
 
 /// Build the signed withdrawal a node sends to a commons it shared to.
 pub fn build_withdraw(rec: &HandleRec, commons_url: &str, created_at: u64) -> Result<Value, &'static str> {
-    let audience = host_label(commons_url);
+    let audience = crate::config::commons_host(commons_url);
     let sig = keys::sign_message(&rec.ed_priv, withdraw_message(&rec.handle, &audience, created_at).as_bytes())?;
     Ok(json!({
         "type": "Withdraw",

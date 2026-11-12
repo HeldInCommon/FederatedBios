@@ -1,7 +1,11 @@
 # Builds the native node app and attaches installers to the release for this
-# version, v<version> (e.g. v0.4.0), creating it if needed. Run by hand it builds Linux by default; the Mac app is usually
-# released from a Mac with scripts/release-mac.sh (much faster). A pushed
-# node-app-v* tag builds both.
+# version, v<version> (e.g. v0.4.0), creating it if needed.
+#
+# A pushed node-app-v* tag builds Linux for both x86 (ubuntu-22.04) and ARM
+# (ubuntu-22.04-arm, e.g. the DGX Spark or a Raspberry Pi 5). The Mac app is
+# released from a Mac with scripts/release-mac.sh (faster, and signed with the
+# maintainer's own keychain), so a tag doesn't build it. Run by hand, choose
+# linux (both), macos or all.
 #
 # macOS builds are SIGNED with a Developer ID Application certificate and
 # NOTARIZED by Apple, so the .dmg opens normally (no "disk is damaged" step).
@@ -37,8 +41,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Run by hand: the platforms chosen (default Linux). A release tag: both.
-        os: ${{ fromJSON(github.event.inputs.platforms == 'macos' && '["macos-latest"]' || (github.event_name == 'push' || github.event.inputs.platforms == 'all') && '["macos-latest","ubuntu-22.04"]' || '["ubuntu-22.04"]') }}
+        # A release tag, or "linux" by hand: Linux on x86 and ARM. "macos" by
+        # hand: the Mac only. "all": everything.
+        os: ${{ fromJSON(github.event.inputs.platforms == 'macos' && '["macos-latest"]' || github.event.inputs.platforms == 'all' && '["macos-latest","ubuntu-22.04","ubuntu-22.04-arm"]' || '["ubuntu-22.04","ubuntu-22.04-arm"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +58,7 @@ jobs:
             src-tauri
           key: ${{ matrix.os }}
       - name: Linux deps
-        if: matrix.os == 'ubuntu-22.04'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
@@ -141,13 +146,16 @@ jobs:
             | Your computer | Download |
             |---|---|
             | macOS — Apple Silicon (M1–M4) | `Held-In-Common-macOS-AppleSilicon.dmg` |
-            | Linux — Ubuntu / Debian | `Held-In-Common-Linux.deb` |
-            | Linux — any distro | `Held-In-Common-Linux.AppImage` |
-            | Linux — Fedora / RHEL | `Held-In-Common-Linux.rpm` |
+            | Linux — Ubuntu / Debian, x86 | `…_amd64.deb` |
+            | Linux — Ubuntu / Debian, ARM (DGX Spark, Raspberry Pi 5) | `…_arm64.deb` |
+            | Linux — any distro | `…_amd64.AppImage` (x86) or `…_aarch64.AppImage` (ARM) |
+            | Linux — Fedora / RHEL | `….x86_64.rpm` or `….aarch64.rpm` |
+
+            Not sure which Linux file? Run `uname -m`: `x86_64` means x86, `aarch64` means ARM.
 
             - **macOS:** the app is signed and notarized by Apple. Open the `.dmg`, drag **Held In Common** into **Applications**, and open it.
-            - **Linux (.AppImage):** `chmod +x Held-In-Common-Linux.AppImage`, then run it. (Install `libfuse2` if it won't start.)
-            - **Linux (.deb):** `sudo apt install ./Held-In-Common-Linux.deb`, then launch **Held In Common**.
+            - **Linux (.AppImage):** `chmod +x` the file, then run it. (Install `libfuse2` if it won't start.)
+            - **Linux (.deb):** `sudo apt install ./<the .deb>`, then launch **Held In Common**.
             - Full guide: `docs/INSTALL.md`.
 
           prerelease: false

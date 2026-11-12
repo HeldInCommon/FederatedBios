@@ -27,7 +27,7 @@ pub fn read_key(data_dir: &Path) -> Result<String, String> {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err("Your commons hasn't made its steward link yet. Start the commons once, then try again.".into())
+            return Err("This commons hasn't made its steward link yet. Start the commons once, then try again.".into())
         }
         Err(e) => return Err(format!("Couldn't read the steward link: {e}")),
     };

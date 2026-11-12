@@ -28,7 +28,6 @@ use sha2::{Digest, Sha256};
 use crate::envelope::{self, Envelope, Signed};
 use crate::model::{Reach, RemoteEntry};
 use crate::story::{check_terms, is_story_id, HeldStory, Story, StoryTombstone, TEXT_MAX};
-use crate::web::layout::host_label;
 
 /// The `hic/v1` type of a story's card.
 pub const STORY_CARD: &str = "StoryCard";
@@ -102,7 +101,7 @@ pub fn card_for(story: &Story, commons_url: &str) -> Card {
         license: story.license.clone(),
         signals: story.signals.clone(),
         text_sha256: text_sha256(&story.text),
-        commons: host_label(commons_url),
+        commons: crate::config::commons_host(commons_url),
     }
 }
 
@@ -267,7 +266,7 @@ pub fn build_relay(
     answers: &[Answer],
     created_at: u64,
 ) -> Result<Value, String> {
-    let body = json!({ "commons": host_label(commons_url), "seq": seq, "answers": answers });
+    let body = json!({ "commons": crate::config::commons_host(commons_url), "seq": seq, "answers": answers });
     let signed = envelope::sign(Envelope::new(STORY_RELAY, author_pub, created_at, None, body), author_priv)?;
     Ok(json!({ "type": "StoryRelay", "schema": envelope::SCHEMA, "relay": signed }))
 }

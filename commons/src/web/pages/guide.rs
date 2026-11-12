@@ -1,4 +1,4 @@
-//! "Run your own commons": questions and answers for someone with a node who
+//! "Run a commons": questions and answers for someone with a node who
 //! is wondering about hosting a commons, and a way to try one safely.
 //!
 //! Inside the desktop app the page offers two buttons. They are `hic-app://`
@@ -28,7 +28,7 @@ const DOCKER_GUIDE: &str = "https://github.com/HeldInCommon/FederatedBios/blob/m
 pub fn run_a_commons(in_app: bool) -> Markup {
     html! {
         header class="intro" {
-            h1 { "Run your own commons" }
+            h1 { "Run a commons" }
             p class="lede" { "A shared directory for a workshop, a class or a collective, hosted by you." }
         }
         (try_it(in_app))
@@ -42,7 +42,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             (figure(JOIN_SVG, html! { "How someone gets listed: they share, wait on the commons' list, and are listed once a " strong { "member vouches" } " for them or the " strong { "steward approves" } " them." }))
 
             h2 class="section-h" { "Do I give up my node?" }
-            p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to your own commons, like anyone else would. Move between them from the " strong { "Go" } " menu or the buttons in the corner of the window." }
+            p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to the commons you run, like anyone else would. Move between them from the " strong { "Go" } " menu or the buttons in the corner of the window." }
             (figure(SIDE_BY_SIDE_SVG, html! { "One computer, up to three servers, each with its own folder: " strong { "your node" } ", " strong { "a commons" } " your node can share to like anyone else's, and a " strong { "local commons" } " for a workshop or a session, which anyone on this Wi-Fi can reach." }))
 
             h2 class="section-h" { "Where can people reach it?" }

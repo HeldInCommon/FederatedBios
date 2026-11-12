@@ -50,6 +50,10 @@ pub struct Sidecar {
     generation: AtomicU64,
     /// Automatic restarts since the last deliberate start.
     restarts: AtomicU32,
+    /// The network address it was started on (`http://10.0.0.5:8082`), for
+    /// a commons or local commons: the router can hand this computer a new
+    /// one, and [`watch_addresses`] moves the server when it does.
+    address: Mutex<Option<String>>,
 }
 
 /// One [`Sidecar`] per kind of server.
@@ -104,9 +108,21 @@ impl Sidecar {
         self.generation.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    /// Remember the running process.
-    fn set(&self, child: CommandChild) {
+    /// Remember the running process and the network address it was started
+    /// on.
+    fn set(&self, child: CommandChild, address: Option<String>) {
         *self.child.lock().unwrap() = Some(child);
+        *self.address.lock().unwrap() = address;
+    }
+
+    /// Is a server running in this slot?
+    fn is_running(&self) -> bool {
+        self.child.lock().unwrap().is_some()
+    }
+
+    /// The network address it was started on, if any.
+    fn address(&self) -> Option<String> {
+        self.address.lock().unwrap().clone()
     }
 
     /// Stop the server if it is running. It won't be restarted automatically.
@@ -164,7 +180,9 @@ pub fn server_env(
     env
 }
 
-/// Start the server of `kind` on `port`, logging its output.
+/// Start the server of `kind` on `port`, logging its output. Returns the
+/// process and, for a commons or local commons, the network address it was
+/// given (`None` when this computer has no network).
 fn spawn(
     app: &tauri::AppHandle,
     cfg: &AppConfig,
@@ -172,7 +190,7 @@ fn spawn(
     port: u16,
     name: &str,
     generation: u64,
-) -> Result<CommandChild, String> {
+) -> Result<(CommandChild, Option<String>), String> {
     let data_dir = data_dir_for(&cfg.base, kind);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
     // A commons or a local commons is reached over the Wi-Fi; a node isn't.
@@ -184,7 +202,9 @@ fn spawn(
         .map_err(|e| format!("could not locate the server binary: {e}"))?
         .env("HIC_DATA", data_dir.to_string_lossy().to_string())
         .env("HIC_LAUNCH_TOKEN", &cfg.launch_token);
-    for (k, v) in server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan, public) {
+    for (k, v) in
+        server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan.clone(), public)
+    {
         cmd = cmd.env(k, v);
     }
 
@@ -216,7 +236,7 @@ fn spawn(
             }
         }
     });
-    Ok(child)
+    Ok((child, lan))
 }
 
 /// If the server that just stopped should come back (see [`should_restart`]),
@@ -238,8 +258,71 @@ fn restart_after_crash(app: &tauri::AppHandle, kind: Kind, port: u16, name: &str
         let sc = servers.get(kind);
         let generation = sc.begin(false);
         match spawn(&app, &cfg, kind, port, &name, generation) {
-            Ok(child) => sc.set(child),
+            Ok((child, address)) => sc.set(child, address),
             Err(e) => log::error!("couldn't restart the server: {e}"),
+        }
+    });
+}
+
+/// Has the network address a commons was started on changed? Returns the new
+/// address to restart on, or `None` to leave it. Pure.
+///
+/// - The router gave this computer a new address: move to it.
+/// - It started with no network and now has one: move to it, so people can
+///   reach it.
+/// - The network went away: leave it running; it moves when one comes back.
+pub fn moved_to(started_on: Option<&str>, now: Option<&str>) -> Option<String> {
+    match (started_on, now) {
+        (Some(was), Some(is)) if was != is => Some(is.to_string()),
+        (None, Some(is)) => Some(is.to_string()),
+        _ => None,
+    }
+}
+
+/// How often [`watch_addresses`] looks.
+const ADDRESS_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Every minute, check the network address of each commons and local commons
+/// this computer runs. When the router has given the computer a new one,
+/// restart that server on it (its data stays), and tell the person with a
+/// notification and in the log, so they can give the room the new address.
+/// Runs for as long as the app does.
+pub fn watch_addresses(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(ADDRESS_CHECK);
+        let (Some(servers), Some(cfg), Some(chosen), Some(shown)) = (
+            app.try_state::<Servers>(),
+            app.try_state::<AppConfig>(),
+            app.try_state::<crate::commands::Chosen>(),
+            app.try_state::<crate::commands::Shown>(),
+        ) else {
+            continue;
+        };
+        let saved = chosen.0.lock().unwrap().clone();
+        for kind in [Kind::Commons, Kind::Practice] {
+            let sc = servers.get(kind);
+            if !saved.runs(kind) || !sc.is_running() {
+                continue;
+            }
+            let port = saved.port_of(kind);
+            let Some(new) = moved_to(sc.address().as_deref(), network::lan_url(port).as_deref()) else { continue };
+            log::info!("{} moved to {new}: this computer has a new network address", kind.key());
+            // Restart on the new address, and keep showing it if the window was.
+            let show = network::local_port(&shown.0.lock().unwrap()).is_some_and(|p| p == port);
+            sc.stop();
+            crate::commands::wait_until_free(port, &cfg.launch_token);
+            if let Err(e) = start(&app, &cfg, &servers, &saved, kind, show) {
+                log::error!("couldn't restart {} on its new address: {e}", kind.key());
+                continue;
+            }
+            let text = format!(
+                "{} has a new address: {new}. Your Wi-Fi gave this computer a new one. Tell people who share to it.",
+                saved.shown_name(kind)
+            );
+            use tauri_plugin_notification::NotificationExt;
+            if let Err(e) = app.notification().builder().title("Held in Common").body(&text).show() {
+                log::warn!("couldn't show a notification: {e}");
+            }
         }
     });
 }
@@ -339,7 +422,8 @@ pub fn start(
     let port = saved.port_of(kind);
     let sc = servers.get(kind);
     let generation = sc.begin(true);
-    sc.set(spawn(app, cfg, kind, port, name, generation)?);
+    let (child, address) = spawn(app, cfg, kind, port, name, generation)?;
+    sc.set(child, address);
     if show {
         open_when_up(app.clone(), cfg.launch_token.clone(), kind, port);
     }
@@ -352,6 +436,16 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_commons_moves_when_the_router_gives_a_new_address() {
+        let (a, b) = ("http://10.0.0.5:8082", "http://10.0.0.9:8082");
+        assert_eq!(moved_to(Some(a), Some(b)), Some(b.to_string()), "a new address: move");
+        assert_eq!(moved_to(Some(a), Some(a)), None, "the same: leave it");
+        assert_eq!(moved_to(None, Some(b)), Some(b.to_string()), "the network came back: move onto it");
+        assert_eq!(moved_to(Some(a), None), None, "the network went away: leave it running");
+        assert_eq!(moved_to(None, None), None);
+    }
 
     #[test]
     fn a_commons_opens_in_the_steward_view() {

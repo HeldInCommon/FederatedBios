@@ -1,4 +1,4 @@
-//! "Run your own commons" (the guide on a node), the local commons, and
+//! "Run a commons" (the guide on a node), the local commons, and
 //! separate sign-in cookies for servers on the same computer.
 
 use axum::http::{header, StatusCode};
@@ -11,7 +11,7 @@ async fn a_node_has_the_guide_and_a_commons_does_not() {
     let (node, _) = server(Role::Node);
     let r = send(&node, get("/run-a-commons", None)).await;
     assert_eq!(r.status, StatusCode::OK);
-    assert!(r.text.contains("Run your own commons"));
+    assert!(r.text.contains("Run a commons"));
     assert!(r.text.contains("What&#39;s a local commons?") || r.text.contains("What's a local commons?"));
     // Outside the app there is nothing to press: directions instead.
     assert!(!r.text.contains("hic-app://"));

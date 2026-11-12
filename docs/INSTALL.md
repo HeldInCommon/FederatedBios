@@ -21,9 +21,12 @@ From the releases page: **https://github.com/HeldInCommon/FederatedBios/releases
 | Your computer | Download |
 |---|---|
 | **macOS — Apple Silicon (M1–M4)** | `Held-In-Common-macOS-AppleSilicon.dmg` |
-| **Linux — Ubuntu / Debian** | the `.deb` file |
-| **Linux — any distro** | the `.AppImage` file |
-| **Linux — Fedora / RHEL** | the `.rpm` file |
+| **Linux — Ubuntu / Debian** | the `.deb` file: `_amd64` for x86, `_arm64` for ARM |
+| **Linux — any distro** | the `.AppImage` file: `_amd64` for x86, `_aarch64` for ARM |
+| **Linux — Fedora / RHEL** | the `.rpm` file: `x86_64` or `aarch64` |
+
+Not sure which? Run `uname -m`: `x86_64` is x86; `aarch64` is ARM (a DGX
+Spark, a Raspberry Pi 5).
 
 Windows and Intel Macs aren't supported by the app yet; use Docker (Part 4).
 
@@ -113,11 +116,11 @@ Members-only profiles are never shared: they stay encrypted on your computer.
    **Email this invite** button.
 
 **Already have a node?** You don't need a second computer. Choose
-**Go → Set up a commons…** (or the button on **Run your own commons**, linked
+**Go → Set up a commons…** (or the button on **Run a commons**, linked
 at the bottom of every node page). The commons runs beside your node, and the
 buttons in the corner of the window move between them. **Hosting a commons
 and want your own profile in it?** Choose **Go → Add your own node…**, then
-share to your commons like anyone else.
+share to that commons like anyone else.
 
 **Running a workshop?** Members can write a short **story** on their node
 (**Stories → Write a story**; the prompt is "Listen to your street for a

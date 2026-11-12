@@ -22,5 +22,5 @@ pub async fn run_a_commons(State(st): State<Shared>, headers: HeaderMap) -> Resp
         return not_found(&st.site, None);
     }
     let me = session(&st, &headers).map(|s| s.handle);
-    render(&st.site, Page::new("Run your own commons", me.as_deref(), pages::run_a_commons(st.site.in_app)))
+    render(&st.site, Page::new("Run a commons", me.as_deref(), pages::run_a_commons(st.site.in_app)))
 }

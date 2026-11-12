@@ -82,12 +82,25 @@ impl Kind {
         Kind::ALL.into_iter().find(|k| k.key() == s)
     }
 
-    /// How the app's buttons and menus name it.
+    /// What kind of server it is, as a label. Never "your commons": a
+    /// commons belongs to its community, not to the computer that hosts it.
+    /// Where a commons has a name, the app shows that instead
+    /// ([`Saved::shown_name`]).
     pub fn label(self) -> &'static str {
         match self {
             Kind::Node => "Your node",
-            Kind::Commons => "Your commons",
+            Kind::Commons => "Commons",
             Kind::Practice => PRACTICE_NAME,
+        }
+    }
+
+    /// The kind with "a", for sentences: "a node", "a commons", "a local
+    /// commons".
+    pub fn a_kind(self) -> &'static str {
+        match self {
+            Kind::Node => "a node",
+            Kind::Commons => "a commons",
+            Kind::Practice => "a local commons",
         }
     }
 }
@@ -136,6 +149,29 @@ impl Saved {
             Kind::Practice => self.practice.then(|| self.practice_name.as_deref().unwrap_or(PRACTICE_NAME)),
             k if self.first() == Some(k) => self.name.as_deref(),
             _ => self.other_name.as_deref().filter(|_| self.ready()),
+        }
+    }
+
+    /// How the app's menu and buttons show `kind`: "Your node" for the node
+    /// (it is the person's own), and a commons by its own name ("Held in
+    /// Common Collective Commons"), falling back to the kind.
+    pub fn shown_name(&self, kind: Kind) -> String {
+        match kind {
+            Kind::Node => kind.label().to_string(),
+            _ => self.name_of(kind).unwrap_or(kind.label()).to_string(),
+        }
+    }
+
+    /// Where `kind` is and who can reach it, in a few words, so the app's
+    /// buttons and menu never leave anyone guessing: "on this computer, only
+    /// you", "local commons, anyone on this Wi-Fi", "online commons, hosted
+    /// on this computer".
+    pub fn where_is(&self, kind: Kind) -> &'static str {
+        match kind {
+            Kind::Node => "on this computer, only you",
+            Kind::Practice => "local commons, anyone on this Wi-Fi",
+            Kind::Commons if self.public_address.is_some() => "online commons, hosted on this computer",
+            Kind::Commons => "commons on this computer, anyone on this Wi-Fi",
         }
     }
 
@@ -437,6 +473,29 @@ mod tests {
         assert!(clean_name(&"x".repeat(NAME_MAX + 1)).is_err());
         assert!(clean_name("bad\u{7}name").is_err());
         assert_eq!(clean_name("Atelier é 🎛").unwrap(), "Atelier é 🎛");
+    }
+
+    #[test]
+    fn the_app_never_calls_a_commons_yours() {
+        let s = Saved {
+            role: Some("commons".into()),
+            name: Some("Held in Common Collective Commons".into()),
+            other_name: Some("Laptop".into()),
+            practice: true,
+            ..Default::default()
+        };
+        assert_eq!(s.shown_name(Kind::Commons), "Held in Common Collective Commons");
+        assert_eq!(s.shown_name(Kind::Node), "Your node", "the node is the person's own");
+        assert_eq!(s.shown_name(Kind::Practice), PRACTICE_NAME);
+        assert_eq!(s.where_is(Kind::Node), "on this computer, only you");
+        assert_eq!(s.where_is(Kind::Practice), "local commons, anyone on this Wi-Fi");
+        assert_eq!(s.where_is(Kind::Commons), "commons on this computer, anyone on this Wi-Fi");
+        let online = Saved { public_address: Some("https://hic.tail.ts.net".into()), ..s.clone() };
+        assert_eq!(online.where_is(Kind::Commons), "online commons, hosted on this computer");
+        for k in Kind::ALL {
+            assert!(!k.label().to_lowercase().contains("your commons"), "{k:?}");
+            assert!(!s.shown_name(k).to_lowercase().contains("your commons"), "{k:?}");
+        }
     }
 
     #[test]

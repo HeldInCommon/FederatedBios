@@ -46,10 +46,12 @@ new one is out, delete the previous one (`gh release delete vA.B.C --cleanup-tag
    `vX.Y.Z` release (creating it, marked Latest). Then edit that release's
    notes on GitHub to say what's new. `--no-upload` stops before uploading. It needs the certificate in
    your keychain and a `notarytool` profile (see the script's header).
-3. **Release Linux on GitHub:** Actions → **desktop-app** → Run workflow on
-   `main` (it builds Linux by default; choose `macos` or `all` to have GitHub
-   build the Mac app too, which is slower). It uploads to the `vX.Y.Z`
-   release. A pushed `node-app-vX.Y.Z` tag builds both.
+3. **Release Linux on GitHub:** push a `node-app-vX.Y.Z` tag on `main`
+   (`git tag -a node-app-vX.Y.Z -m "Held In Common X.Y.Z" && git push origin
+   node-app-vX.Y.Z`). The **desktop-app** workflow builds Linux for **x86 and
+   ARM** (`.deb`, `.rpm`, `.AppImage` each) and uploads them to the `vX.Y.Z`
+   release. Run by hand (Actions → desktop-app → Run workflow) it does the
+   same, or choose `macos` or `all` to have GitHub build the Mac app too.
 4. **Check** the release page, and download the `.dmg` on another Mac to
    confirm it opens without warnings.
 

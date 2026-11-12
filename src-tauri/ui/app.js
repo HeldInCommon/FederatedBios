@@ -120,8 +120,8 @@ const NAMING_TEXT = {
 };
 
 const ADD_NOTE = {
-  node: 'Your node runs beside your commons, with its own folder and keys. Share your profile from it to your commons, like anyone else would.',
-  commons: 'Your commons runs beside your node. Your node, its keys and your sign-in stay as they are.',
+  node: 'Your node runs beside the commons on this computer, with its own folder and keys. Share your profile from it to the commons, like anyone else would.',
+  commons: 'The commons runs beside your node. Your node, its keys and your sign-in stay as they are.',
 };
 
 function choose(role){
@@ -146,7 +146,7 @@ function showNaming(role, mode, current){
       reach.append('People on the same Wi-Fi or network will share to ');
       const c = document.createElement('code'); c.textContent = lanUrl; reach.append(c, '.');
     } else {
-      reach.textContent = "We couldn't find this computer's network address. Connect to Wi-Fi first, or people won't be able to reach your commons.";
+      reach.textContent = "We couldn't find this computer's network address. Connect to Wi-Fi first, or people won't be able to reach the commons.";
     }
   }
   $('name-go').textContent = t.go;

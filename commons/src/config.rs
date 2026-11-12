@@ -73,6 +73,22 @@ fn host_of(url: &str) -> String {
     rest.split('/').next().unwrap_or(rest).to_string()
 }
 
+/// The host a signed message names a commons by: its address without the
+/// scheme or a trailing slash (`hic.example.ts.net`, `10.0.0.5:8081`).
+///
+/// Used for everything that is **signed** (invites, vouches, withdrawals,
+/// waiting-list requests, "Only while I'm here" cards and polls), and must
+/// match [`Config::own_hosts`] on the commons. Never a display name or a
+/// substituted address: for what people read, use
+/// `web::layout::host_label`. Pure.
+pub fn commons_host(url: &str) -> String {
+    url.strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url)
+        .trim_end_matches('/')
+        .to_string()
+}
+
 /// The sign-in cookie's name unless `HIC_SESSION_COOKIE` says otherwise.
 pub const DEFAULT_SESSION_COOKIE: &str = "hic_session";
 
@@ -242,6 +258,13 @@ mod tests {
         assert_eq!(cfg(&[("HIC_SESSION_COOKIE", " hic_session_8081 ")]).session_cookie, "hic_session_8081");
         assert_eq!(cfg(&[("HIC_SESSION_COOKIE", "bad; name")]).session_cookie, "hic_session");
         assert_eq!(cfg(&[("HIC_SESSION_COOKIE", "")]).session_cookie, "hic_session");
+    }
+
+    #[test]
+    fn signed_messages_name_a_commons_by_its_exact_host() {
+        assert_eq!(commons_host("https://hic.example.ts.net/"), "hic.example.ts.net");
+        assert_eq!(commons_host("http://127.0.0.1:8082"), "127.0.0.1:8082", "never swapped for a network address");
+        assert_eq!(commons_host("http://10.0.0.5:8081"), "10.0.0.5:8081");
     }
 
     #[test]
