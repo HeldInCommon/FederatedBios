@@ -58,6 +58,11 @@ pub async fn join_submit(State(st): State<Shared>, body: String) -> Response {
     if !passphrase::long_enough(&pass) {
         return error_page(&st.site, "Please choose a passphrase of at least 8 characters.");
     }
+    // Checked before anything is saved: a mistyped passphrase would lock the
+    // member out of a handle they just made.
+    if pass != f.one("passphrase_again") {
+        return error_page(&st.site, "The two passphrases don't match, so nothing was created. Please type it again.");
+    }
     // Handles are unique per commons. Ask the default commons first, so a clash
     // shows now rather than at the first share. If it can't be reached, carry
     // on: the commons still refuses a clash when the profile is shared.

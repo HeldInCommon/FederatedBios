@@ -33,7 +33,7 @@ printf '%s' "$SPAGE" | grep -q "hic-founding-" && ok "steward view shows the fou
 SCSRF=$(printf '%s' "$SPAGE" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8090/health >/dev/null && ok "node up" || no "node failed to start"
 
-SIGNUP=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" | tr -d '\r')
+SIGNUP=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret1" --data-urlencode "passphrase_again=supersecret1" | tr -d '\r')
 SID=$(printf '%s\n' "$SIGNUP" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 # Sign-up shows the recovery code once (decision record 0010); keep it for later.
 RCODE=$(printf '%s\n' "$SIGNUP" | grep -oE '[0-9a-f]{8}(-[0-9a-f]{8}){7}' | head -1)
@@ -55,7 +55,7 @@ curl -s http://localhost:8091/api/directory | grep -q "tega" && no "tega wrongly
 # gated (HIC_ROLE=commons).
 curl -s http://localhost:8091/join | grep -qi "shared commons" && ok "commons /join shows the gate page" || no "commons /join not gated"
 curl -s http://localhost:8091/login | grep -qi "shared commons" && ok "commons /login shows the gate page" || no "commons /login not gated"
-GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=sneak" --data-urlencode "display_name=Sneak" --data-urlencode "passphrase=supersecret9" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+GSID=$(curl -is -X POST http://localhost:8091/join --data-urlencode "handle=sneak" --data-urlencode "display_name=Sneak" --data-urlencode "passphrase=supersecret9" --data-urlencode "passphrase_again=supersecret9" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 [ -z "$GSID" ] && ok "commons /join mints no identity" || no "commons /join created a session"
 # ...while the node still allows normal sign-up (proven by @tega above).
 curl -s http://localhost:8090/join | grep -qi "join the commons" && ok "node /join still allows sign-up" || no "node /join wrongly gated"
@@ -80,7 +80,7 @@ curl -s http://localhost:8091/ | grep -q "Nodes share to" && ok "commons banner 
 mkdir -p "$T/impostor"
 HIC_DATA="$T/impostor" PORT=8092 HIC_INSTANCE="Impostor node" HIC_BASE_URL=http://localhost:8092 "$BIN" >"$T/impostor.log" 2>&1 & IPID=$!
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8092/health >/dev/null || no "impostor node failed to start"
-ISID=$(curl -is -X POST http://localhost:8092/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret3" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+ISID=$(curl -is -X POST http://localhost:8092/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret3" --data-urlencode "passphrase_again=supersecret3" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 ICSRF=$(curl -s http://localhost:8092/new -H "Cookie: hic_session=$ISID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -s -o /dev/null -X POST http://localhost:8092/publish -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Definitely the real one." --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
 curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "already used on localhost:8091" && ok "same handle from another node + key refused (409)" || no "impostor @tega was not refused"
@@ -94,7 +94,7 @@ curl -s http://localhost:8091/api/handle/nobody_yet | grep -q '"available":true'
 mkdir -p "$T/node3"
 HIC_DATA="$T/node3" PORT=8093 HIC_ROLE=node HIC_INSTANCE="Third node" HIC_BASE_URL=http://localhost:8093 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >"$T/node3.log" 2>&1 & N3PID=$!
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8093/health >/dev/null || no "third node failed to start"
-curl -s -X POST http://localhost:8093/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega" --data-urlencode "passphrase=supersecret4" | grep -q "already used on localhost:8091" && ok "sign-up refused when default commons has the handle" || no "sign-up allowed a handle taken on the default commons"
+curl -s -X POST http://localhost:8093/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega" --data-urlencode "passphrase=supersecret4" --data-urlencode "passphrase_again=supersecret4" | grep -q "already used on localhost:8091" && ok "sign-up refused when default commons has the handle" || no "sign-up allowed a handle taken on the default commons"
 [ -e "$T/node3/handles/tega.json" ] && no "refused sign-up still minted @tega" || ok "refused sign-up minted no identity"
 # ...but the same handle may live on a different commons (one key per handle per commons).
 mkdir -p "$T/commons2"
@@ -127,7 +127,7 @@ sed 's/environmental/TAMPERED/' "$T/cap.json" > "$T/tamper.json"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/tamper.json")" = "400" ] && ok "tampered content rejected (400)" || no "tamper not 400"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary 'not json')" = "400" ] && ok "garbage rejected (400)" || no "garbage not 400"
 
-SID2=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=mo" --data-urlencode "display_name=Mo Secret" --data-urlencode "passphrase=supersecret2" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+SID2=$(curl -is -X POST http://localhost:8090/join --data-urlencode "handle=mo" --data-urlencode "display_name=Mo Secret" --data-urlencode "passphrase=supersecret2" --data-urlencode "passphrase_again=supersecret2" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 CSRF2=$(curl -s http://localhost:8090/new -H "Cookie: hic_session=$SID2" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -s -o /dev/null -X POST http://localhost:8090/publish -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "name=Mo Secret" --data-urlencode "bio=Private." --data-urlencode "visibility=members" --data-urlencode "license=cc-by"
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID2" --data-urlencode "handle=mo" --data-urlencode "csrf=$CSRF2" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "never shared\|stay on your node" && ok "members-only share blocked on node" || no "members-only not blocked"
@@ -135,7 +135,7 @@ curl -s http://localhost:8091/ | grep -qi 'Mo Secret\|@mo' && no "members handle
 
 # Vouching (ADR 0011): a newcomer without an invite waits; a member vouches for
 # them from their own node; then they are listed.
-NSID=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=newbie" --data-urlencode "display_name=New Person" --data-urlencode "passphrase=supersecret5" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+NSID=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=newbie" --data-urlencode "display_name=New Person" --data-urlencode "passphrase=supersecret5" --data-urlencode "passphrase_again=supersecret5" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 NCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$NSID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_session=$NSID" --data-urlencode "handle=newbie" --data-urlencode "csrf=$NCSRF" --data-urlencode "name=New Person" --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
 curl -s -X POST http://localhost:8093/share -H "Cookie: hic_session=$NSID" --data-urlencode "handle=newbie" --data-urlencode "csrf=$NCSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Waiting for a vouch" && ok "newcomer without an invite waits for a vouch" || no "newcomer not put on the pending list"
@@ -146,7 +146,7 @@ grep -rq '"newbie"' "$T/commons/remote/" 2>/dev/null && ok "newcomer listed afte
 curl -s -X POST http://localhost:8090/invite -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Invite code" && ok "member can make an invite code" || no "invite code page failed"
 
 # The steward approves someone waiting (ADR 0017).
-R=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=walker" --data-urlencode "display_name=Walker" --data-urlencode "passphrase=supersecret6" | tr -d '\r'); WSID=$(printf '%s\n' "$R" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+R=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=walker" --data-urlencode "display_name=Walker" --data-urlencode "passphrase=supersecret6" --data-urlencode "passphrase_again=supersecret6" | tr -d '\r'); WSID=$(printf '%s\n' "$R" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 WCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$WSID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "name=Walker" --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
 curl -s -o /dev/null -X POST http://localhost:8093/share -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091"

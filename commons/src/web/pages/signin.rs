@@ -36,6 +36,12 @@ pub fn join_form(signed_in_as: Option<&str>) -> Markup {
                 input id="passphrase" name="passphrase" type="password" minlength="8" maxlength="200" placeholder="At least 8 characters" required;
                 p class="hint" { "You'll use this to sign in and to publish. Choose something you'll remember — we store only a salted hash and can't recover it." }
             }
+            // Typed twice: a typo here would lock the member out, since there's
+            // no other way to learn what the passphrase was.
+            div class="field" {
+                label class="field-label" for="passphrase_again" { "Passphrase again" }
+                input id="passphrase_again" name="passphrase_again" type="password" minlength="8" maxlength="200" required;
+            }
             div class="actions" { button class="primary" type="submit" { "Create handle" } }
         }
         p class="hint" { "Moving to a new computer? " a href="/restore" { "Restore from a backup" } "." }
