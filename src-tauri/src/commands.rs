@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager};
 use crate::network::{self, Probe};
 use crate::settings::{self, clean_name, valid_role, Kind, Saved};
 use crate::sidecar::{self, open_url, AppConfig, Servers};
+use crate::steward;
 
 /// The label of the small window used to name, add, rename or remove a
 /// server (opened from the Go menu or a `hic-app://` link).
@@ -135,6 +136,35 @@ pub fn open_setup(app: &AppHandle, query: &str, title: &str) {
 }
 
 // ---- commands for the app's own screens ------------------------------------
+
+/// The steward links for this computer's commons, one per address it answers
+/// to (public first, then the room address), for the setup window's
+/// "Steward link" screen (Go → Show steward link…). Only reads. ADR 0024:
+/// only that window may ask, so no page shown in the main window can read
+/// the key, even one of this computer's own servers.
+#[tauri::command]
+pub fn steward_links(
+    window: tauri::WebviewWindow,
+    cfg: tauri::State<'_, AppConfig>,
+    chosen: tauri::State<'_, Chosen>,
+) -> Result<Vec<String>, String> {
+    if window.label() != SETUP_WINDOW {
+        return Err("Open the steward link from the Go menu.".into());
+    }
+    let saved = chosen.0.lock().unwrap().clone();
+    if !saved.runs(Kind::Commons) {
+        return Err("This computer doesn't run a commons.".into());
+    }
+    let key = steward::read_key(&settings::data_dir_for(&cfg.base, Kind::Commons))?;
+    // The same addresses the commons was started with (sidecar::spawn).
+    let public = settings::load(&cfg.base).0.public_address;
+    let room = network::lan_url(saved.port_of(Kind::Commons));
+    let addresses: Vec<String> = public.into_iter().chain(room).collect();
+    if addresses.is_empty() {
+        return Err("We couldn't find this computer's network address. Connect to Wi-Fi, then try again.".into());
+    }
+    Ok(steward::links(&key, &addresses))
+}
 
 /// Is *our* server of `which` kind (default: the first-launch role)
 /// answering? (Not just "is the port open": see [`crate::network`].) The

@@ -47,6 +47,13 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
                     (editing.map(|s| s.text.as_str()).unwrap_or(""))
                 }
                 p class="hint" { "As long as you like, up to 12,000 characters." }
+                // Links are found when the story is shown (crate::text_links);
+                // what's saved and signed stays plain text.
+                p class="hint" {
+                    "To add a link, paste a web address (https://\u{2026}), or write "
+                    code { "[some words](https://\u{2026})" }
+                    " to make some words into a link."
+                }
             }
             div class="actions" {
                 button class="btn-action" type="submit" { (button) }
@@ -104,6 +111,7 @@ mod tests {
         let new = write_form("ada", "c", None).into_string();
         assert!(new.contains("Listen to your street") && new.contains("Next: choose who can see it"));
         assert!(!new.contains("name=\"visibility\""), "rights come in step two");
+        assert!(new.contains("To add a link") && new.contains("[some words](https://"), "how to add a link");
         let edit = write_form("ada", "c", Some(&story())).into_string();
         assert!(edit.contains("value=\"Night bus\"") && edit.contains("action=\"/story/0123456789abcdef/edit\""));
     }

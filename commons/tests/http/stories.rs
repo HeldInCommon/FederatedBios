@@ -250,3 +250,25 @@ async fn withdrawals_from_a_node_on_the_commons_own_computer_are_accepted() {
     let other = story::build_withdraw(&ada.ed_pub, &ada.ed_priv, ID, "http://127.0.0.1:9999", 160).unwrap();
     assert_eq!(send(&commons, post_json("/inbox", &other)).await.status, StatusCode::BAD_REQUEST);
 }
+
+/// Links written in a story's text become links when a commons shows it,
+/// only to `http` and `https`, and its stored copy stays plain text.
+#[tokio::test]
+async fn links_in_a_shared_story_are_shown_as_safe_links() {
+    let (commons, store, ada) = commons_with_ada().await;
+    let text = "Hear [the bus](https://example.org/38) at https://example.org/stop.\n[x](javascript:alert(1))";
+    let s = story::new_story(ID, "ada", "Night bus", text, "public", "cc-by", &[]).unwrap();
+    let msg = story::share_message(&story::sign(&s, &ada.ed_pub, &ada.ed_priv, 100).unwrap());
+    assert_eq!(send(&commons, post_json("/inbox", &msg)).await.status, StatusCode::OK);
+
+    let kid = hic_commons::keys::keyid(&ada.ed_pub);
+    let page = send(&commons, get(&format!("/stories/{kid}/{ID}"), None)).await.text;
+    assert!(page.contains(r#"<a href="https://example.org/38" rel="nofollow ugc noopener">the bus</a>"#));
+    assert!(page
+        .contains(r#"<a href="https://example.org/stop" rel="nofollow ugc noopener">https://example.org/stop</a>."#));
+    assert!(!page.contains("href=\"javascript:"), "never a javascript: link");
+    let list = send(&commons, get("/stories", None)).await.text;
+    assert!(list.contains("Hear the bus at https://example.org/stop."), "the preview shows the words");
+    let held = store.held_story(&kid, ID).unwrap().unwrap();
+    assert_eq!(held.story.text, text, "what's kept is the signed plain text");
+}

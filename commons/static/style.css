@@ -2156,7 +2156,11 @@ a.rail-foot {
   color: var(--accent);
 }
 
-.share-actions {
+/* A row of buttons: in a share card, and at the foot of a story's side
+   panel ("Change its terms"; a profile and all stories). As a row, each
+   button keeps its own width instead of stretching across the panel. */
+.share-actions,
+.side-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);

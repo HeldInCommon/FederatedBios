@@ -12,6 +12,7 @@
 //! | [`settings`] | what this computer runs, the names, ports and data folders (`app.json`) |
 //! | [`network`] | is *our* server answering; this computer's network address |
 //! | [`sidecar`] | starting and stopping the server processes |
+//! | [`steward`] | the commons' steward link: hidden in the log, shown from the Go menu (pure parts) |
 //! | [`links`] | `hic-app://` links and the switcher between servers (pure) |
 //! | [`commands`] | what the app's screens (`ui/app.js`), the menu and links can ask for |
 //!
@@ -22,6 +23,7 @@ pub mod links;
 pub mod network;
 pub mod settings;
 pub mod sidecar;
+pub mod steward;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -33,8 +35,8 @@ use settings::{Kind, Saved};
 use sidecar::{AppConfig, DefaultCommons, Servers};
 
 /// The Go menu: show each server this computer runs, or set it up; remove
-/// the practice commons; rename the node, commons or practice commons; and,
-/// always, open the
+/// the practice commons; rename the node, commons or practice commons; show
+/// the commons' steward link; and, always, open the
 /// project's site. Rebuilt whenever what the computer runs changes
 /// ([`refresh_menu`]). Before first launch's choice it holds only the site.
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> tauri::Result<tauri::menu::Menu<R>> {
@@ -61,6 +63,11 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
         let text = format!("Rename {}\u{2026}", k.label().to_lowercase());
         go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
+    }
+    // ADR 0024: the steward link isn't in the log, so the menu is where a
+    // commons' steward finds it.
+    if saved.runs(Kind::Commons) {
+        go.append(&MenuItem::with_id(app, "steward-link", "Show steward link\u{2026}", true, None::<&str>)?)?;
     }
     if saved.practice {
         go.append(&MenuItem::with_id(app, "remove-practice", "Remove practice commons\u{2026}", true, None::<&str>)?)?;
@@ -96,6 +103,9 @@ fn on_menu(app: &tauri::AppHandle, id: &str) {
         commands::open(app, k)
     } else if let Some(k) = id.strip_prefix("rename:").and_then(Kind::parse) {
         commands::open_setup(app, &format!("do=rename&role={}", k.key()), "Rename");
+        Ok(())
+    } else if id == "steward-link" {
+        commands::open_setup(app, "do=steward-link", "Steward link");
         Ok(())
     } else if id == "remove-practice" {
         commands::open_setup(app, "do=remove-practice", "Remove practice commons");
@@ -269,7 +279,8 @@ pub fn run() {
             commands::set_name,
             commands::close_setup,
             commands::restart_node,
-            commands::remove_practice_now
+            commands::remove_practice_now,
+            commands::steward_links
         ])
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished {
@@ -290,8 +301,9 @@ pub fn run() {
                     log::warn!("couldn't update app.json: {e}");
                 }
             }
-            // Before any server starts: the log will hold a commons' steward
-            // link and founding invite, so only this user may read it (ADR 0023).
+            // Before any server starts: the log will hold a commons' founding
+            // invite, so only this user may read it (ADR 0023). The steward
+            // key is hidden from it altogether (ADR 0024).
             match app.path().app_log_dir() {
                 Ok(dir) => {
                     if let Err(e) = settings::make_private(&dir) {

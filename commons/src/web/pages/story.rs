@@ -8,6 +8,7 @@ use super::parts::{ago, terms_panel, words};
 use crate::keys::keyid;
 use crate::model::Reach;
 use crate::story::{HeldStory, OwnStory, Story};
+use crate::text_links::{find_links, Piece};
 use crate::web::layout::host_label;
 
 /// What just happened to a story, confirmed at the top of its page.
@@ -41,7 +42,7 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
             section class="flash flash-withdrawn" role="status" {
                 p class="flash-label" { "Withdrawn" }
                 p { strong { "Your story is gone from " (at) "." } " That commons deleted its copy and won't take the same one back. Anyone who already read it, or copied it, keeps that. It's still here on your node, and you can share it again." }
-                p { a class="btn-action" href="/stories/new" { "Write a new story" } }
+                p { a class="btn-solid" href="/stories/new" { "Write a new story" } }
             }
         },
         StoryOutcome::Saved => html! {
@@ -56,7 +57,29 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
     }
 }
 
-/// A story's text: blank lines separate paragraphs, single line breaks stay.
+/// The rel of every link in a story: `nofollow ugc` tells search engines the
+/// author of the page didn't vouch for it (it's user-generated content), and
+/// `noopener` keeps the opened page from reaching back into this one.
+const STORY_LINK_REL: &str = "nofollow ugc noopener";
+
+/// One line of a story, with its web addresses and `[words](address)` links
+/// made into links (see `crate::text_links`, which only lets `http` and
+/// `https` through). Everything is escaped by maud. Links open in the same
+/// tab, like every other link on the site.
+fn story_line(line: &str) -> Markup {
+    html! {
+        @for piece in find_links(line) {
+            @match piece {
+                Piece::Text(words) => (words),
+                Piece::Link { words, href } => a href=(href) rel=(STORY_LINK_REL) { (words) },
+            }
+        }
+    }
+}
+
+/// A story's text: blank lines separate paragraphs, single line breaks stay,
+/// and links are made clickable (see [`story_line`]). The same for every
+/// view of a story: its author's node, and a commons.
 fn story_text(s: &Story) -> Markup {
     html! {
         div class="story-text" {
@@ -64,7 +87,7 @@ fn story_text(s: &Story) -> Markup {
                 p {
                     @for (i, line) in para.lines().enumerate() {
                         @if i > 0 { br; }
-                        (line)
+                        (story_line(line))
                     }
                 }
             }
@@ -87,7 +110,7 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
                 @if owner.is_some() {
                     div class="story-tools" {
                         a class="btn-line" href={ "/story/" (st.id) "/edit" } { "Edit story" }
-                        a class="link-btn" href={ "/story/" (st.id) "/text" } { "Export as a text file" }
+                        a class="btn-line" href={ "/story/" (st.id) "/text" } { "Export as a text file" }
                     }
                 }
                 (story_text(st))
@@ -95,8 +118,12 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
             aside class="story-side" {
                 @if let Some(o) = owner { (owner_side(s, o, now)) }
                 (terms_panel(st.reach(), &st.license, &st.signals, false))
+                // An outline button, like "Edit story": the story screen has
+                // no underlined actions, and plain text wouldn't look pressable.
                 @if owner.is_some() {
-                    a class="link-btn" href={ "/story/" (st.id) "/rights" } { "Change its terms" }
+                    div class="side-actions" {
+                        a class="btn-line" href={ "/story/" (st.id) "/rights" } { "Change its terms" }
+                    }
                 }
             }
         }
@@ -126,7 +153,7 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
                             input type="hidden" name="id" value=(id);
                             input type="hidden" name="csrf" value=(o.csrf);
                             input type="hidden" name="commons_url" value=(c);
-                            button class="btn-action" type="submit" { "Re-share" }
+                            button class="btn-solid" type="submit" { "Re-share" }
                         }
                         form method="post" action="/story/withdraw" {
                             input type="hidden" name="id" value=(id);
@@ -157,7 +184,7 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
                             input type="hidden" name="id" value=(id);
                             input type="hidden" name="csrf" value=(o.csrf);
                             input type="hidden" name="commons_url" value=(c);
-                            button class="btn-action" type="submit" { "Share" }
+                            button class="btn-solid" type="submit" { "Share" }
                         }
                     }
                 }
@@ -192,10 +219,9 @@ pub fn held_story(h: &HeldStory, now: u64) -> Markup {
                     p class="card-label" { "Verified" }
                     p { "Signed by @" (st.handle) "'s key " span class="mono" { (key_start) "\u{2026}" } " and checked when it arrived." }
                 }
-                p {
-                    a class="link-btn" href={ "/federated/" (kid) } { "@" (st.handle) "'s profile" }
-                    " "
-                    a class="link-btn" href="/stories" { "All stories" }
+                div class="side-actions" {
+                    a class="btn-line" href={ "/federated/" (kid) } { "@" (st.handle) "'s profile" }
+                    a class="btn-line" href="/stories" { "All stories" }
                 }
             }
         }
@@ -230,6 +256,37 @@ mod tests {
         let m = story_text(&own("one\ntwo\n\n<b>three</b>", "public").story).into_string();
         assert!(m.contains("<p>one<br>two</p>"));
         assert!(m.contains("&lt;b&gt;three&lt;/b&gt;"));
+    }
+
+    #[test]
+    fn links_in_a_story_become_safe_links_in_the_same_tab() {
+        let m = story_line("At https://example.org/a?x=1&y=2, or [the map](https://example.org/map).").into_string();
+        assert!(m.contains(
+            r#"<a href="https://example.org/a?x=1&amp;y=2" rel="nofollow ugc noopener">https://example.org/a?x=1&amp;y=2</a>,"#
+        ));
+        assert!(m.contains(r#"<a href="https://example.org/map" rel="nofollow ugc noopener">the map</a>."#));
+        assert!(!m.contains("target="), "same tab");
+    }
+
+    #[test]
+    fn a_hostile_link_stays_escaped_text() {
+        let m = story_line(r#"[x](javascript:alert(1)) https://e.org/"><script>alert(1)</script>"#).into_string();
+        assert!(!m.contains("javascript:alert(1)\""), "no javascript: href");
+        assert!(!m.contains("<script>"), "markup is escaped");
+        assert!(m.contains(r#"<a href="https://e.org/" rel="nofollow ugc noopener">"#));
+        assert!(m.contains("&quot;&gt;&lt;script&gt;"));
+    }
+
+    #[test]
+    fn a_commons_shows_links_too_and_no_underlined_actions() {
+        let s = own("Hear [it](https://example.org).", "commons");
+        let held = HeldStory { story: s.story.clone(), signed: s.signed.clone(), received_at: 1 };
+        let m = held_story(&held, 10).into_string();
+        assert!(m.contains(r#"<a href="https://example.org" rel="nofollow ugc noopener">it</a>"#));
+        assert!(!m.contains("link-btn"), "actions are buttons, not underlined links");
+        let mine = own_story(&s, Some(&owner(&["http://room:8081"])), None, 10).into_string();
+        assert!(!mine.contains("link-btn"));
+        assert!(mine.contains(r#"class="btn-line" href="/story/0123456789abcdef/rights""#));
     }
 
     #[test]

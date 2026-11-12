@@ -14,6 +14,7 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::network::{self, local_url, Probe};
 use crate::settings::{cookie_name, data_dir_for, instance_label, Kind, Saved};
+use crate::steward;
 
 /// Fixed for the whole run of the app; computed once at start-up.
 pub struct AppConfig {
@@ -191,8 +192,14 @@ fn spawn(
     tauri::async_runtime::spawn(async move {
         while let Some(ev) = rx.recv().await {
             match ev {
-                CommandEvent::Stdout(l) => log::info!("[{tag}] {}", String::from_utf8_lossy(&l).trim_end()),
-                CommandEvent::Stderr(l) => log::warn!("[{tag}] {}", String::from_utf8_lossy(&l).trim_end()),
+                // ADR 0024: the steward key is hidden before the line is
+                // logged, since people send this log to get help.
+                CommandEvent::Stdout(l) => {
+                    log::info!("[{tag}] {}", steward::redact_for_log(String::from_utf8_lossy(&l).trim_end()))
+                }
+                CommandEvent::Stderr(l) => {
+                    log::warn!("[{tag}] {}", steward::redact_for_log(String::from_utf8_lossy(&l).trim_end()))
+                }
                 CommandEvent::Error(e) => log::error!("[{tag}] {e}"),
                 CommandEvent::Terminated(t) => {
                     log::warn!("[{tag}] server stopped (exit code {:?}, signal {:?})", t.code, t.signal);

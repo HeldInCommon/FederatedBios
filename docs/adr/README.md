@@ -37,5 +37,6 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0021](0021-held-not-copied.md) | "Only while I'm here": a commons that lists but doesn't keep | Proposed | 2026-11-11 |
 | [0022](0022-the-ramp.md) | The ramp: one next step, and tabs that arrive when they're useful | Accepted (built) | 2026-11-11 |
 | [0023](0023-steward-needs-a-key.md) | The steward view needs a key, not "this computer" | Accepted (built) | 2026-11-11 |
+| [0024](0024-steward-link-out-of-the-log.md) | The steward link stays out of the app's log | Accepted (built) | 2026-11-12 |
 
 Background for the 2026 decisions: [the November 2026 code review](../REVIEW-2026-11.md).
