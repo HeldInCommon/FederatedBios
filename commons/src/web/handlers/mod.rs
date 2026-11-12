@@ -16,11 +16,13 @@
 //! | `publish.rs` | `GET /new`, `POST /publish` |
 //! | `share.rs` | `POST /share`, `POST /withdraw`, and sending to a commons |
 //! | `inbox.rs` | `POST /inbox`: what a commons receives from nodes |
+//! | `here.rs` | "Only while I'm here" on a commons: `POST /here/card`, `POST /here/poll`, reading a card's story |
 //! | `backup.rs` | `POST /backup`, `/restore` |
 //! | `federated.rs` | `GET /federated/{keyid}` |
 //! | `about.rs` | `GET /about`, `GET /run-a-commons` |
 //! | `account.rs` | recovery key, replacing and recovering a key |
-//! | `membership.rs` | invite codes and vouches, from a member's node |
+//! | `membership.rs` | invite codes and vouches, from a member's node (`POST /invite`, `POST /vouch`) |
+//! | `waiting_list.rs` | `POST /api/waiting`: a commons shows its members who is waiting for a vouch |
 //! | `steward.rs` | the steward view of a commons |
 //! | `stories.rs` | `GET /stories` (a node's, or a commons' with recent withdrawals), `GET /stories/{keyid}/{id}` |
 //! | `story.rs` | one story on its author's node: `GET /story/{id}`, export, `POST /story/share`, `POST /story/withdraw` |
@@ -39,6 +41,7 @@ mod about;
 mod backup;
 mod directory;
 mod federated;
+mod here;
 mod inbox;
 mod notices;
 mod profile;
@@ -48,6 +51,7 @@ mod signin;
 mod stories;
 mod story;
 mod story_edit;
+mod waiting_list;
 
 pub mod account;
 pub mod membership;
@@ -57,17 +61,19 @@ pub use about::{about, run_a_commons};
 pub use backup::{backup, backup_later, restore_form, restore_submit};
 pub use directory::directory;
 pub use federated::federated;
+pub use here::{here_card, here_json, here_poll};
 pub use inbox::inbox;
 pub(crate) use inbox::list_entry_response;
 pub use notices::{check_waiting, dismiss_notices};
 pub use profile::profile;
 pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
-pub(crate) use share::{post_to_commons, send_share};
+pub(crate) use share::{post_to_commons, post_to_commons_at, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};
 pub use stories::{held_story, stories};
 pub use story::{own_story, story_share, story_text, story_withdraw};
 pub use story_edit::{rights_form, rights_submit, story_create, story_edit, story_edit_form, story_form};
+pub use waiting_list::waiting_list;
 
 /// The signed-in session for this request, if any.
 pub(crate) fn session(st: &AppState, headers: &HeaderMap) -> Option<Session> {

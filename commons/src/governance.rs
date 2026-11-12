@@ -4,6 +4,10 @@
 //! preferences aimed at datasets and model training ("govern the models, not
 //! only the data"). Both are fixed vocabularies: the keys are stored and
 //! signed, so never rename an existing key.
+//!
+//! Held in Common's own signals (withdraw even after training, and own terms
+//! for AI) are not CC signal keys; they live in [`crate::held_signals`]
+//! (decision record 0025).
 
 /// `(key, name, url)` for each licence. `arr` has no URL.
 pub const LICENSES: &[(&str, &str, &str)] = &[

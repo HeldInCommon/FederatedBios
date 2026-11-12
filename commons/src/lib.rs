@@ -17,6 +17,7 @@
 //! |---|---|---|
 //! | [`model`] | the data types that are stored and sent | none |
 //! | [`governance`] | the licence and signal vocabularies | none |
+//! | [`held_signals`] | Held in Common Signals: withdraw after training, and own terms for AI | none |
 //! | [`handle`] | rules for what a handle may be | none |
 //! | [`canonical`] | the content address (`cid`) of a profile version (format version 0) | none |
 //! | [`jcs`] | canonical JSON (RFC 8785) | none |
@@ -28,6 +29,7 @@
 //! | [`member`] | pure changes to a member's record (moving to new keys) | none |
 //! | [`publishing`] | signing a profile version | randomness only for members-only encryption |
 //! | [`vouching`] | invites, vouches and the founding invite: who may join a commons | none |
+//! | [`vouch_list`] | who is waiting for a vouch, as a member's node sees it; the result of a one-click vouch | asks commons (reads only) |
 //! | [`waiting`] | following up on shares waiting for a vouch, and recording news | asks commons; writes notices |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
@@ -38,6 +40,9 @@
 //! | [`sessions`] | signed-in sessions and their cookies | in-memory state |
 //! | [`form`] | parsing form posts | none |
 //! | [`text_links`] | finding web links in a story's text, for display | none |
+//! | [`here`] | "Only while I'm here": the signed card and poll, and a commons' rules for them | none |
+//! | [`relay`] | a commons' readers waiting for an author's node, and who is here | in-memory state |
+//! | [`relay_node`] | a node's outgoing connection to each commons holding its cards | asks commons; in-memory status |
 //! | [`web`] | HTML pages (pure rendering) and the request handlers | handlers only |
 //! | [`api`] | JSON and ActivityStreams endpoints | handlers only |
 //! | [`app`] | shared state and the route table | none |
@@ -55,6 +60,8 @@ pub mod federation;
 pub mod form;
 pub mod governance;
 pub mod handle;
+pub mod held_signals;
+pub mod here;
 pub mod identity;
 pub mod jcs;
 pub mod keys;
@@ -65,11 +72,14 @@ pub mod passphrase;
 pub mod publishing;
 pub mod ramp;
 pub mod ratelimit;
+pub mod relay;
+pub mod relay_node;
 pub mod role;
 pub mod sessions;
 pub mod store;
 pub mod story;
 pub mod text_links;
+pub mod vouch_list;
 pub mod vouching;
 pub mod waiting;
 pub mod web;

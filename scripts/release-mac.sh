@@ -18,6 +18,7 @@
 #   HIC_NOTARY_PROFILE   notarytool profile name        (default: hic-notary)
 #   HIC_SIGNING_IDENTITY signing identity               (default: the first Developer ID in the keychain)
 #   HIC_SHARE_DEFAULT    commons pre-filled in the app  (default: the repo's Actions variable)
+#   HIC_SHARE_DEFAULT_NAME  what pages call it          (default: the repo's Actions variable)
 #
 # Publishes to the numbered release v<version> (from src-tauri/Cargo.toml),
 # creating it and marking it Latest if needed. Edit its notes on GitHub after.
@@ -31,6 +32,7 @@ PROFILE="${HIC_NOTARY_PROFILE:-hic-notary}"
 ID="${HIC_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)}"
 [ -n "$ID" ] || { echo "No Developer ID Application certificate found in the keychain." >&2; exit 1; }
 SHARE="${HIC_SHARE_DEFAULT:-$(gh variable get HIC_SHARE_DEFAULT --repo "$REPO" 2>/dev/null || true)}"
+SHARE_NAME="${HIC_SHARE_DEFAULT_NAME:-$(gh variable get HIC_SHARE_DEFAULT_NAME --repo "$REPO" 2>/dev/null || true)}"
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
 OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
 DMG="$OUT/Held-In-Common-macOS-AppleSilicon.dmg"
@@ -47,7 +49,7 @@ cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
 
 step "Building and signing the app"
 rm -rf src-tauri/target/release/bundle/macos
-(cd src-tauri && APPLE_SIGNING_IDENTITY="$ID" HIC_SHARE_DEFAULT="$SHARE" cargo tauri build --bundles app)
+(cd src-tauri && APPLE_SIGNING_IDENTITY="$ID" HIC_SHARE_DEFAULT="$SHARE" HIC_SHARE_DEFAULT_NAME="$SHARE_NAME" cargo tauri build --bundles app)
 APP="src-tauri/target/release/bundle/macos/Held In Common.app"
 codesign --verify --deep --strict "$APP"
 

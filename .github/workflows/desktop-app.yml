@@ -128,6 +128,8 @@ jobs:
           # src-tauri/src/lib.rs), so downloaded apps pre-fill "Share to a commons".
           # Set as a repo/org Actions variable, NOT in source.
           HIC_SHARE_DEFAULT: ${{ vars.HIC_SHARE_DEFAULT }}
+          # What pages call that commons, instead of its address.
+          HIC_SHARE_DEFAULT_NAME: ${{ vars.HIC_SHARE_DEFAULT_NAME }}
           # APPLE_* come from the signing step above via $GITHUB_ENV (macOS only).
         with:
           tagName: v__VERSION__

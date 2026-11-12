@@ -11,7 +11,7 @@ This document is for the people building on and operating Held in Common. For
 major choice was made, the [decision records](adr/README.md); for the exact
 bytes that are signed, the [format specification](spec/README.md).
 
-Current version: **0.7.0** (November 2026).
+Current version: **0.8.0** (November 2026).
 
 ---
 
@@ -78,8 +78,10 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
   with every share; it is never the computer's account name. Rename any time
   from the **Go** menu. Roles and names are saved in `<app data>/app.json`;
   each has its own data folder (`node-data/`, `commons-data/`, `practice-data/`).
-- **Side by side:** the other role can be added later, and a practice commons
-  (only this computer can reach it) opened to learn on. The first-launch role
+- **Side by side:** the other role can be added later, and a **local commons**
+  (`practice` in code and folders, its first name) opened for a workshop or a
+  session: anyone on the same Wi-Fi reaches it at this computer's address, and
+  joining needs a vouch as anywhere else. The first-launch role
   keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
   row of buttons on each page move between them; a node's
   **Run your own commons** page links into the app with `hic-app://open/…`
@@ -130,14 +132,19 @@ Sessions live in memory and expire after 24 hours.
 
 <img src="diagrams/publish-federate.svg" width="820" alt="Publish, sign, federate, verify flow" />
 
-1. **Publish** on the node: the profile, its reach, licence and signals.
+1. **Publish** on the node: the profile, its reach, licence, signals and
+   **Held in Common Signals**: the right to withdraw even after a model is
+   trained, and the person's own terms for AI in their own words
+   ([0025](adr/0025-held-in-common-signals.md)).
 2. **Sign:** the version gets a content address (`cid`) and an Ed25519
    signature, and is stored on the node.
 3. **Share:** the node sends a signed **`hic/v1` Profile** to the commons'
    `/inbox`. Every field is signed: the profile (picture included), display
    name, reach, licence, signals, encryption key, and the node's address and
-   name ([spec §5.2](spec/README.md)). Commons that predate `hic/v1` get the
-   older format.
+   name ([spec §5.2](spec/README.md)). With Held in Common Signals chosen it
+   is a **`ProfileV2`**, which signs them too ([spec §5.6](spec/README.md)).
+   A commons that doesn't know a format answers 400 and gets the next older
+   one (`ProfileV2` → `Profile` → version 0).
 4. **Check:** the commons recomputes the content address and checks the
    signature (tampering → 400), then applies its rules:
    - a handle belongs to the first key that used it here; another key → 409
@@ -150,6 +157,22 @@ Sessions live in memory and expire after 24 hours.
 
 Members-only versions are never sent.
 
+### Stories: a copy, or a card
+
+A **story** travels to a commons in one of two ways, the author's choice
+("How it travels"):
+
+- **a copy** ([0020](adr/0020-stories.md)): the commons keeps the signed
+  story until it's withdrawn;
+- **a card**, "Only while I'm here" ([0021](adr/0021-held-not-copied.md)):
+  the commons keeps a signed **card** (title, author, first line, terms and
+  the SHA-256 of the text, but not the text). The author's node keeps a
+  long poll open to the commons (`/here/poll`; the node opens it, and still
+  accepts nothing). When someone reads the story, the commons hands the
+  request to that poll, checks the text the node sends against the card's
+  signed hash, passes it to the reader and keeps nothing. When the node is
+  away, readers see "Not here right now".
+
 ---
 
 ## 5. Joining a commons
@@ -160,7 +183,7 @@ A new handle is listed only when someone already there vouches for it
 | Route | How |
 |---|---|
 | **Member's invite code** | a member presses **Invite someone**, sends the code (there's an **Email this invite** button), and the newcomer pastes it when they share |
-| **Member's vouch** | the newcomer waits on the commons' list; a member who knows them vouches from their node |
+| **Member's vouch** | the newcomer waits on the commons' list; a member who knows them presses **Vouch** beside them on the People tab of their own node ([0026](adr/0026-vouch-with-a-click.md)), or types their handle and key |
 | **Steward approval** | the steward opens the **steward view** and presses **Approve** (or **Decline**) |
 | **Steward's invite code** | the steward presses **Make an invite** in the steward view |
 | **Founding invite** | a new commons makes a one-time code for its first person |
@@ -170,6 +193,12 @@ straight there), or with the private **steward link** the commons prints in its
 log (in the desktop app: **Go → Show steward link…**; the app keeps it out of
 its own log, ADR 0024). Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
 `HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
+
+**Seeing who is waiting** ([0026](adr/0026-vouch-with-a-click.md)): when a
+member opens the People tab, their node asks each commons they're listed on
+(`POST /api/waiting`), with a fresh `WaitingListRequest` signed by the
+member's key. The commons answers only a key it lists, and only with each
+person's handle, name and key, not their profile.
 
 **Hearing you were listed** ([0018](adr/0018-hearing-you-were-listed.md)):
 commons can't contact nodes, so a waiting node asks (`GET /api/status`) when it
@@ -221,8 +250,8 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 - **Network exposure:** a node listens only on its own computer
   ([0004](adr/0004-node-listens-only-locally.md)). A node reachable from the
   network won't share to internal addresses ([0012](adr/0012-block-internal-addresses-on-share.md)).
-- **Abuse:** vouching for new handles; at most 120 `/inbox` requests per minute
-  per address.
+- **Abuse:** vouching for new handles; at most 120 `/inbox` and
+  `/api/waiting` requests (counted together) per minute per address.
 - **Crash safety:** atomic writes; clean shutdown on SIGTERM.
 - **Web pages:** strict Content-Security-Policy; `X-Robots-Tag: noindex` for
   the Commons reach; `robots.txt`.
@@ -243,8 +272,11 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | POST | `/waiting/check`, `/notices/dismiss` | Check now; hide the news banner |
 | POST | `/backup`, `/recovery/new`, `/rotate`, `/recover` | Backup; recovery key; replace key; recover |
 | POST | `/inbox` | Receive shares, withdrawals, vouches, key changes (commons) |
+| POST | `/here/card`, `/here/poll` | "Only while I'm here": a node shares a story's card; a node's long poll (commons) |
+| GET | `/stories/{keyid}/{id}/here.json` | A card and, if its author is here, the text, to check against the card (commons) |
 | GET | `/steward`; POST `/steward/approve`, `/steward/decline`, `/steward/invite` | The steward view (commons) |
 | GET | `/api/directory`, `/api/@{handle}`, `/api/handle/{h}`, `/api/pending`, `/api/status` | JSON |
+| POST | `/api/waiting` | Who is waiting for a vouch, for a listed member's signed request (commons) |
 | POST | `/api/notices/claim` | For the desktop app (needs its launch token) |
 | GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityStreams-shaped discovery (not full ActivityPub) |
 | GET | `/health`, `/robots.txt`, `/style.css`, `/avatar.js`, `/password.js` | Housekeeping |
@@ -261,12 +293,14 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_BASE_URL` | `http://localhost:$PORT` | This server's public address |
 | `HIC_ALSO_KNOWN_AS` | — | Other addresses it is reached at, comma separated (e.g. a room commons that is also public through Tailscale Funnel). Invites, vouches and withdrawals made for them count as addressed here. The app sets it from `public_address` in `app.json`. |
 | `HIC_SHARE_DEFAULT` | *(blank)* | The commons a node offers first |
+| `HIC_SHARE_DEFAULT_NAME` | *(blank)* | What pages call that commons ("Held in Common Collective Commons") instead of its address |
 | `HIC_VOUCH_LIMIT` | `5` | People one member may bring in per week |
 | `HIC_OPEN_COMMONS` | *(off)* | `1`: no vouching |
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 | `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
-| `HIC_PRACTICE` | *(off)* | `1`: a practice commons; its pages say so |
+| `HIC_PRACTICE` | *(off)* | `1`: a local commons (once "practice"); its pages say so and show its Wi-Fi address |
+| `HIC_RELAY_HOLD`, `HIC_RELAY_WAIT` | `25`, `8` | Seconds a commons holds a node's "Only while I'm here" poll open, and a reader waits for the node (1–60) |
 
 ---
 

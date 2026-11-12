@@ -56,7 +56,15 @@ pub fn rekey(
                 .iter()
                 .map(|(h, b)| if *h == rec.handle { (h.clone(), rec.box_pub.clone()) } else { (h.clone(), b.clone()) })
                 .collect();
-            let draft = Draft { profile, reach: v.reach(), license: v.license, signals: v.signals, created_at: now };
+            // The Held in Common Signals carry over to the re-signed version.
+            let draft = Draft {
+                profile,
+                reach: v.reach(),
+                license: v.license,
+                signals: v.signals,
+                created_at: now,
+                held_signals: v.held_signals,
+            };
             let signed = publishing::sign_version(&rec, draft, &recipients)?;
             rec.current_cid = Some(signed.cid.clone());
             Some(signed)
@@ -82,6 +90,7 @@ mod tests {
             license: "cc-by".into(),
             signals: vec![],
             created_at: 1,
+            held_signals: Default::default(),
         };
         let v = publishing::sign_version(&rec, draft, &[]).unwrap();
         (rec, v, profile)

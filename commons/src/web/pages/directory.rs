@@ -125,7 +125,14 @@ pub fn headline(site: &Site) -> String {
     } else if site.instance.trim().is_empty() {
         "Your node".to_string()
     } else {
-        format!("{} node", site.instance.trim())
+        // "Studio laptop" becomes "Studio laptop node", but a name that
+        // already says node ("My node") isn't given a second one.
+        let name = site.instance.trim();
+        if name.to_lowercase().ends_with("node") {
+            name.to_string()
+        } else {
+            format!("{name} node")
+        }
     }
 }
 
@@ -226,7 +233,7 @@ fn pending_list(pending: &[PendingShare], steward: Option<&StewardView>) -> Mark
     html! {
         section class="pending" {
             h2 class="section-h" { "Waiting for a vouch" }
-            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from their own node (under " strong { "Vouch for someone" } "), using the handle and key shown here, or the steward can approve them." }
+            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from the " strong { "People" } " tab on their own node, or the steward can approve them." }
             ul class="pending-list" {
                 @for p in pending {
                     li class="pending-item" {
@@ -264,11 +271,14 @@ mod tests {
             base_url: "http://n".into(),
             also_known_as: Vec::new(),
             share_default: String::new(),
+            share_default_name: String::new(),
             practice: false,
             in_app: true,
         };
         assert_eq!(headline(&site(crate::role::Role::Node, "phoenixs_machine")), "phoenixs_machine node");
         assert_eq!(headline(&site(crate::role::Role::Node, "  ")), "Your node");
+        assert_eq!(headline(&site(crate::role::Role::Node, "Review node")), "Review node", "no \"node node\"");
+        assert_eq!(headline(&site(crate::role::Role::Node, "Studio NODE")), "Studio NODE");
         assert_eq!(headline(&site(crate::role::Role::Commons, "heldincommon")), "The commons");
     }
 

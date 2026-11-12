@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 
 use crate::canonical::{content_id, hash_body};
 use crate::handle;
+use crate::held_signals::{self, HeldSignals};
 use crate::keys::{self, verify_cid};
 use crate::model::{HandleRec, Profile, Reach, RemoteEntry, Tombstone, Version};
 use crate::web::layout::host_label;
@@ -118,6 +119,8 @@ pub fn verify_share(activity: &Value, received_at: u64) -> Result<RemoteEntry, S
         signature: sig_hex.to_string(),
         received_at,
         signed: None,
+        // Version 0 can't carry them: "not chosen" (decision record 0025).
+        held_signals: HeldSignals::default(),
     })
 }
 
@@ -128,13 +131,15 @@ pub fn verify_share(activity: &Value, received_at: u64) -> Result<RemoteEntry, S
 /// The `hic/v1` type for a shared profile.
 pub const PROFILE: &str = "Profile";
 
-/// Build a `hic/v1` share: a signed `Profile` envelope covering the profile
-/// (picture included), display name, reach, licence, signals, encryption key,
-/// and the node's address and name. Dated with the version's own time, so the
-/// same version always gives the same object. The recovery-key declaration,
-/// if any, travels alongside.
-pub fn build_share_v1(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<Value, String> {
-    let body = json!({
+/// The `hic/v1` type for a shared profile that carries Held in Common
+/// Signals (decision record 0025): a `Profile` body plus `held_signals`.
+pub const PROFILE_V2: &str = "ProfileV2";
+
+/// The body every `hic/v1` profile share signs: the profile (picture
+/// included), display name, reach, licence, signals, encryption key, and the
+/// node's address and name.
+fn profile_body(sender: &Sender, rec: &HandleRec, v: &Version) -> Value {
+    json!({
         "handle": rec.handle,
         "display_name": rec.display_name,
         "visibility": v.visibility,
@@ -145,9 +150,15 @@ pub fn build_share_v1(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<V
         "origin": sender.base_url,
         "origin_label": sender.instance,
         "version_cid": v.cid,
-    });
+    })
+}
+
+/// Sign `body` as a profile of type `kind`, dated with the version's own
+/// time (so the same version always gives the same object), and wrap it as
+/// the share message. The recovery-key declaration, if any, travels alongside.
+fn sign_profile_share(kind: &str, body: Value, rec: &HandleRec, v: &Version) -> Result<Value, String> {
     let signed = crate::envelope::sign(
-        crate::envelope::Envelope::new(PROFILE, &rec.ed_pub, v.created_at, None, body),
+        crate::envelope::Envelope::new(kind, &rec.ed_pub, v.created_at, None, body),
         &rec.ed_priv,
     )?;
     let mut share = json!({ "type": "Share", "schema": crate::envelope::SCHEMA, "profile": signed });
@@ -157,16 +168,61 @@ pub fn build_share_v1(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<V
     Ok(share)
 }
 
-/// Check a `hic/v1` share and turn it into a [`RemoteEntry`].
+/// Build a `hic/v1` share: a signed `Profile` envelope covering the profile
+/// (picture included), display name, reach, licence, signals, encryption key,
+/// and the node's address and name.
+/// Never carries Held in Common Signals; that is [`build_share_v2`].
+pub fn build_share_v1(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<Value, String> {
+    sign_profile_share(PROFILE, profile_body(sender, rec, v), rec, v)
+}
+
+/// Build a `hic/v1` share of type `ProfileV2`: the `Profile` body plus the
+/// version's Held in Common Signals as `held_signals`, all signed.
+pub fn build_share_v2(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<Value, String> {
+    let mut body = profile_body(sender, rec, v);
+    body[held_signals::BODY_KEY] = serde_json::to_value(&v.held_signals).map_err(|e| e.to_string())?;
+    sign_profile_share(PROFILE_V2, body, rec, v)
+}
+
+/// The format a share was sent in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShareFormat {
+    /// `hic/v1` `ProfileV2`: everything signed, Held in Common Signals included.
+    WithHeldSignals,
+    /// `hic/v1` `Profile`: everything signed, no Held in Common Signals.
+    Signed,
+    /// Version 0: only the profile text, licence and signals are signed.
+    Version0,
+}
+
+/// The shares to offer a commons, newest format first, each with its format.
+/// A commons answers 400 to a format it doesn't understand, and the node
+/// then tries the next (see `send_share`). `ProfileV2` comes first only when
+/// the version has Held in Common Signals to carry; otherwise nothing changes
+/// from before (decision record 0025). Pure.
+pub fn share_attempts(sender: &Sender, rec: &HandleRec, v: &Version) -> Result<Vec<(ShareFormat, Value)>, String> {
+    let mut attempts = Vec::new();
+    if !v.held_signals.is_empty() {
+        attempts.push((ShareFormat::WithHeldSignals, build_share_v2(sender, rec, v)?));
+    }
+    attempts.push((ShareFormat::Signed, build_share_v1(sender, rec, v)?));
+    attempts.push((ShareFormat::Version0, build_share(sender, rec, v)));
+    Ok(attempts)
+}
+
+/// Check a `hic/v1` share (`Profile` or `ProfileV2`) and turn it into a
+/// [`RemoteEntry`]. A `ProfileV2` must carry well-formed Held in Common
+/// Signals and a `Profile` none (see [`held_signals::from_body`]).
 pub fn verify_share_v1(msg: &Value, received_at: u64) -> Result<RemoteEntry, String> {
     let signed: crate::envelope::Signed =
         serde_json::from_value(msg.get("profile").cloned().ok_or("missing profile")?).map_err(|_| "bad profile")?;
     crate::envelope::verify(&signed)?;
     let env = &signed.envelope;
-    if env.kind != PROFILE {
+    if env.kind != PROFILE && env.kind != PROFILE_V2 {
         return Err(format!("expected a Profile, got {:?}", env.kind));
     }
     let b = &env.body;
+    let held_signals = held_signals::from_body(b, env.kind == PROFILE_V2)?;
     let field = |k: &str| b.get(k).and_then(|x| x.as_str()).map(String::from).ok_or_else(|| format!("missing {k}"));
     let handle_ = field("handle")?;
     if !handle::is_valid(&handle_) {
@@ -201,6 +257,7 @@ pub fn verify_share_v1(msg: &Value, received_at: u64) -> Result<RemoteEntry, Str
         signature: signed.sig.clone(),
         received_at,
         signed: Some(signed.clone()),
+        held_signals,
     })
 }
 
@@ -424,6 +481,7 @@ mod tests {
             signature: sig,
             payload: Some(profile),
             enc: None,
+            held_signals: HeldSignals::default(),
         };
         (build_share(&Sender { base_url: "http://n", instance: "n" }, &rec, &v), k)
     }
@@ -575,9 +633,58 @@ mod tests {
             license: "cc-by".into(),
             signals: vec!["credit".into()],
             created_at: 10,
+            held_signals: HeldSignals::default(),
         };
         let v = crate::publishing::sign_version(&rec, draft, &[]).unwrap();
         (rec, v)
+    }
+
+    /// Held in Common Signals with both answers given, for these tests.
+    fn held() -> HeldSignals {
+        HeldSignals { withdraw_after_training: true, own_terms: "Ask me first.".into() }
+    }
+
+    #[test]
+    fn a_profile_v2_signs_held_signals_and_a_commons_cannot_change_them() {
+        let (rec, mut v) = published("tega", "");
+        v.held_signals = held();
+        let s = Sender { base_url: "http://n", instance: "n" };
+        let msg = build_share_v2(&s, &rec, &v).unwrap();
+        assert_eq!(msg["profile"]["envelope"]["type"], PROFILE_V2);
+        let e = verify_any_share(&msg, 5).unwrap();
+        assert_eq!(e.held_signals, held());
+        let mut m = msg.clone();
+        m["profile"]["envelope"]["body"]["held_signals"]["withdraw_after_training"] = json!(false);
+        assert!(verify_any_share(&m, 5).is_err(), "the choice is signed");
+        let mut m = msg.clone();
+        m["profile"]["envelope"]["body"]["held_signals"]["own_terms"] = json!("Use it however.");
+        assert!(verify_any_share(&m, 5).is_err(), "the words are signed");
+    }
+
+    #[test]
+    fn without_held_signals_the_share_is_unchanged_and_newest_comes_first() {
+        let (rec, mut v) = published("tega", "");
+        let s = Sender { base_url: "http://n", instance: "n" };
+        let formats =
+            |v: &Version| share_attempts(&s, &rec, v).unwrap().into_iter().map(|(f, _)| f).collect::<Vec<_>>();
+        assert_eq!(formats(&v), vec![ShareFormat::Signed, ShareFormat::Version0], "nothing chosen: as before");
+        assert_eq!(share_attempts(&s, &rec, &v).unwrap()[0].1, build_share_v1(&s, &rec, &v).unwrap());
+        v.held_signals = held();
+        assert_eq!(formats(&v), vec![ShareFormat::WithHeldSignals, ShareFormat::Signed, ShareFormat::Version0]);
+        // Each fallback is a share an older commons accepts, and carries none.
+        for (format, msg) in share_attempts(&s, &rec, &v).unwrap() {
+            let e = verify_any_share(&msg, 5).unwrap();
+            assert_eq!(e.held_signals.is_empty(), format != ShareFormat::WithHeldSignals, "{format:?}");
+        }
+    }
+
+    #[test]
+    fn a_profile_type_may_not_carry_held_signals() {
+        let (rec, v) = published("tega", "");
+        let mut body = profile_body(&Sender { base_url: "http://n", instance: "n" }, &rec, &v);
+        body["held_signals"] = json!({ "withdraw_after_training": true, "own_terms": "" });
+        let msg = sign_profile_share(PROFILE, body, &rec, &v).unwrap();
+        assert!(verify_any_share(&msg, 5).unwrap_err().contains("V2"));
     }
 
     #[test]

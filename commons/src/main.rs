@@ -29,6 +29,9 @@ async fn main() {
 /// **Writes**, only the first time each is needed: the role file for a new
 /// data folder, and on a commons the founding invite and the steward key.
 async fn run(config: Config) -> Result<(), String> {
+    // Pages call the node's default commons by its name, not its address
+    // (see `web::layout::host_label`).
+    hic_commons::web::layout::name_default_commons(&config.share_default, &config.share_default_name);
     let store = Store::open(&config.data_dir)
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;
     // Decide the folder's role: read what's there, apply the rule, then save
@@ -82,6 +85,11 @@ async fn run(config: Config) -> Result<(), String> {
         tokio::spawn(async move {
             hic_commons::waiting::check_once(&st).await;
         });
+        // For as long as the node runs: keep an outgoing connection open to
+        // each commons holding one of our "Only while I'm here" cards, so
+        // readers there can fetch the words (decision record 0021). The node
+        // opens these itself; it still accepts nothing (decision record 0004).
+        tokio::spawn(hic_commons::relay_node::run(state.clone()));
     }
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
     println!("hic-commons listening on {addr}");

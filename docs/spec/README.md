@@ -97,12 +97,16 @@ deterministic, so an implementation MUST reproduce them exactly.
 | `04-profile.json` | A shared profile, picture included. |
 | `05-story.json` | A story, with its terms. |
 | `06-story-withdraw.json` | Withdrawing a story from one commons. |
+| `07-story-card.json` | An "Only while I'm here" card for the story in 05: no text, its SHA-256. |
+| `08-story-relay.json` | A node's poll answering one request with that text (it must match 07's hash). |
+| `09-profile-v2.json` | A `ProfileV2`: a shared profile with Held in Common Signals (section 5.6). |
+| `10-story-v2.json` | A `StoryV2`: a story with Held in Common Signals, own terms only. |
 
 Check them:
 
 ```text
 cargo test --manifest-path commons/Cargo.toml --test spec_vectors   # everything, including signatures
-python3 scripts/check_spec_vectors.py                              # canonical bytes, cid and signing input, independently
+python3 scripts/check_spec_vectors.py                              # canonical bytes, cid, signing input and the card hash, independently
 ```
 
 ## 4. Versions and change
@@ -153,8 +157,11 @@ node's own claims; the signature means nobody else changed them.)
 
 A commons MUST refuse `members` visibility, MUST refuse a share that isn't
 newer than the one it holds for that key, and keeps the signed object as
-proof. A node that gets HTTP 400 from a commons SHOULD retry in version 0, so
-sharing keeps working while commons are upgraded.
+proof. A node that gets HTTP 400 from a commons SHOULD retry in the next
+older format (`ProfileV2`, then `Profile`, then version 0), so sharing keeps
+working while commons are upgraded.
+
+The profile MAY instead be signed as a `ProfileV2` (section 5.6).
 
 ### 5.3 Joining a commons (decision record 0011)
 
@@ -162,6 +169,12 @@ sharing keeps working while commons are upgraded.
 |---|---|---|---|
 | `Invite` | a member's key | `commons` (host), `code_id` (random hex), `expires_at` | Made in advance and handed to a newcomer as an **invite code**: the signed object as JSON, URL-safe base64 without padding. The newcomer's share carries it as the field `invite`. |
 | `Vouch` | a member's key | `commons` (host), `handle`, `key` (the newcomer's) | Sent to the commons' `/inbox` for someone on its pending list. |
+| `WaitingListRequest` | a member's key | `commons` (host) | Posted to the commons' `/api/waiting` to ask who is waiting for a vouch (decision record 0026). A request, not a record: it is checked and not kept. |
+
+A commons answers a `WaitingListRequest` only when it is signed by a key it
+lists, names this commons, and its `created_at` is within five minutes of the
+commons' clock (either way). The answer is
+`{"waiting": [{"handle", "name", "key"}, …]}`: no other profile content.
 
 A commons lists a **new** handle only with a valid invite, a valid vouch, or
 its one-time **founding invite** (`hic-founding-` followed by hex; not a
@@ -208,13 +221,104 @@ A commons:
 
 Members-only stories stay on the node that wrote them.
 
+The story MAY instead be signed as a `StoryV2` (section 5.6).
+
 **Which host is "this commons".** Withdrawals, invites, vouches and story
 withdrawals name the commons they are for by host. A commons MUST accept its
 public host (from its base URL), and SHOULD also accept `127.0.0.1:<port>` and
 `localhost:<port>` for its own port: a node on the commons' own computer
 reaches it that way while the commons announces its network address.
 
-### 5.5 Planned
+### 5.5 "Only while I'm here" (decision record 0021)
+
+A second way to share a story: the commons keeps a signed **card** (no
+text), and fetches the text from the author's node each time someone reads
+it, over a connection the node opens. Two new types; nothing in 5.4 changes.
+
+A node shares a card to a commons' **`/here/card`** (not `/inbox`) as
+
+```json
+{ "type": "StoryCardShare", "schema": "hic/v1", "card": <signed StoryCard> }
+```
+
+and keeps a **long poll** open to `/here/poll`, sending
+
+```json
+{ "type": "StoryRelay", "schema": "hic/v1", "relay": <signed StoryRelay> }
+```
+
+The commons answers a poll with `{ "requests": [ { "request": "<32 hex>", "story": "<id>" } ] }`
+when a reader asks, or with no requests after its hold time (about 25
+seconds). The node answers those requests in its next poll.
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `StoryCard` | the member's key | `id`, `handle`, `title`, `first_line` (at most 140 characters), `words`, `visibility` (`public` or `commons`), `license`, `signals`, `text_sha256` (lowercase hex SHA-256 of the story's `text` as UTF-8), `commons` (host) |
+| `StoryRelay` | the member's key | `commons` (host), `seq` (an integer higher than any earlier poll from this key), `answers`: at most 32 of `{ "request", "story", "text" }` |
+
+A commons:
+
+- MUST apply the same gate and terms checks to a card as to a story (5.4),
+  and MUST refuse a card addressed to another commons;
+- keeps one card *or* one copy per (author, `id`): a newer card replaces a
+  copy and a newer copy replaces a card; anything not newer than what it
+  holds, or than a recorded withdrawal, MUST be refused;
+- MUST NOT store a card's text, and MUST NOT pass a text to a reader unless
+  its SHA-256 equals the card's `text_sha256`;
+- MUST accept a poll only if it is signed by a key with a card here,
+  addressed to this commons, dated within 300 seconds of its clock, and
+  numbered higher than the last poll it took from that key; MUST ignore an
+  answer to a request it didn't hand to that key;
+- withdraws a card with `StoryWithdraw` (5.4), at once.
+
+A reader (or a reader's node) that wants to check the text without trusting
+the commons fetches `GET /stories/<keyid>/<id>/here.json`, which returns the
+signed card and the text, and compares the text's SHA-256 with the card's
+signed `text_sha256`.
+
+A commons that predates this section answers `/here/card` with 404; a node
+SHOULD then tell the member that commons doesn't support "Only while I'm
+here" yet. Vectors 07 and 08 are a card for the story in 05 and a poll
+answering it.
+
+### 5.6 Held in Common Signals (decision record 0025)
+
+Two answers a person can give about AI beyond the CC signals: the right to
+withdraw their work even after a model has been trained on it, and their own
+terms for AI in their own words. They travel signed, in two types:
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `ProfileV2` | the handle's key | everything in a `Profile` body (section 5.2), plus `held_signals` |
+| `StoryV2` | the member's key | everything in a `Story` body (section 5.4), plus `held_signals` |
+
+`held_signals` is an object with exactly two keys:
+
+| Key | Value |
+|---|---|
+| `withdraw_after_training` | `true` when the person keeps the right to withdraw this even after a model is trained on it; `false` when not chosen. |
+| `own_terms` | Their own terms for AI, as plain text (never markup), at most 1,000 characters (Unicode code points). Empty when they wrote none. |
+
+A `ProfileV2` is sent in a `Share` message and a `StoryV2` in a `StoryShare`
+message, exactly as their older types are. Every other rule of the older
+type applies.
+
+- A commons MUST refuse a `ProfileV2` or `StoryV2` without a well-formed
+  `held_signals`, with any other key in it, or with `own_terms` longer than
+  1,000 characters. It MUST refuse a `Profile` or `Story` that carries
+  `held_signals`.
+- A `Profile`, `Story` or version-0 share means "not chosen": `false` and
+  empty.
+- A node SHOULD send a V2 type only when something is chosen, and otherwise
+  the older type, unchanged.
+- A commons that doesn't understand a V2 type answers HTTP 400 (section 4).
+  The node SHOULD then send the older type without `held_signals`: for a
+  story, the same story signed again as a `Story` with the same
+  `created_at`. It SHOULD tell the member that their Held in Common Signals
+  didn't reach that commons.
+- Pages MUST show `own_terms` as text, never as markup.
+
+### 5.6 Planned
 
 Dataset listings, rights records, licences, adapters, model versions,
 governance decisions will be added as `hic/v1` types as they are

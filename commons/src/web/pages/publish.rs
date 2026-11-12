@@ -2,21 +2,14 @@
 
 use maud::{html, Markup};
 
-use super::parts::{page_head, section_label, terms_panel};
+use super::parts::{page_head, section_label, terms_panel, Chosen};
 use super::rights::{rights_fields, RightsFor};
-use crate::model::{Profile, Reach};
+use crate::model::Profile;
 
 /// The publish form, prefilled from the current version: about you, then
-/// Sharing and rights open and explained, then what travels with every copy.
-pub fn publish_form(
-    me: &str,
-    csrf: &str,
-    p: &Profile,
-    reach: Reach,
-    license: &str,
-    signals: &[String],
-    first_time: bool,
-) -> Markup {
+/// Sharing and rights open and explained (filled in with what is `chosen`),
+/// then what travels with every copy.
+pub fn publish_form(me: &str, csrf: &str, p: &Profile, chosen: &Chosen, first_time: bool) -> Markup {
     let title = if first_time { "Say who you are" } else { "Update your profile" };
     html! {
         (page_head(&format!("Your profile \u{b7} @{me}"), title, Some("Then decide who can see it, and how it can be used.")))
@@ -28,11 +21,11 @@ pub fn publish_form(
             (section_label("Sharing and rights", None))
             div class="rights-intro" {
                 p class="rights-intro-title" { "Who can see it, and how it can be used." }
-                p { "These three choices are signed with your key and travel with every copy you share. Change them any time: the next version carries the new terms. Good defaults are already chosen." }
+                p { "These choices are signed with your key and travel with every copy you share. Change them any time: the next version carries the new terms. Good defaults are already chosen." }
             }
-            (rights_fields(RightsFor::Profile, reach, license, signals))
+            (rights_fields(RightsFor::Profile, chosen))
             (section_label("What travels with every copy", None))
-            (terms_panel(reach, license, signals, true))
+            (terms_panel(chosen, true))
             aside class="caution" {
                 p {
                     strong { "Publishing cannot be fully undone." }
@@ -40,7 +33,7 @@ pub fn publish_form(
                 }
             }
             div class="actions" {
-                button class="btn-ink" type="submit" { "Publish" }
+                button class="btn-action" type="submit" { "Publish" }
                 span class="hint" { "It stays on this computer. Sharing comes next." }
             }
         }
@@ -98,10 +91,14 @@ fn profile_fields(p: &Profile) -> Markup {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::held_signals::HeldSignals;
+    use crate::model::Reach;
 
     #[test]
     fn caution_no_longer_promises_withdrawal() {
-        let m = publish_form("tega", "x", &Profile::default(), Reach::Public, "cc-by", &[], true).into_string();
+        let none = HeldSignals::default();
+        let chosen = Chosen { reach: Reach::Public, license: "cc-by", signals: &[], held_signals: &none };
+        let m = publish_form("tega", "x", &Profile::default(), &chosen, true).into_string();
         assert!(m.contains("anyone who already downloaded"));
         assert!(!m.contains("stops serving"));
     }

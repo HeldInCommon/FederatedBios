@@ -10,19 +10,22 @@
 //! | `directory.rs` | the commons' front page, with the steward's tools and the waiting list |
 //! | `profile.rs` | a member's profile page |
 //! | `owner_account.rs` | the Account tab: backup, recovery key, your key, Advanced |
-//! | `owner.rs` | a member's own profile: next step, tabs, Sharing and People |
+//! | `owner.rs` | a member's own profile: next step, tabs, Sharing |
+//! | `owner_people.rs` | the People tab: who is waiting for a vouch (with Vouch buttons), invite someone |
 //! | `publish.rs` | the publish form |
 //! | `signin.rs` | sign-up, sign-in, and the "this is a shared commons" gate |
 //! | `account.rs` | recovery code, key change, restore from backup |
-//! | `sharing.rs` | results of sharing: shared, waiting for a vouch, vouched, withdrawn |
+//! | `sharing.rs` | results of sharing: shared, waiting for a vouch, vouched (or not), withdrawn |
 //! | `invites.rs` | invite codes made by a member or the steward |
 //! | `federated.rs` | a profile shared in from another node |
 //! | `about.rs` | how this works |
+//! | `schematics.rs` | the diagrams on How this works and Run your own commons |
 //! | `guide.rs` | run your own commons: questions and answers, and a practice commons |
 //! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
 //! | `story.rs` | one story: the author's view with its sharing tools, and a commons' |
+//! | `here.rs` | a story shared "Only while I'm here": its text fetched just now, or "Not here right now" |
 //! | `story_form.rs` | writing a story (new or editing), then its rights step |
-//! | `rights.rs` | Sharing and rights: who can see it, licence, signals, how a story travels |
+//! | `rights.rs` | Sharing and rights: who can see it, licence, signals, Held in Common Signals, how a story travels |
 //! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
 
 use crate::model::RemoteEntry;
@@ -33,13 +36,16 @@ mod account;
 mod directory;
 mod federated;
 mod guide;
+mod here;
 mod invites;
 mod owner;
 mod owner_account;
+mod owner_people;
 mod parts;
 mod profile;
 mod publish;
 mod rights;
+mod schematics;
 mod sharing;
 mod signin;
 mod stories;
@@ -51,11 +57,13 @@ pub use account::{key_change, recovery_code, restore_form};
 pub use directory::{directory, your_next, Card, SignedIn, StewardView, Viewer, YourNext};
 pub use federated::federated;
 pub use guide::{run_a_commons, steward_node_note};
+pub use here::here_story;
 pub use invites::{invite_code, steward_invite};
 pub use owner::OwnerPanel;
+pub use parts::Chosen;
 pub use profile::profile;
 pub use publish::publish_form;
-pub use sharing::{shared, shared_pending, vouched, withdrawn};
+pub use sharing::{shared, shared_pending, vouch_outcome, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
 pub use stories::{author_stories, commons_stories, node_stories};
 pub use story::{held_story, own_story, StoryOutcome, StoryOwner};

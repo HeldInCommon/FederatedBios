@@ -7,7 +7,7 @@ use axum::response::Response;
 
 use super::{authorised_as, update_member};
 use crate::app::{AppState, Shared};
-use crate::federation::{self, Sender};
+use crate::federation::{self, Sender, ShareFormat};
 use crate::form::Form;
 use crate::model::{HandleRec, Reach, Version};
 use crate::web::layout::{error_page, render, server_error, Page};
@@ -42,7 +42,11 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     let sent = send_share(&st, &commons, &rec, &v, Some(&invite)).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
-        Ok(r) if r.status().is_success() => {
+        Ok((r, format)) if r.status().is_success() => {
+            // An older commons took the share without the Held in Common
+            // Signals (decision record 0025): say so, rather than let the
+            // member think that commons shows them.
+            let left_out = !v.held_signals.is_empty() && format != ShareFormat::WithHeldSignals;
             let pending = r.text().await.unwrap_or_default().starts_with("pending");
             // Remember the commons, and whether we're waiting to be listed
             // there (the node follows up; see crate::waiting).
@@ -58,17 +62,17 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
                 eprintln!("warning: shared, but couldn't remember it for @{h}: {e}");
             }
             let body = if pending {
-                pages::shared_pending(&h, &commons, &rec.ed_pub, &f.one("csrf"))
+                pages::shared_pending(&h, &commons, &rec.ed_pub, &f.one("csrf"), left_out)
             } else {
-                pages::shared(&h, &commons)
+                pages::shared(&h, &commons, left_out)
             };
             render(&st.site, Page::new("Shared", Some(&h), body))
         }
-        Ok(r) if r.status() == StatusCode::FORBIDDEN => {
+        Ok((r, _)) if r.status() == StatusCode::FORBIDDEN => {
             let why = r.text().await.unwrap_or_default();
             error_page(&st.site, &format!("{label} didn't accept the invite code: {why}"))
         }
-        Ok(r) if r.status() == StatusCode::CONFLICT => {
+        Ok((r, _)) if r.status() == StatusCode::CONFLICT => {
             let reason = r.text().await.unwrap_or_default();
             if reason.contains("newer") {
                 error_page(
@@ -81,7 +85,7 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
                 ))
             }
         }
-        Ok(r) => error_page(
+        Ok((r, _)) => error_page(
             &st.site,
             &format!("That commons rejected the share (HTTP {}). It may not accept federation.", r.status().as_u16()),
         ),
@@ -97,30 +101,49 @@ pub(crate) async fn post_to_commons(
     commons: &str,
     body: &serde_json::Value,
 ) -> Result<reqwest::Response, String> {
+    post_to_commons_at(st, commons, "/inbox", body, std::time::Duration::from_secs(10)).await
+}
+
+/// POST `body` to `path` on a commons (`/inbox`, or `/here/card` and
+/// `/here/poll` for "Only while I'm here"), waiting at most `timeout`, after
+/// the same address check as every outgoing request (see
+/// [`crate::outbound`], decision record 0012). Errors are messages for the
+/// member.
+pub(crate) async fn post_to_commons_at(
+    st: &AppState,
+    commons: &str,
+    path: &str,
+    body: &serde_json::Value,
+    timeout: std::time::Duration,
+) -> Result<reqwest::Response, String> {
     let policy = outbound::Policy {
         personal: st.config.bind_addr(st.site.role).is_loopback(),
         allow_private: st.config.allow_private_share,
     };
     let client = outbound::client_for(commons, policy).await?;
     client
-        .post(format!("{commons}/inbox"))
+        .post(format!("{commons}{path}"))
         .json(body)
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(timeout)
         .send()
         .await
         .map_err(|e| format!("Could not reach that commons: {e}"))
 }
 
-/// Share a version to a commons in format `hic/v1` (every field signed). A
-/// commons that predates `hic/v1` answers 400; then send the older format so
-/// sharing keeps working while commons are upgraded.
+/// Share a version to a commons in the newest format it accepts, and say
+/// which that was. The formats come from [`federation::share_attempts`],
+/// newest first: `ProfileV2` (with Held in Common Signals, decision record
+/// 0025, only when there are some), then `Profile` (`hic/v1`, every field
+/// signed), then version 0. A commons that doesn't understand a format
+/// answers 400; then the next older one is sent, so sharing keeps working
+/// while commons are upgraded. Any other answer is final.
 pub(crate) async fn send_share(
     st: &AppState,
     commons: &str,
     rec: &HandleRec,
     v: &Version,
     invite: Option<&str>,
-) -> Result<reqwest::Response, String> {
+) -> Result<(reqwest::Response, ShareFormat), String> {
     let sender = Sender { base_url: &st.config.base_url, instance: &st.site.instance };
     // An invite code, if the member has one, travels alongside (decision record 0011).
     let with_invite = |mut m: serde_json::Value| {
@@ -129,12 +152,16 @@ pub(crate) async fn send_share(
         }
         m
     };
-    let v1 = with_invite(federation::build_share_v1(&sender, rec, v)?);
-    let r = post_to_commons(st, commons, &v1).await?;
-    if r.status() == StatusCode::BAD_REQUEST {
-        return post_to_commons(st, commons, &with_invite(federation::build_share(&sender, rec, v))).await;
+    // `peekable` lets the loop ask whether an older format is left to try.
+    let mut attempts = federation::share_attempts(&sender, rec, v)?.into_iter().peekable();
+    while let Some((format, message)) = attempts.next() {
+        let r = post_to_commons(st, commons, &with_invite(message)).await?;
+        if r.status() == StatusCode::BAD_REQUEST && attempts.peek().is_some() {
+            continue;
+        }
+        return Ok((r, format));
     }
-    Ok(r)
+    Err("There was nothing to share.".into())
 }
 
 /// `POST /withdraw` — ask a commons to remove this member's shared copy.

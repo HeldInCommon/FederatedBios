@@ -28,6 +28,9 @@ pub struct Config {
     pub instance: String,
     /// `HIC_SHARE_DEFAULT`: the commons pre-filled in "Share to a commons".
     pub share_default: String,
+    /// `HIC_SHARE_DEFAULT_NAME`: what to call that commons on pages
+    /// ("Held in Common Collective Commons"), instead of its address.
+    pub share_default_name: String,
     /// `HIC_ROLE`, raw. Interpreted by [`crate::role::decide`].
     pub role_env: Option<String>,
     /// `HIC_LAUNCH_TOKEN`: set by the desktop app when it starts this server,
@@ -51,6 +54,17 @@ pub struct Config {
     /// `HIC_PRACTICE=1`: this commons is a practice one, for learning to run a
     /// commons. Only changes what its pages say.
     pub practice: bool,
+    /// `HIC_RELAY_HOLD` and `HIC_RELAY_WAIT`, in seconds: how long a commons
+    /// holds a node's poll open, and how long a reader waits for the node's
+    /// answer, for "Only while I'm here" (decision record 0021). Defaults 25
+    /// and 8; tests make them short. Each is kept between 1 and 60.
+    pub relay: crate::relay::Timing,
+}
+
+/// A number of seconds from a setting, kept between 1 and 60, or `default`
+/// when it's missing or not a number.
+fn seconds(value: Option<String>, default: u64) -> u64 {
+    value.and_then(|v| v.trim().parse::<u64>().ok()).map_or(default, |s| s.clamp(1, 60))
 }
 
 /// The host (and port, if any) of a URL: `https://c.example/x` → `c.example`.
@@ -89,6 +103,7 @@ impl Config {
                 .collect(),
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
+            share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
@@ -101,6 +116,10 @@ impl Config {
                 .filter(|c| valid_cookie_name(c))
                 .unwrap_or_else(|| DEFAULT_SESSION_COOKIE.into()),
             practice: get("HIC_PRACTICE").is_some_and(|v| v.trim() == "1"),
+            relay: crate::relay::Timing {
+                hold: seconds(get("HIC_RELAY_HOLD"), crate::relay::DEFAULT_TIMING.hold),
+                wait: seconds(get("HIC_RELAY_WAIT"), crate::relay::DEFAULT_TIMING.wait),
+            },
         }
     }
 

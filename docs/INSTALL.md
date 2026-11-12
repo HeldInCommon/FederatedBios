@@ -84,7 +84,10 @@ Members-only profiles are never shared: they stay encrypted on your computer.
 
 - **Invite someone:** makes a one-time code; **Email this invite** opens your
   mail app with the invitation written for you.
-- **Vouch for someone:** for people you know who are waiting on that commons.
+- **Waiting for a vouch** (on the People tab): everyone waiting on each
+  commons you're listed on, with their name, handle and key fingerprint.
+  Press **Vouch for @…** for someone you know, after checking the
+  fingerprint with them.
 - **Withdraw:** asks the commons to remove your shared copy.
 
 ### Keep your identity safe
@@ -122,9 +125,13 @@ minute. Write a small story from what you hear."). It stays on their computer
 until they press **Share**, and goes to a commons where they're listed. They
 can **Withdraw** it from there at any time, and **Export** it as a text file.
 
-**Want to try it first?** **Go → Open a practice commons** starts a commons only
-this computer can reach. Share your profile to it, approve yourself, make an
-invite. **Go → Remove practice commons…** deletes it when you're done.
+**A local commons, for a workshop or a session.** **Go → Open a local commons
+(this Wi-Fi)** starts a commons on this computer that anyone on the same Wi-Fi
+can reach. Name it (**Go → Rename local commons…**) and tell the room its
+address, which its sidebar shows (it looks like `http://192.168.1.20:8082`).
+People share to it from their own nodes and are listed once a member vouches
+(one click on their People tab) or you approve them. **Go → Remove local
+commons…** deletes it when the session's over.
 
 **Also public (Tailscale Funnel, a reverse proxy)?** A commons started by the
 app knows itself only by its room address, so invite codes and vouches made

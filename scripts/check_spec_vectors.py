@@ -6,6 +6,16 @@ integers only), the cid (SHA-256) and the signing input for each vector, and
 compares them with the published values. A second implementation agreeing
 with the first is the point of a written specification.
 
+It also checks the "Only while I'm here" pair (decision record 0021): the
+card in 07 carries the SHA-256 of the story text in 05, and the answer in the
+poll in 08 is text that matches it. That hash is what lets a reader catch a
+commons that altered the words.
+
+It also checks the shape of Held in Common Signals (decision record 0025,
+spec section 5.6): a ProfileV2 or StoryV2 body carries `held_signals` with
+exactly `withdraw_after_training` (true or false) and `own_terms` (text, at
+most 1,000 characters); a Profile or Story body carries none.
+
 Signatures aren't checked here because Python's standard library has no
 Ed25519; `cargo test --test spec_vectors` checks those.
 
@@ -18,6 +28,9 @@ import sys
 
 VECTORS = pathlib.Path(__file__).resolve().parent.parent / "docs" / "spec" / "vectors"
 MAX_SAFE_INT = 2**53 - 1
+OWN_TERMS_MAX = 1000  # characters (Unicode code points), as in held_signals.rs
+V2_TYPES = {"ProfileV2", "StoryV2"}
+OLDER_TYPES = {"Profile", "Story"}
 
 
 def canonical(value):
@@ -44,6 +57,23 @@ def canonical(value):
     raise ValueError(f"not allowed in signed objects: {value!r}")
 
 
+def held_signals_ok(envelope):
+    """True when the body's held_signals are as its type requires (spec 5.6)."""
+    kind, body = envelope["type"], envelope["body"]
+    if kind in OLDER_TYPES:
+        return "held_signals" not in body
+    if kind not in V2_TYPES:
+        return True  # other types don't carry them
+    held = body.get("held_signals")
+    return (
+        isinstance(held, dict)
+        and set(held) == {"withdraw_after_training", "own_terms"}
+        and isinstance(held["withdraw_after_training"], bool)
+        and isinstance(held["own_terms"], str)
+        and len(held["own_terms"]) <= OWN_TERMS_MAX
+    )
+
+
 def main():
     failures = 0
     files = sorted(VECTORS.glob("*.json"))
@@ -56,12 +86,42 @@ def main():
             ("canonical", text == v["canonical"]),
             ("cid", cid == v["cid"]),
             ("signing input", signing_input == v["signing_input"]),
+            ("held signals", held_signals_ok(v["envelope"])),
         ]
         bad = [name for name, ok in checks if not ok]
         print(("FAIL " if bad else "ok   ") + path.name + (f" ({', '.join(bad)})" if bad else ""))
         failures += bool(bad)
     print(f"{len(files) - failures}/{len(files)} vectors match")
-    return 1 if failures or not files else 0
+    text_failures = check_card_hashes()
+    return 1 if failures or text_failures or not files else 0
+
+
+def sha256_hex(text):
+    """Lowercase hex SHA-256 of a string's UTF-8 bytes (spec section 5.5)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def check_card_hashes():
+    """The StoryCard's text_sha256 is the hash of the Story's text (05), and
+    every StoryRelay answer (08) for that story matches it. Returns the
+    number of failures."""
+    def body(name):
+        return json.loads((VECTORS / name).read_text(encoding="utf-8"))["envelope"]["body"]
+
+    try:
+        story, card, relay = body("05-story.json"), body("07-story-card.json"), body("08-story-relay.json")
+    except FileNotFoundError as missing:
+        print(f"FAIL card hashes (missing {missing.filename})")
+        return 1
+    checks = [("card hash is the story text's", card["text_sha256"] == sha256_hex(story["text"]))]
+    for answer in relay["answers"]:
+        if answer["story"] == card["id"]:
+            checks.append(("answer matches the card", sha256_hex(answer["text"]) == card["text_sha256"]))
+    # And an altered text would not match (the point of the hash).
+    checks.append(("altered text is caught", sha256_hex(story["text"] + " ") != card["text_sha256"]))
+    bad = [name for name, ok in checks if not ok]
+    print(("FAIL " if bad else "ok   ") + "card hashes" + (f" ({', '.join(bad)})" if bad else ""))
+    return len(bad)
 
 
 if __name__ == "__main__":

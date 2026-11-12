@@ -66,7 +66,7 @@ fn remember(app: &AppHandle, current: &mut Saved, next: Saved) -> Result<(), Str
 
 /// Show `kind` in the main window: switch to it if this computer runs it;
 /// otherwise set it up. A node or commons is named first (in the setup
-/// window); a practice commons just starts.
+/// window); a local commons just starts.
 pub fn open(app: &AppHandle, kind: Kind) -> Result<(), String> {
     let chosen = app.state::<Chosen>();
     let mut current = chosen.0.lock().unwrap();
@@ -92,9 +92,9 @@ pub fn open(app: &AppHandle, kind: Kind) -> Result<(), String> {
     remember(app, &mut current, next)
 }
 
-/// Stop the practice commons and delete everything in it. The node and any
+/// Stop the local commons and delete everything in it. The node and any
 /// real commons are untouched. The main window goes home if it was showing
-/// the practice commons.
+/// the local commons.
 pub fn remove_practice(app: &AppHandle) -> Result<(), String> {
     let chosen = app.state::<Chosen>();
     let mut current = chosen.0.lock().unwrap();
@@ -104,11 +104,12 @@ pub fn remove_practice(app: &AppHandle) -> Result<(), String> {
     wait_until_free(port, &cfg.launch_token);
     let dir = settings::data_dir_for(&cfg.base, Kind::Practice);
     match std::fs::remove_dir_all(&dir) {
-        Ok(()) => log::info!("removed the practice commons ({})", dir.display()),
+        Ok(()) => log::info!("removed the local commons ({})", dir.display()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("couldn't delete the practice commons' folder: {e}")),
+        Err(e) => return Err(format!("couldn't delete the local commons' folder: {e}")),
     }
-    let next = Saved { practice: false, ..current.clone() };
+    // Its name goes with it: a new local commons starts as "Local commons".
+    let next = Saved { practice: false, practice_name: None, ..current.clone() };
     remember(app, &mut current, next)?;
     let showing_practice = network::local_port(&app.state::<Shown>().0.lock().unwrap()) == Some(port);
     if let (true, Some(home)) = (showing_practice, current.home()) {
@@ -224,7 +225,9 @@ pub struct SetupState {
     /// The node's and commons' names, if this computer runs them.
     node_name: Option<String>,
     commons_name: Option<String>,
-    /// True while there is a practice commons.
+    /// What the local commons is called, while there is one.
+    practice_name: Option<String>,
+    /// True while there is a local commons.
     practice: bool,
     /// Where nodes in the same room would reach this computer's commons.
     lan_url: Option<String>,
@@ -237,6 +240,7 @@ pub fn setup_state(chosen: tauri::State<'_, Chosen>) -> SetupState {
     SetupState {
         node_name: s.name_of(Kind::Node).map(String::from),
         commons_name: s.name_of(Kind::Commons).map(String::from),
+        practice_name: s.name_of(Kind::Practice).map(String::from),
         practice: s.practice,
         lan_url: network::lan_url(s.port_of(Kind::Commons)),
         role: s.role,
@@ -309,6 +313,7 @@ pub fn set_name(app: AppHandle, role: Option<String>, name: String) -> Result<()
     let kind = kind_or_first(role, &current)?;
     let next = match kind {
         k if current.first() == Some(k) => Saved { name: Some(name), ..current.clone() },
+        Kind::Practice if current.practice => Saved { practice_name: Some(name), ..current.clone() },
         k if k != Kind::Practice && current.runs(k) => Saved { other_name: Some(name), ..current.clone() },
         _ => return Err(format!("This computer doesn't run {}.", kind.label().to_lowercase())),
     };
@@ -351,7 +356,7 @@ pub fn restart_node(app: AppHandle, which: Option<String>) -> Result<(), String>
     sidecar::start(&app, &cfg, &servers, &saved, kind, false)
 }
 
-/// Remove the practice commons (the setup window's confirm button).
+/// Remove the local commons (the setup window's confirm button).
 #[tauri::command]
 pub fn remove_practice_now(app: AppHandle) -> Result<(), String> {
     remove_practice(&app)?;

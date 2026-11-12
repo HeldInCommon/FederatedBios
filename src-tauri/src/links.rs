@@ -156,6 +156,7 @@ mod tests {
             name: Some("Laptop".into()),
             other_name: other.map(String::from),
             practice,
+            practice_name: None,
             public_address: None,
         }
     }
@@ -203,7 +204,7 @@ mod tests {
         let s = saved(Some("Room 4"), true);
         assert_eq!(kind_on(&s, 8081), Some(Kind::Commons));
         assert_eq!(kind_on(&s, 8082), Some(Kind::Practice));
-        assert_eq!(kind_on(&saved(None, false), 8082), None, "no practice commons yet");
+        assert_eq!(kind_on(&saved(None, false), 8082), None, "no local commons yet");
     }
 
     #[test]

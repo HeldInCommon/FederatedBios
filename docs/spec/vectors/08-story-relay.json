@@ -1,0 +1,51 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"answers\":[{\"request\":\"00112233445566778899aabbccddeeff\",\"story\":\"0123456789abcdef\",\"text\":\"The 38 sighs at the stop.\\nA dog answers from a balcony.\"}],\"commons\":\"room.example:8081\",\"seq\":1700000600000},\"created_at\":1700000600,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"StoryRelay\"}",
+  "cid": "7b63d08ad8d847e0785f98e565d0b3d0ed006e6d2ea58c68d7bfeafe908f00da",
+  "description": "A StoryRelay: a node's poll to the commons in 07, answering one reader's request with the story's text, which must match the card's text_sha256.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "answers": [
+        {
+          "request": "00112233445566778899aabbccddeeff",
+          "story": "0123456789abcdef",
+          "text": "The 38 sighs at the stop.\nA dog answers from a balcony."
+        }
+      ],
+      "commons": "room.example:8081",
+      "seq": 1700000600000
+    },
+    "created_at": 1700000600,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "StoryRelay"
+  },
+  "name": "08-story-relay.json",
+  "signed": {
+    "cid": "7b63d08ad8d847e0785f98e565d0b3d0ed006e6d2ea58c68d7bfeafe908f00da",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "answers": [
+          {
+            "request": "00112233445566778899aabbccddeeff",
+            "story": "0123456789abcdef",
+            "text": "The 38 sighs at the stop.\nA dog answers from a balcony."
+          }
+        ],
+        "commons": "room.example:8081",
+        "seq": 1700000600000
+      },
+      "created_at": 1700000600,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "StoryRelay"
+    },
+    "sig": "5d84ce0961217272763efc5eca8ca6063e3ec8cf966a96e552daf1aa2bdf8d0bf5828fcd03eea0aaf275db0d288ad625514ad6ca8509107e0646ef0776f10503"
+  },
+  "signing_input": "hic/v1/StoryRelay\n7b63d08ad8d847e0785f98e565d0b3d0ed006e6d2ea58c68d7bfeafe908f00da",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

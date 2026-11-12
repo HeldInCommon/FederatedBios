@@ -409,7 +409,7 @@ fieldset {
 .story-card,
 .story-chip,
 .server-card,
-:where(.btn-ink, .btn-line, .btn-solid, .btn-outline) {
+:where(.btn-action, .btn-line, .btn-solid, .btn-outline) {
   position: relative;
 }
 
@@ -574,6 +574,15 @@ a.server-card:focus-visible {
 
 a.rail-foot:hover {
   color: var(--accent);
+}
+
+/* "Go to the Held in Common Collective Commons": the node's default commons
+   as a button at the foot of the rail, rather than its long address. */
+.rail-go {
+  position: relative;
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: var(--text-sm);
 }
 
 .server-text {
@@ -792,6 +801,139 @@ a.rail-foot {
 .prose p {
   font-size: var(--text-lg);
   line-height: 1.65;
+}
+
+/* How this works: diagrams drawn after the workshop slides. The SVG names
+   its parts with classes; the colours come from the tokens here. */
+.schematic {
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.schematic figcaption {
+  margin-top: var(--space-3);
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.fig {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fig-line,
+.fig-spokes {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  opacity: 0.32;
+}
+
+.fig-spokes {
+  stroke: var(--blue);
+  opacity: 0.55;
+}
+
+.fig-ink {
+  fill: var(--ink);
+}
+
+.fig-pink {
+  fill: var(--pink);
+}
+
+.fig-blue {
+  fill: var(--blue);
+}
+
+.fig-jade {
+  fill: var(--jade);
+}
+
+.fig-violet {
+  fill: var(--violet);
+}
+
+/* Boxes are nodes, the ring is the commons. */
+.fig-box,
+.fig-ring,
+.fig-hub {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+
+.fig-box-pink {
+  stroke: var(--pink);
+}
+
+.fig-box-blue {
+  stroke: var(--blue);
+}
+
+.fig-box-violet {
+  stroke: var(--violet);
+}
+
+/* The reach rings, widest first (online, local, your node). */
+.fig-ring-jade,
+.fig-ring-blue,
+.fig-ring-violet,
+.fig-ring-pink {
+  fill: none;
+  stroke-width: 5;
+}
+
+.fig-ring-jade {
+  stroke: var(--jade);
+}
+
+.fig-ring-blue {
+  stroke: var(--blue);
+}
+
+.fig-ring-violet {
+  stroke: var(--violet);
+}
+
+.fig-ring-pink {
+  stroke: var(--pink);
+}
+
+.fig-hub {
+  stroke: var(--blue);
+  stroke-width: 5;
+}
+
+.fig-ring {
+  fill: none;
+}
+
+.fig-label {
+  font: 700 21px var(--font-mono);
+  fill: var(--ink);
+}
+
+.fig-note {
+  font: 18px var(--font-text);
+  fill: var(--text-muted);
+}
+
+/* Coloured labels use the darker inks, so they read on white. */
+.fig-jade-text {
+  fill: var(--jade-ink);
+}
+
+.fig-pink-text {
+  fill: var(--pink);
+}
+
+.fig-blue-text {
+  fill: var(--blue);
+}
+
+.fig-violet-text {
+  fill: var(--violet-ink);
 }
 
 /* Reach: who can see a profile. Each reach has a --tone. */
@@ -1258,9 +1400,10 @@ a.rail-foot {
 
 /* Ramp: the member's next step and tabs (decision record 0022) */
 
-/* Buttons from heldincommon.org: ink, outline, and the pair used on a pink
-   block (white, and white outline). */
-:where(.btn-ink, .btn-line, .btn-solid, .btn-outline) {
+/* Buttons from heldincommon.org: the blue action button, the outline, and
+   the pair used on a pink block (white, and white outline). A button is
+   never ink: ink is for its shadow, so a button never sits black on black. */
+:where(.btn-action, .btn-line, .btn-solid, .btn-outline) {
   display: inline-block;
   padding: 12px 20px;
   border: 0;
@@ -1270,7 +1413,7 @@ a.rail-foot {
   cursor: pointer;
 }
 
-:where(.btn-ink, .btn-line, .btn-solid, .btn-outline):is(
+:where(.btn-action, .btn-line, .btn-solid, .btn-outline):is(
     :hover,
     :focus-visible
   ) {
@@ -1279,9 +1422,9 @@ a.rail-foot {
   left: var(--lift-by);
 }
 
-.btn-ink {
-  background: var(--ink);
-  color: var(--white);
+.btn-action {
+  background: var(--blue);
+  color: var(--white); /* 5:1 on blue, bold */
 }
 
 .btn-line {
@@ -1699,20 +1842,6 @@ a.rail-foot {
   opacity: 0.8;
 }
 
-.choice.is-soon {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.soon-tag {
-  padding: 4px 8px;
-  font: 700 var(--text-2xs) var(--font-mono);
-  letter-spacing: var(--track-wide);
-  text-transform: uppercase;
-  color: var(--accent);
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-
 .license-grid.compact {
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
 }
@@ -1911,7 +2040,7 @@ a.rail-foot {
 
 .card-edit:hover,
 .card-edit:focus-visible {
-  background: var(--ink);
+  background: var(--blue);
   color: var(--white);
 }
 

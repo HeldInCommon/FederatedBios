@@ -1,4 +1,4 @@
-//! "Run your own commons" (the guide on a node), the practice commons, and
+//! "Run your own commons" (the guide on a node), the local commons, and
 //! separate sign-in cookies for servers on the same computer.
 
 use axum::http::{header, StatusCode};
@@ -12,7 +12,7 @@ async fn a_node_has_the_guide_and_a_commons_does_not() {
     let r = send(&node, get("/run-a-commons", None)).await;
     assert_eq!(r.status, StatusCode::OK);
     assert!(r.text.contains("Run your own commons"));
-    assert!(r.text.contains("What&#39;s a practice commons?") || r.text.contains("What's a practice commons?"));
+    assert!(r.text.contains("What&#39;s a local commons?") || r.text.contains("What's a local commons?"));
     // Outside the app there is nothing to press: directions instead.
     assert!(!r.text.contains("hic-app://"));
 
@@ -21,7 +21,7 @@ async fn a_node_has_the_guide_and_a_commons_does_not() {
 }
 
 #[tokio::test]
-async fn in_the_app_the_guide_offers_a_practice_commons() {
+async fn in_the_app_the_guide_offers_a_local_commons() {
     let (node, _) = server_with(Role::Node, &[("HIC_LAUNCH_TOKEN", "t")]);
     let r = send(&node, get("/run-a-commons", None)).await;
     assert!(r.text.contains("hic-app://open/practice"));
@@ -29,10 +29,11 @@ async fn in_the_app_the_guide_offers_a_practice_commons() {
 }
 
 #[tokio::test]
-async fn a_practice_commons_says_so() {
-    let (practice, _) = server_with(Role::Commons, &[("HIC_PRACTICE", "1")]);
-    let r = send(&practice, get("/", None)).await;
-    assert!(r.text.contains("Practice commons"));
+async fn a_local_commons_says_so_and_shows_where_to_share() {
+    let (local, _) = server_with(Role::Commons, &[("HIC_PRACTICE", "1"), ("HIC_BASE_URL", "http://192.168.1.20:8082")]);
+    let r = send(&local, get("/", None)).await;
+    assert!(r.text.contains("Local commons"));
+    assert!(r.text.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
 }
 
 #[tokio::test]

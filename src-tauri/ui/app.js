@@ -4,16 +4,16 @@
 //
 // The setup window says what to do in its address (?do=…&role=…):
 //   do=add&role=node|commons      run the other role too: name it, start it
-//   do=rename&role=node|commons   rename it
-//   do=remove-practice            confirm removing the practice commons
+//   do=rename&role=node|commons|practice   rename it
+//   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
-//   setup_state  -> { role, name, node_name, commons_name, practice, lan_url }
+//   setup_state  -> { role, name, node_name, commons_name, practice_name, practice, lan_url }
 //   choose_role  (role, name)           first launch: save the choice and name, start it
 //   add_role     (role, name)           add the other role and start it
 //   set_name     (role, name)           name (or rename) the node or commons
-//   remove_practice_now                 delete the practice commons
+//   remove_practice_now                 delete the local commons
 //   steward_links -> [string]           the commons' steward link, per address
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
@@ -132,7 +132,7 @@ function choose(role){
 function showNaming(role, mode, current){
   naming = { role, mode };
   const t = NAMING_TEXT[mode];
-  $('naming-role').textContent = role === 'commons' ? 'commons' : 'node';
+  $('naming-role').textContent = { commons: 'commons', practice: 'local commons' }[role] || 'node';
   $('naming-eyebrow').textContent = t.eyebrow;
   const note = mode === 'add' ? ADD_NOTE[role] : t.note;
   $('naming-why').textContent = note;
@@ -253,9 +253,10 @@ async function init(){
   lanUrl = st.lan_url;
   // The setup window (opened from the Go menu or a page's link).
   const q = new URLSearchParams(location.search);
-  const todo = q.get('do'), role = q.get('role') === 'commons' ? 'commons' : 'node';
+  const asked = q.get('role');
+  const todo = q.get('do'), role = asked === 'commons' || asked === 'practice' ? asked : 'node';
   if (todo === 'add') showNaming(role, 'add', '');
-  else if (todo === 'rename') showNaming(role, 'rename', role === 'commons' ? st.commons_name : st.node_name);
+  else if (todo === 'rename') showNaming(role, 'rename', { node: st.node_name, commons: st.commons_name, practice: st.practice_name }[role]);
   else if (todo === 'remove-practice') showRemove();
   else if (todo === 'steward-link') showStewardLink();
   // The main window.
