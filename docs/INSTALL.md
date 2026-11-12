@@ -138,7 +138,11 @@ folder (`~/Library/Application Support/org.heldincommon.node/` on a Mac,
 ```
 
 The commons then accepts both addresses, shows the public one first ("Nodes
-share to …"), and prints a steward link for each.
+share to …"), and has a steward link for each.
+
+**Your steward link** opens the steward view from any computer: in the app,
+choose **Go → Show steward link…** and press **Copy**. Keep it private:
+anyone who has it can approve people and make invite codes.
 
 To host on a server or in Docker instead, see [commons/README.md](../commons/README.md).
 
