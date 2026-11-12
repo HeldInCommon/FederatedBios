@@ -73,7 +73,7 @@ async fn editing_makes_a_new_version_with_the_same_id() {
     let sid = join_and_publish(&node, "ada", "public").await;
     let (id, csrf) = write(&node, &sid, "ada").await;
     let form = send(&node, get(&format!("/story/{id}/edit"), Some(&sid))).await.text;
-    assert!(form.contains("value=\"Bins at six\"") && form.contains("Save changes"));
+    assert!(form.contains("value=\"Bins at six\"") && form.contains(">Save</button>"));
 
     let body = format!("csrf={csrf}&title=Bins+at+seven&text=Later+now.");
     let r = send(&node, post_form(&format!("/story/{id}/edit"), &body, Some(&sid))).await;

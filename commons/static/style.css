@@ -1886,6 +1886,36 @@ a.rail-foot {
   color: rgb(255 255 255 / 80%);
 }
 
+/* Edit, on your own story cards: a small chunky button, above the card's
+   stretched title link (like the chips) so it opens the editor, not the story. */
+.card-edit {
+  position: relative;
+  z-index: 1;
+  padding: 4px 10px;
+  border: var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--text-sm) var(--font-text);
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+}
+
+.card-edit:hover,
+.card-edit:focus-visible {
+  background: var(--ink);
+  color: var(--white);
+}
+
+/* Edit and export, at the top of your own story. */
+.story-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
 /* On your own stories the chips open the rights step. */
 .story-chips.is-editable {
   position: relative;

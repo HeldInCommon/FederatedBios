@@ -23,7 +23,7 @@ pub async fn stories(State(st): State<Shared>, headers: HeaderMap) -> Response {
         let held = st.store.held_stories();
         let withdrawn = story::recent_withdrawals(&st.store.story_tombstones(), &held, &st.store.remotes(), now());
         let noindex = held.iter().any(|h| h.story.reach() == Reach::Commons);
-        let body = pages::commons_stories(&st.site.instance, &held, &withdrawn, now());
+        let body = pages::commons_stories(&st.site.instance, st.site.in_app, &held, &withdrawn, now());
         return render(&st.site, Page::new("Stories", me.as_deref(), body).noindex(noindex).at(Section::Stories));
     }
     let visible: Vec<OwnStory> =

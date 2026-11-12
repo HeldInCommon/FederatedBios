@@ -49,9 +49,25 @@ fn card(href: &str, s: &Story, tone: &str, foot_end: Markup, edit_terms: Option<
                 p class="card-first" { (s.first_line()) }
                 div class="card-foot" {
                     (chips(s, edit_terms))
+                    // Your own story: edit it from the card.
+                    @if edit_terms.is_some() {
+                        a class="card-edit" href={ (href) "/edit" } { "Edit" }
+                    }
                     span class="card-foot-end" { (foot_end) }
                 }
             }
+        }
+    }
+}
+
+/// The "Write a new story" card that leads every story grid: `href` is where
+/// writing happens (this node's form, or the way to a node), `sub` says so.
+fn new_story_card(href: &str, sub: &str) -> Markup {
+    html! {
+        a class="new-story-card" href=(href) {
+            span class="star step-1" aria-hidden="true" { "+" }
+            span class="new-story-title" { "Write a new story" }
+            span class="new-story-sub" { (sub) }
         }
     }
 }
@@ -77,22 +93,15 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
     html! {
         (page_head("Your node \u{b7} stories", "Stories", Some("Small pieces of writing made on this node. Each stays here until its author shares it.")))
         (section_label("Stories", Some(&count)))
-        @if stories.is_empty() {
-            p class="empty-note" {
-                "No stories yet. "
-                @if signed_in { a href="/stories/new" { "Write the first one" } "." } @else { a href="/login" { "Sign in" } " to write one." }
-            }
-        }
         div class="story-grid" {
             // Writing another is always the first card, so it's there after
-            // a withdrawal or whenever there's more to say.
-            @if signed_in && !stories.is_empty() {
-                a class="new-story-card" href="/stories/new" {
-                    span class="star step-1" aria-hidden="true" { "+" }
-                    span class="new-story-title" { "Write a new story" }
-                    span class="new-story-sub" { "It stays on this computer until you share it." }
-                }
-            }
+            // a withdrawal, on an empty page, or whenever there's more to say.
+            // Signed out, the form asks you to sign in first.
+            (new_story_card("/stories/new", if signed_in {
+                "It stays on this computer until you share it."
+            } else {
+                "Sign in first; it stays on this computer until you share it."
+            }))
             @for s in stories {
                 @let where_ = match s.shared_to.len() {
                     0 => "On this computer".to_string(),
@@ -127,7 +136,13 @@ pub fn author_stories(handle: &str, held: &[&HeldStory]) -> Markup {
 
 /// The stories shared to this commons, most recently arrived first, then
 /// any withdrawn in the last day.
-pub fn commons_stories(instance: &str, held: &[HeldStory], withdrawn: &[RecentWithdrawal], now: u64) -> Markup {
+pub fn commons_stories(
+    instance: &str,
+    in_app: bool,
+    held: &[HeldStory],
+    withdrawn: &[RecentWithdrawal],
+    now: u64,
+) -> Markup {
     let count = if withdrawn.is_empty() {
         format!("{} shared", held.len())
     } else {
@@ -136,10 +151,14 @@ pub fn commons_stories(instance: &str, held: &[HeldStory], withdrawn: &[RecentWi
     html! {
         (page_head(&format!("{instance} \u{b7} stories"), "Stories", Some("Small stories, each still held by the person who wrote it.")))
         (section_label("Stories", Some(&count)))
-        @if held.is_empty() && withdrawn.is_empty() {
-            p class="empty-note" { "No stories here yet. Members write them on their own nodes and share them in." }
-        }
         div class="story-grid" {
+            // Stories are written on a node: in the app, yours is one click
+            // away; anyone else is shown how to get one.
+            @if in_app {
+                (new_story_card(super::guide::OPEN_NODE, "Stories are written on your node, then shared here."))
+            } @else {
+                (new_story_card("/join", "Stories are written on your own node. Here's how to get one."))
+            }
             @for h in held {
                 (card(&format!("/stories/{}/{}", keyid(h.author()), h.story.id), &h.story, "tone-violet", verified(), None))
             }
@@ -176,8 +195,16 @@ mod tests {
     }
 
     #[test]
+    fn a_commons_leads_to_a_node_for_writing() {
+        let in_app = commons_stories("Room 4", true, &[], &[], 10).into_string();
+        assert!(in_app.contains(r#"class="new-story-card" href="hic-app://open/node""#), "in the app: your node");
+        let visitor = commons_stories("Room 4", false, &[], &[], 10).into_string();
+        assert!(visitor.contains(r#"class="new-story-card" href="/join""#), "elsewhere: how to get one");
+    }
+
+    #[test]
     fn room_cards_show_terms_and_verification() {
-        let m = commons_stories("Room 4", &[held("Night bus")], &[], 10).into_string();
+        let m = commons_stories("Room 4", false, &[held("Night bus")], &[], 10).into_string();
         assert!(m.contains("Room 4 \u{b7} stories") && m.contains("Night bus") && m.contains("First line."));
         assert!(m.contains("CC BY 4.0") && m.contains("Credit") && m.contains("Verified"));
         assert!(m.contains("1 shared"));
@@ -200,13 +227,13 @@ mod tests {
         let theirs = node_stories(&own, Some("sam")).into_string();
         assert!(!theirs.contains("/rights"), "only the author can change the terms");
         assert!(!node_stories(&own, None).into_string().contains("/rights"));
-        assert!(!commons_stories("Room 4", &[held("Night bus")], &[], 10).into_string().contains("/rights"));
+        assert!(!commons_stories("Room 4", false, &[held("Night bus")], &[], 10).into_string().contains("/rights"));
     }
 
     #[test]
     fn a_withdrawal_names_who_and_when_but_keeps_nothing_of_the_story() {
         let w = [RecentWithdrawal { handle: "sam".into(), at: 100 }];
-        let m = commons_stories("Room 4", &[], &w, 220).into_string();
+        let m = commons_stories("Room 4", false, &[], &w, 220).into_string();
         assert!(m.contains("Withdrawn by @sam \u{b7} 2 min ago"));
         assert!(m.contains("0 shared \u{b7} 1 withdrawn"));
         assert!(!m.contains("card-title"), "no title");

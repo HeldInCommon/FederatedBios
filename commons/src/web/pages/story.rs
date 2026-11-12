@@ -83,13 +83,14 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
                 p class="eyebrow" { "Your story" }
                 h1 class="story-title" { (st.title) }
                 p class="story-meta" { "@" (st.handle) " \u{b7} " (words(st.word_count())) " \u{b7} written " (ago(s.created_at(), now)) }
-                (story_text(st))
+                // Your own story: edit it from the top, before reading on.
                 @if owner.is_some() {
-                    div class="actions" {
+                    div class="story-tools" {
                         a class="btn-line" href={ "/story/" (st.id) "/edit" } { "Edit story" }
                         a class="link-btn" href={ "/story/" (st.id) "/text" } { "Export as a text file" }
                     }
                 }
+                (story_text(st))
             }
             aside class="story-side" {
                 @if let Some(o) = owner { (owner_side(s, o, now)) }
