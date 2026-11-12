@@ -2,14 +2,15 @@
  *
  * Look: the "Common Signal" system from heldincommon.org. Space Grotesk for
  * text, Space Mono for labels and headings, Cormorant for ledes; pink, blue,
- * jade and violet on white; hard ink hairlines; flat, square-cornered blocks.
+ * jade and violet; panels floating on a quilt; chunky edges or none, never
+ * hairlines; square-cornered blocks inside round outer panels.
  *
  * How this file is organised:
  *   1. Design tokens: every colour, font, size and space. Change them here
  *      and the whole site follows.
  *   2. Base: the page, links, focus.
  *   3. Shared patterns: the mono label, buttons, form controls, panels.
- *   4. Site frame: role bar, top bar, footer.
+ *   4. Site frame: the quilt, the rail, the page panel and its main links.
  *   5. Page parts, in the order a visitor meets them.
  *   6. Small screens.
  *
@@ -43,6 +44,9 @@
   --cream: #f2efe8;
   --cream-deep: #e3e0d8;
   --line: rgb(17 17 17 / 15%);
+  --felt-veil: rgb(
+    227 225 230 / 78%
+  ); /* --felt at 78%: dims the quilt on phones */
 
   /* What each colour is for */
   --text: var(--ink-soft);
@@ -51,6 +55,8 @@
   --surface-sunk: #f1f0f2;
   --link: var(--blue);
   --accent: var(--pink);
+  --text-on-jade: #04140e; /* near-black with a green cast, for the jade notice bar */
+  --text-on-oxblood: #5fe0b0; /* light jade that reads on oxblood (8:1) */
 
   /* Fonts */
   --font-text: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -71,6 +77,10 @@
   --track: 0.08em; /* letter-spacing for mono labels */
   --track-wide: 0.12em;
 
+  /* Button padding (the primary is the larger call to action) */
+  --pad-primary: 15px 24px;
+  --pad-secondary: 10px 18px;
+
   /* Space (a 4px scale) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -84,16 +94,17 @@
 
   /* Lines and widths */
 
-  /* Lines are chunky or absent: no hairlines. A divider is space, so
-     --rule-soft draws nothing; --rule is for the few edges that must show. */
+  /* Lines are chunky or absent: no hairlines. A divider is space (padding),
+     not a line; --rule is for the few edges that must show. */
   --rule: 2px solid var(--ink);
-  --rule-strong: 2px solid var(--ink);
-  --rule-soft: 0 solid transparent;
   --focus: 2px solid var(--blue);
 
   /* A card rising onto a hard ink shadow, as on heldincommon.org's model landscape */
   --lift-by: -4px; /* how far a card or button rises on hover (top and left) */
   --shadow-lift: 9px 9px 0 var(--ink);
+  --shadow-lift-accent: 10px 10px 0 var(--accent); /* the "new story" card's pink shadow */
+  --lift-by-small: -2px; /* small things (chips) rise less */
+  --shadow-lift-small: 4px 4px 0 var(--ink);
   --measure: 70ch; /* longest comfortable line of text */
   --panel-width: 640px;
   --page-width: 1180px;
@@ -201,7 +212,7 @@ code,
 }
 
 .primary {
-  padding: 15px 24px;
+  padding: var(--pad-primary);
   border: 0;
   background: var(--accent);
   color: var(--ink);
@@ -209,7 +220,7 @@ code,
 
 .secondary {
   flex: none;
-  padding: 10px 18px;
+  padding: var(--pad-secondary);
   font-weight: 600;
   border: var(--rule);
   background: var(--surface);
@@ -273,7 +284,7 @@ select {
   font: var(--text-base) / 1.5 var(--font-text);
   color: var(--text);
   background: var(--surface);
-  border: var(--rule-strong);
+  border: var(--rule);
   border-radius: 0;
 }
 
@@ -705,7 +716,7 @@ a.rail-foot {
   margin: 0 0 var(--space-5);
   padding: var(--space-4) var(--space-5);
   background: var(--jade);
-  color: #04140e;
+  color: var(--text-on-jade);
 }
 
 .notice-bar p {
@@ -912,7 +923,7 @@ a.rail-foot {
 
 /* The key fingerprint, in a light jade that reads on oxblood (8:1). */
 .pending-item .mono {
-  color: #5fe0b0;
+  color: var(--text-on-oxblood);
 }
 
 /* The steward's panel: a white card on the grey panel. Only the founding
@@ -965,7 +976,7 @@ a.rail-foot {
 .handle-input {
   display: flex;
   align-items: center;
-  border: var(--rule-strong);
+  border: var(--rule);
 }
 
 .handle-input .at {
@@ -1042,7 +1053,7 @@ a.rail-foot {
   width: 104px;
   height: 104px;
   object-fit: cover;
-  border: var(--rule-strong);
+  border: var(--rule);
   background: var(--surface);
 }
 
@@ -1068,7 +1079,6 @@ a.rail-foot {
 
 .profile-places li {
   padding: 6px 0;
-  border-bottom: var(--rule-soft);
 }
 
 .place-city {
@@ -1476,7 +1486,6 @@ a.rail-foot {
   flex-direction: column;
   margin-top: auto;
   padding-top: var(--space-3);
-  border-top: var(--rule-soft);
   font: var(--text-xs) / 1.7 var(--font-mono);
 }
 
@@ -1818,7 +1827,6 @@ a.rail-foot {
   gap: var(--space-2);
   margin-top: auto;
   padding-top: var(--space-3);
-  border-top: var(--rule-soft);
   font: var(--text-2xs) var(--font-mono);
   letter-spacing: var(--track);
   text-transform: uppercase;
@@ -1865,7 +1873,7 @@ a.rail-foot {
 .new-story-card:focus-visible {
   top: var(--lift-by);
   left: var(--lift-by);
-  box-shadow: 10px 10px 0 var(--accent);
+  box-shadow: var(--shadow-lift-accent);
 }
 
 .new-story-card .star {
@@ -1929,9 +1937,9 @@ a.rail-foot {
 
 .story-chips.is-editable .story-chip:hover,
 .story-chips.is-editable:focus-visible .story-chip {
-  box-shadow: 4px 4px 0 var(--ink);
-  top: -2px;
-  left: -2px;
+  box-shadow: var(--shadow-lift-small);
+  top: var(--lift-by-small);
+  left: var(--lift-by-small);
 }
 
 .story-chips.is-editable:focus-visible {
@@ -2194,7 +2202,6 @@ a.rail-foot {
 .advanced {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
-  border-top: var(--rule-soft);
 }
 
 .advanced summary {
@@ -2215,10 +2222,7 @@ a.rail-foot {
    never competes with small text. */
 @media (max-width: 760px) {
   body {
-    background-image: linear-gradient(
-        rgb(227 225 230 / 78%),
-        rgb(227 225 230 / 78%)
-      ),
+    background-image: linear-gradient(var(--felt-veil), var(--felt-veil)),
       var(--quilt, none);
     background-attachment: scroll;
   }

@@ -60,8 +60,8 @@ pub struct Place {
     /// view goes through the app (`hic-app://open/…`), which adds the launch
     /// token, so the token is never written into a page (ADR 0023).
     pub url: String,
-    /// The colour of the role bar on that server's pages (used by the
-    /// corner buttons on pages elsewhere).
+    /// That server's colour: the background of its button in the corner bar
+    /// the app adds to pages that have no rail of their own.
     pub tone: &'static str,
     /// Which kind of server it is (`node`, `commons`, `practice`): the rail's
     /// card picks its starburst colour from this.
