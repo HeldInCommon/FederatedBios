@@ -1,6 +1,7 @@
-//! "Sharing and rights": who can see something, its licence and its signals,
-//! as numbered panels with each choice explained (decision record 0022).
-//! Used by the profile form and by a story's rights step.
+//! "Sharing and rights": who can see something, its licence, its signals and
+//! its Held in Common Signals, as numbered panels with each choice explained
+//! (decision records 0022 and 0025). Used by the profile form and by a
+//! story's rights step, which adds a fifth: how it travels.
 //!
 //! Every choice carries a `data-label`, which `/rights.js` copies into the
 //! "What travels with every copy" summary as the reader changes their mind.
@@ -9,8 +10,9 @@
 
 use maud::{html, Markup};
 
-use super::parts::{burst, Tone};
+use super::parts::{burst, Chosen, Tone};
 use crate::governance::{license_terms, LICENSES, SIGNALS};
+use crate::held_signals::{HeldSignals, OWN_TERMS_LABEL, OWN_TERMS_MAX, WITHDRAW_LABEL};
 use crate::model::Reach;
 
 /// Whose rights these are: the wording differs a little.
@@ -63,8 +65,10 @@ fn reach_choices(kind: RightsFor) -> [(Reach, &'static str, &'static str, &'stat
     }
 }
 
-/// The three numbered panels: who can see it, licence, signals.
-pub fn rights_fields(kind: RightsFor, reach: Reach, license: &str, signals: &[String]) -> Markup {
+/// The four numbered panels, filled in with what is `chosen`: who can see
+/// it, licence, signals, and Held in Common Signals.
+pub fn rights_fields(kind: RightsFor, chosen: &Chosen) -> Markup {
+    let (reach, license, signals) = (chosen.reach, chosen.license, chosen.signals);
     html! {
         fieldset class="rights-step" {
             legend { (burst(1, Tone::Pink)) span { "Who can see it" } }
@@ -126,15 +130,43 @@ pub fn rights_fields(kind: RightsFor, reach: Reach, license: &str, signals: &[St
                 }
             }
         }
+        (held_signals_step(chosen.held_signals))
     }
 }
 
-/// The fourth step for a story: does the commons keep a copy? Only the first
+/// Step four, Held in Common Signals (decision record 0025): the right to
+/// withdraw even after a model is trained, and the person's own terms for
+/// AI in their own words. Both are signed and travel with every copy.
+fn held_signals_step(held: &HeldSignals) -> Markup {
+    html! {
+        fieldset class="rights-step" {
+            legend { (burst(4, Tone::Violet)) span { "Held in Common Signals: your terms for AI, in your words" } }
+            p class="hint" { "Two more things you can say about AI, beyond the CC signals. Both are signed with your key and travel with every copy." }
+            div class="choice-panel" {
+                label class="choice" {
+                    span class="choice-head" {
+                        input type="checkbox" name="withdraw_after_training" value="yes" data-label=(WITHDRAW_LABEL) checked[held.withdraw_after_training];
+                        span class="choice-title" { (WITHDRAW_LABEL) }
+                    }
+                    span class="choice-body" { "If an AI model has already been trained on this, you keep the right to ask for it to be taken out of the model, or for the model to stop using it." }
+                }
+            }
+            div class="field" {
+                label class="field-label" for="own_terms" { "Your terms for AI, in your own words" }
+                textarea id="own_terms" name="own_terms" maxlength=(OWN_TERMS_MAX) rows="4" data-label=(OWN_TERMS_LABEL) aria-describedby="own_terms_hint"
+                    placeholder="For example: you may learn from this for open research, but not to imitate my voice." { (held.own_terms) }
+                p class="hint" id="own_terms_hint" { "Say what AI systems may and may not do with this, and how you relate to them. Plain text, up to 1,000 characters. Leave it empty if the choices above say enough." }
+            }
+        }
+    }
+}
+
+/// The fifth step for a story: does the commons keep a copy? Only the first
 /// way exists today; the second is proposed (decision record 0021).
 pub fn how_it_travels() -> Markup {
     html! {
         fieldset class="rights-step" {
-            legend { (burst(4, Tone::Violet)) span { "How it travels" } }
+            legend { (burst(5, Tone::Ink)) span { "How it travels" } }
             p class="hint" { "Does the commons keep a copy of your story, or only show it while you're here?" }
             div class="choice-panel" {
                 label class="choice" {
@@ -164,18 +196,41 @@ pub fn how_it_travels() -> Markup {
 mod tests {
     use super::*;
 
+    /// Terms with these choices, for these tests.
+    fn chosen<'a>(reach: Reach, license: &'a str, signals: &'a [String], held: &'a HeldSignals) -> Chosen<'a> {
+        Chosen { reach, license, signals, held_signals: held }
+    }
+
     #[test]
     fn the_current_choices_are_selected_and_labelled() {
-        let m = rights_fields(RightsFor::Profile, Reach::Commons, "cc-by-nc", &["open".into()]).into_string();
+        let (open, none) = (["open".to_string()], HeldSignals::default());
+        let m = rights_fields(RightsFor::Profile, &chosen(Reach::Commons, "cc-by-nc", &open, &none)).into_string();
         assert!(m.contains("value=\"commons\" data-label=\"Listed in the commons\" checked"));
         assert!(m.contains("value=\"cc-by-nc\" data-label=\"CC BY-NC 4.0\" checked"));
         assert!(m.contains("value=\"open\" data-label=\"Open\" checked"));
         assert!(m.contains("Commercial use"), "profiles explain licences in full");
+        assert!(!m.contains("value=\"yes\" data-label=\"Withdraw even after training\" checked"));
+    }
+
+    #[test]
+    fn held_in_common_signals_are_step_four_and_prefilled() {
+        let held = HeldSignals { withdraw_after_training: true, own_terms: "<i>Mine</i>".into() };
+        let m = rights_fields(RightsFor::Story, &chosen(Reach::Public, "cc-by", &[], &held)).into_string();
+        let step3 = m.find("Signals: how AI models may learn from it").unwrap();
+        let step4 = m.find("Held in Common Signals").unwrap();
+        assert!(step3 < step4, "after the CC signals");
+        assert!(m.contains(">4</text>"));
+        assert!(m.contains("value=\"yes\" data-label=\"Withdraw even after training\" checked"));
+        assert!(m.contains("label class=\"field-label\" for=\"own_terms\""), "the text box has a visible label");
+        assert!(m.contains("maxlength=\"1000\""));
+        assert!(m.contains("&lt;i&gt;Mine&lt;/i&gt;</textarea>"), "own terms are escaped, never HTML");
+        assert!(how_it_travels().into_string().contains(">5</text>"), "How it travels is now step five");
     }
 
     #[test]
     fn stories_never_claim_encryption() {
-        let m = rights_fields(RightsFor::Story, Reach::Commons, "cc-by", &[]).into_string();
+        let none = HeldSignals::default();
+        let m = rights_fields(RightsFor::Story, &chosen(Reach::Commons, "cc-by", &[], &none)).into_string();
         assert!(!m.contains("Encrypted"), "members-only stories aren't encrypted (decision record 0020)");
         assert!(m.contains("license-grid compact") && m.contains("Any use, with credit"));
     }

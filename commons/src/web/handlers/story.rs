@@ -24,10 +24,10 @@ fn may_read(st: &AppState, headers: &HeaderMap, s: &OwnStory) -> bool {
 }
 
 /// What just happened to a story, shown once at the top of its page
-/// (`?done=shared|withdrawn&at=<commons host>`, or `?done=saved`).
+/// (`?done=shared|shared-older|withdrawn&at=<commons host>`, or `?done=saved`).
 #[derive(serde::Deserialize)]
 pub struct DoneQ {
-    /// `shared`, `withdrawn` or `saved`.
+    /// `shared`, `shared-older` (without Held in Common Signals), `withdrawn` or `saved`.
     pub done: Option<String>,
     /// The commons' host, for shared and withdrawn (checked before it's shown).
     pub at: Option<String>,
@@ -41,6 +41,7 @@ fn outcome(q: &DoneQ) -> Option<pages::StoryOutcome> {
     });
     match (q.done.as_deref(), at) {
         (Some("shared"), Some(at)) => Some(pages::StoryOutcome::Shared(at.to_string())),
+        (Some("shared-older"), Some(at)) => Some(pages::StoryOutcome::SharedWithoutHeldSignals(at.to_string())),
         (Some("withdrawn"), Some(at)) => Some(pages::StoryOutcome::Withdrawn(at.to_string())),
         (Some("saved"), _) => Some(pages::StoryOutcome::Saved),
         _ => None,
@@ -190,15 +191,37 @@ pub(crate) fn forget_shares(st: &AppState, h: &str, only: Option<&str>) -> Resul
     Ok(())
 }
 
+/// How a commons took a story.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoryTaken {
+    /// As signed on this node, Held in Common Signals and all.
+    AsWritten,
+    /// An older commons took it as a `Story`, without its Held in Common
+    /// Signals (decision record 0025).
+    WithoutHeldSignals,
+}
+
+impl StoryTaken {
+    /// The `done=` value that confirms it on the story's page.
+    pub(crate) fn done(self) -> &'static str {
+        match self {
+            StoryTaken::AsWritten => "shared",
+            StoryTaken::WithoutHeldSignals => "shared-older",
+        }
+    }
+}
+
 /// Send story `s` to `commons` and, if it's taken, record when. After a key
-/// change the story is signed again with the member's current key first.
+/// change the story is signed again with the member's current key first. A
+/// commons that predates `StoryV2` answers 400; then the same story is sent
+/// as a `Story`, without its Held in Common Signals ([`story::older_copy`]).
 /// **Writes the story file.** The error is a sentence to show the member.
 pub(crate) async fn share_story_to(
     st: &AppState,
     mut s: OwnStory,
     rec: &HandleRec,
     commons: &str,
-) -> Result<(), String> {
+) -> Result<StoryTaken, String> {
     if s.story.reach() == Reach::Members {
         return Err("Members-only stories stay on your node.".into());
     }
@@ -211,13 +234,23 @@ pub(crate) async fn share_story_to(
         update_story(st, &s.story.id, |old| OwnStory { signed, ..old })?;
     }
     let label = host_label(commons);
-    let r = post_to_commons(st, commons, &story::share_message(&s.signed)).await?;
+    let mut taken = StoryTaken::AsWritten;
+    let mut r = post_to_commons(st, commons, &story::share_message(&s.signed)).await?;
+    if r.status() == StatusCode::BAD_REQUEST {
+        // Perhaps a commons from before StoryV2: offer the older type, if
+        // there is one (there isn't for a plain Story).
+        if let Some(older) = story::older_copy(&s.story, &s.signed, &rec.ed_priv)? {
+            r = post_to_commons(st, commons, &story::share_message(&older)).await?;
+            taken = StoryTaken::WithoutHeldSignals;
+        }
+    }
     if !r.status().is_success() {
         let why = r.text().await.unwrap_or_default();
         return Err(format!("{label} didn't take the story: {why}"));
     }
     update_story(st, &s.story.id, |old| old.with_shared_to(commons, now()))
-        .map_err(|e| format!("Shared to {label}, but this node couldn't record it: {e}"))
+        .map_err(|e| format!("Shared to {label}, but this node couldn't record it: {e}"))?;
+    Ok(taken)
 }
 
 /// `POST /story/share` — send the signed story to a commons.
@@ -230,7 +263,7 @@ pub async fn story_share(State(st): State<Shared>, headers: HeaderMap, body: Str
     let commons = f.one("commons_url").trim().trim_end_matches('/').to_string();
     let id = s.story.id.clone();
     match share_story_to(&st, s, &rec, &commons).await {
-        Ok(()) => redirect(&format!("/story/{id}?done=shared&at={}", host_label(&commons))),
+        Ok(taken) => redirect(&format!("/story/{id}?done={}&at={}", taken.done(), host_label(&commons))),
         Err(e) => error_page(&st.site, &e),
     }
 }

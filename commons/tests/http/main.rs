@@ -13,6 +13,7 @@ mod common;
 mod accounts;
 mod basics;
 mod guide;
+mod held_signals;
 mod publishing;
 mod ramp;
 mod sharing;

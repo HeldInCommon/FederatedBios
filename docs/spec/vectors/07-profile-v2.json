@@ -1,0 +1,79 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"box_key\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"display_name\":\"Tega Brain\",\"handle\":\"tega\",\"held_signals\":{\"own_terms\":\"Learn from this for open research.\\nNot to imitate my voice — ask me first.\",\"withdraw_after_training\":true},\"license\":\"cc-by-nc\",\"origin\":\"https://tega.example\",\"origin_label\":\"Tega's node\",\"profile\":{\"avatar\":\"\",\"bio\":\"Works with environmental data.\",\"name\":\"Tega Brain\",\"places\":[],\"pronouns\":\"she/her\",\"role\":\"Artist\"},\"signals\":[\"credit\"],\"version_cid\":\"2f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659\",\"visibility\":\"public\"},\"created_at\":1700000500,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"ProfileV2\"}",
+  "cid": "493c6df580fb5bbb66e6116b947eb2e93d17528441127e77b1c9b748ffddcca1",
+  "description": "A ProfileV2 (decision record 0025): a Profile body plus held_signals, the right to withdraw even after training and the person's own terms for AI. Everything is signed.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "box_key": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "display_name": "Tega Brain",
+      "handle": "tega",
+      "held_signals": {
+        "own_terms": "Learn from this for open research.\nNot to imitate my voice — ask me first.",
+        "withdraw_after_training": true
+      },
+      "license": "cc-by-nc",
+      "origin": "https://tega.example",
+      "origin_label": "Tega's node",
+      "profile": {
+        "avatar": "",
+        "bio": "Works with environmental data.",
+        "name": "Tega Brain",
+        "places": [],
+        "pronouns": "she/her",
+        "role": "Artist"
+      },
+      "signals": [
+        "credit"
+      ],
+      "version_cid": "2f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+      "visibility": "public"
+    },
+    "created_at": 1700000500,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "ProfileV2"
+  },
+  "name": "07-profile-v2.json",
+  "signed": {
+    "cid": "493c6df580fb5bbb66e6116b947eb2e93d17528441127e77b1c9b748ffddcca1",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "box_key": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "display_name": "Tega Brain",
+        "handle": "tega",
+        "held_signals": {
+          "own_terms": "Learn from this for open research.\nNot to imitate my voice — ask me first.",
+          "withdraw_after_training": true
+        },
+        "license": "cc-by-nc",
+        "origin": "https://tega.example",
+        "origin_label": "Tega's node",
+        "profile": {
+          "avatar": "",
+          "bio": "Works with environmental data.",
+          "name": "Tega Brain",
+          "places": [],
+          "pronouns": "she/her",
+          "role": "Artist"
+        },
+        "signals": [
+          "credit"
+        ],
+        "version_cid": "2f4e0af70ee2d0a728728e0f045a139cbf7cfd34df02a0ea71372ad93b40f659",
+        "visibility": "public"
+      },
+      "created_at": 1700000500,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "ProfileV2"
+    },
+    "sig": "2d1da88ca2360ca9e64f242273908a4be3e151ac54e563942ecf825d635a851ef0eda89dcc1ba7d357a0e9c3d401d62dfedeab6589146858a5de5e15dfca6f0f"
+  },
+  "signing_input": "hic/v1/ProfileV2\n493c6df580fb5bbb66e6116b947eb2e93d17528441127e77b1c9b748ffddcca1",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::envelope::Signed;
+use crate::held_signals::HeldSignals;
 use crate::keys::NewKeys;
 
 /// Who can see a version. Stored and sent as the lowercase string.
@@ -233,6 +234,12 @@ pub struct Version {
     pub payload: Option<Profile>,
     /// One encrypted copy per member, for members-only versions.
     pub enc: Option<Vec<MemberBox>>,
+    /// Held in Common Signals (decision record 0025). Kept beside the
+    /// version: its version-0 `cid` and signature don't cover them (that
+    /// format can't change). They are signed when shared, in a `ProfileV2`.
+    /// Left out of the file when nothing is chosen.
+    #[serde(default, skip_serializing_if = "HeldSignals::is_empty")]
+    pub held_signals: HeldSignals,
 }
 
 impl Version {
@@ -273,6 +280,10 @@ pub struct RemoteEntry {
     /// shares in the older format, where only the content hash is signed.
     #[serde(default)]
     pub signed: Option<Signed>,
+    /// Held in Common Signals, from a `ProfileV2` share (covered by its
+    /// signature). Empty for older shares: "not chosen" (decision record 0025).
+    #[serde(default)]
+    pub held_signals: HeldSignals,
 }
 
 /// What a commons keeps after someone withdraws their shared profile: just

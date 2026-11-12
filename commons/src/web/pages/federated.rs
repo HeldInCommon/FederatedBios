@@ -3,6 +3,7 @@
 use maud::{html, Markup};
 
 use super::origin_host;
+use super::parts::own_terms_note;
 use super::profile::{places_list, profile_header, terms_line};
 use crate::canonical::short;
 use crate::model::{Reach, RemoteEntry};
@@ -12,9 +13,10 @@ pub fn federated(r: &RemoteEntry) -> Markup {
     let p = &r.profile;
     let reach = Reach::parse(&r.visibility).unwrap_or(Reach::Public);
     html! {
-        (profile_header(&r.handle, Some(p), &format!("Shared in \u{b7} {}", terms_line(reach, &r.license, &r.signals))))
+        (profile_header(&r.handle, Some(p), &format!("Shared in \u{b7} {}", terms_line(reach, &r.license, &r.signals, &r.held_signals))))
         (places_list(p))
         section class="profile-meta" {
+            (own_terms_note(&r.handle, &r.held_signals))
             div class="origin-box" {
                 p class="origin-line" {
                     "Shared from "

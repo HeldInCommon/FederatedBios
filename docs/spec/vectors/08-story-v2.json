@@ -1,0 +1,61 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"handle\":\"tega\",\"held_signals\":{\"own_terms\":\"Fine for a workshop dataset that stays with the room.\",\"withdraw_after_training\":false},\"id\":\"0123456789abcdef\",\"license\":\"cc-by-nc\",\"signals\":[\"credit\",\"open\"],\"text\":\"The 38 sighs at the stop.\\nA dog answers from a balcony.\",\"title\":\"Night bus\",\"visibility\":\"commons\"},\"created_at\":1700000600,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"StoryV2\"}",
+  "cid": "c36977c61d75a9284ceb34fac4b0209977590c2648ad67e53042d8a2f7c9f0ea",
+  "description": "A StoryV2 (decision record 0025): a Story body plus held_signals. Here only own terms are given, so withdraw_after_training is false (not chosen).",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "handle": "tega",
+      "held_signals": {
+        "own_terms": "Fine for a workshop dataset that stays with the room.",
+        "withdraw_after_training": false
+      },
+      "id": "0123456789abcdef",
+      "license": "cc-by-nc",
+      "signals": [
+        "credit",
+        "open"
+      ],
+      "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+      "title": "Night bus",
+      "visibility": "commons"
+    },
+    "created_at": 1700000600,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "StoryV2"
+  },
+  "name": "08-story-v2.json",
+  "signed": {
+    "cid": "c36977c61d75a9284ceb34fac4b0209977590c2648ad67e53042d8a2f7c9f0ea",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "handle": "tega",
+        "held_signals": {
+          "own_terms": "Fine for a workshop dataset that stays with the room.",
+          "withdraw_after_training": false
+        },
+        "id": "0123456789abcdef",
+        "license": "cc-by-nc",
+        "signals": [
+          "credit",
+          "open"
+        ],
+        "text": "The 38 sighs at the stop.\nA dog answers from a balcony.",
+        "title": "Night bus",
+        "visibility": "commons"
+      },
+      "created_at": 1700000600,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "StoryV2"
+    },
+    "sig": "94cf0f70aaa1884c3144d5c6b2cf3069e5d2279725e181364d36ad54ad91abb1ba09250c7542f33a8f625c725a02c66a6292bc6b75ef9dcf3a9255b8ef443302"
+  },
+  "signing_input": "hic/v1/StoryV2\nc36977c61d75a9284ceb34fac4b0209977590c2648ad67e53042d8a2f7c9f0ea",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

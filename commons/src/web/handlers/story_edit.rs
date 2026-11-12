@@ -13,6 +13,7 @@ use super::{authorised_as, session};
 use crate::app::Shared;
 use crate::form::Form;
 use crate::governance::DEFAULT_LICENSE;
+use crate::held_signals::HeldSignals;
 use crate::now;
 use crate::sessions;
 use crate::story::{self, OwnStory, TEXT_MAX, TITLE_MAX};
@@ -25,6 +26,12 @@ use crate::web::pages;
 const NEW_STORY_REACH: &str = "commons";
 /// The signals a new story starts with (see above).
 const NEW_STORY_SIGNALS: [&str; 1] = ["credit"];
+
+/// The Held in Common Signals a rights form carries (decision record 0025),
+/// or the plain message to show when the own terms are too long.
+fn held_signals_from(f: &Form) -> Result<HeldSignals, &'static str> {
+    HeldSignals::from_form(&f.one("withdraw_after_training"), &f.one("own_terms"))
+}
 
 /// `GET /stories/new` — step one: write it.
 pub async fn story_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
@@ -61,6 +68,12 @@ pub async fn story_create(State(st): State<Shared>, headers: HeaderMap, body: St
     } else {
         (f.one("visibility"), f.one("license"), f.many("signals"))
     };
+    // A new story starts with no Held in Common Signals unless the form
+    // carries them (they're chosen in the rights step).
+    let held = match held_signals_from(&f) {
+        Ok(h) => h,
+        Err(why) => return error_page(&st.site, why),
+    };
     // Clamped a little past the limits so new_story can say what was too long.
     let draft = story::new_story(
         &sessions::random_hex(8),
@@ -72,7 +85,7 @@ pub async fn story_create(State(st): State<Shared>, headers: HeaderMap, body: St
         &signals,
     );
     let s = match draft {
-        Ok(s) => s,
+        Ok(s) => s.with_held_signals(held),
         Err(why) => return error_page(&st.site, why),
     };
     let signed = match story::sign(&s, &rec.ed_pub, &rec.ed_priv, now()) {
@@ -152,7 +165,13 @@ pub async fn rights_submit(
         Ok(x) => x,
         Err(resp) => return *resp,
     };
-    let terms = s.story.with_terms(&f.one("visibility"), &f.one("license"), &f.many("signals"));
+    // Held in Common Signals (decision record 0025): too-long own terms are
+    // refused with a plain message, never cut.
+    let held = match held_signals_from(&f) {
+        Ok(h) => h,
+        Err(why) => return error_page(&st.site, why),
+    };
+    let terms = s.story.with_terms(&f.one("visibility"), &f.one("license"), &f.many("signals"), held);
     let s = if terms == s.story {
         s
     } else {
@@ -174,7 +193,7 @@ pub async fn rights_submit(
         return error_page(&st.site, "Share your profile to that commons first.");
     }
     match share_story_to(&st, s, &rec, &commons).await {
-        Ok(()) => redirect(&format!("/story/{id}?done=shared&at={}", host_label(&commons))),
+        Ok(taken) => redirect(&format!("/story/{id}?done={}&at={}", taken.done(), host_label(&commons))),
         Err(e) => error_page(&st.site, &e),
     }
 }

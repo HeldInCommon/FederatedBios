@@ -8,7 +8,9 @@
 use maud::{html, Markup};
 
 use crate::governance::{license_name, signal_name};
+use crate::held_signals::HeldSignals;
 use crate::model::Reach;
+use crate::story::Story;
 
 /// A page heading: a small pink label above the title, and an optional
 /// serif line under it. (The title's pink full stop comes from the CSS.)
@@ -45,6 +47,8 @@ pub enum Tone {
     Jade,
     /// Violet: the fourth.
     Violet,
+    /// Ink: the fifth.
+    Ink,
 }
 
 impl Tone {
@@ -55,6 +59,7 @@ impl Tone {
             Tone::Blue => "tone-blue",
             Tone::Jade => "tone-jade",
             Tone::Violet => "tone-violet",
+            Tone::Ink => "tone-ink",
         }
     }
 }
@@ -88,9 +93,33 @@ pub fn signals_line(signals: &[String]) -> String {
     }
 }
 
-/// The terms that travel with every copy, as one panel of three columns.
-/// `live` marks the cells the rights form's script keeps up to date.
-pub fn terms_panel(reach: Reach, license: &str, signals: &[String], live: bool) -> Markup {
+/// The terms chosen for a profile version or a story: what the Sharing and
+/// rights panels show as chosen, and what travels with every copy.
+pub struct Chosen<'a> {
+    /// Who can see it.
+    pub reach: Reach,
+    /// The licence key (see `governance::LICENSES`).
+    pub license: &'a str,
+    /// The CC signal keys.
+    pub signals: &'a [String],
+    /// Held in Common Signals (decision record 0025).
+    pub held_signals: &'a HeldSignals,
+}
+
+impl<'a> Chosen<'a> {
+    /// The terms a story carries.
+    ///
+    /// Rust note: `'a` says the borrowed fields live as long as the story
+    /// they point into, so `Chosen` can't outlive it.
+    pub fn of_story(s: &'a Story) -> Chosen<'a> {
+        Chosen { reach: s.reach(), license: &s.license, signals: &s.signals, held_signals: &s.held_signals }
+    }
+}
+
+/// The terms that travel with every copy, as one panel of cells: who can see
+/// it, licence, signals and Held in Common Signals. `live` marks the cells
+/// the rights form's script keeps up to date.
+pub fn terms_panel(chosen: &Chosen, live: bool) -> Markup {
     let cell = |label: &str, value: String, key: &str| {
         html! {
             div class="terms-cell" {
@@ -102,9 +131,29 @@ pub fn terms_panel(reach: Reach, license: &str, signals: &[String], live: bool) 
     };
     html! {
         div class="terms-panel" {
-            (cell("Who can see it", reach_label(reach).to_string(), "visibility"))
-            (cell("Licence", license_name(license).to_string(), "license"))
-            (cell("Signals", signals_line(signals), "signals"))
+            (cell("Who can see it", reach_label(chosen.reach).to_string(), "visibility"))
+            (cell("Licence", license_name(chosen.license).to_string(), "license"))
+            (cell("Signals", signals_line(chosen.signals), "signals"))
+            (cell("Held in Common Signals", chosen.held_signals.summary(), "held"))
+        }
+    }
+}
+
+/// Someone's own terms for AI, in their words, under a label naming whose
+/// they are; nothing when they wrote none. Plain text: maud escapes it, and
+/// line breaks are kept as `<br>`.
+pub fn own_terms_note(handle: &str, held: &HeldSignals) -> Markup {
+    html! {
+        @if !held.own_terms.is_empty() {
+            div class="side-note" {
+                p class="card-label" { "Terms for AI, in @" (handle) "'s own words" }
+                p {
+                    @for (i, line) in held.own_terms.lines().enumerate() {
+                        @if i > 0 { br; }
+                        (line)
+                    }
+                }
+            }
         }
     }
 }
@@ -151,10 +200,25 @@ mod tests {
     fn terms_read_plainly() {
         assert_eq!(signals_line(&[]), "None");
         assert_eq!(signals_line(&["credit".into(), "open".into()]), "Credit, Open");
-        let m = terms_panel(Reach::Commons, "cc-by-nc", &["credit".into()], true).into_string();
+        let none = HeldSignals::default();
+        let credit = ["credit".to_string()];
+        let chosen = Chosen { reach: Reach::Commons, license: "cc-by-nc", signals: &credit, held_signals: &none };
+        let m = terms_panel(&chosen, true).into_string();
         assert!(m.contains("Listed in the commons") && m.contains("CC BY-NC 4.0") && m.contains("data-summary"));
-        assert!(!terms_panel(Reach::Public, "cc0", &[], false).into_string().contains("data-summary"));
+        assert!(m.contains("Held in Common Signals") && m.contains("data-summary=\"held\">None<"));
+        let plain = Chosen { reach: Reach::Public, license: "cc0", signals: &[], held_signals: &none };
+        assert!(!terms_panel(&plain, false).into_string().contains("data-summary"));
         assert_eq!(words(1), "1 word");
+    }
+
+    #[test]
+    fn held_signals_travel_in_the_summary_and_own_terms_are_plain_text() {
+        let held = HeldSignals { withdraw_after_training: true, own_terms: "<b>Ask</b>\nfirst".into() };
+        let chosen = Chosen { reach: Reach::Public, license: "cc-by", signals: &[], held_signals: &held };
+        assert!(terms_panel(&chosen, false).into_string().contains("Withdraw even after training, Own terms"));
+        let note = own_terms_note("ada", &held).into_string();
+        assert!(note.contains("in @ada's own words") && note.contains("&lt;b&gt;Ask&lt;/b&gt;<br>first"));
+        assert!(own_terms_note("ada", &HeldSignals::default()).into_string().is_empty(), "nothing written");
     }
 
     #[test]

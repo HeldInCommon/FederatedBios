@@ -3,7 +3,7 @@
 
 use maud::{html, Markup};
 
-use super::parts::{page_head, section_label, terms_panel};
+use super::parts::{page_head, section_label, terms_panel, Chosen};
 use super::rights::{how_it_travels, rights_fields, RightsFor};
 use crate::story::{Story, PROMPT, TEXT_MAX, TITLE_MAX};
 use crate::web::layout::host_label;
@@ -58,7 +58,8 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
     }
 }
 
-/// Step two: who can read it, its licence and signals, how it travels; then
+/// Step two: who can read it, its licence, signals and Held in Common
+/// Signals, how it travels; then
 /// share it to `share_to` (the commons suggested for this member) or keep it.
 pub fn rights_form(s: &Story, csrf: &str, share_to: Option<&str>) -> Markup {
     html! {
@@ -69,10 +70,10 @@ pub fn rights_form(s: &Story, csrf: &str, share_to: Option<&str>) -> Markup {
         ))
         form method="post" action={ "/story/" (s.id) "/rights" } class="stack-form rights-form" {
             input type="hidden" name="csrf" value=(csrf);
-            (rights_fields(RightsFor::Story, s.reach(), &s.license, &s.signals))
+            (rights_fields(RightsFor::Story, &Chosen::of_story(s)))
             (how_it_travels())
             (section_label("What travels with every copy", None))
-            (terms_panel(s.reach(), &s.license, &s.signals, true))
+            (terms_panel(&Chosen::of_story(s), true))
             div class="actions" {
                 @if let Some(c) = share_to {
                     input type="hidden" name="commons_url" value=(c);

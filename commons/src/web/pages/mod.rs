@@ -22,7 +22,7 @@
 //! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
 //! | `story.rs` | one story: the author's view with its sharing tools, and a commons' |
 //! | `story_form.rs` | writing a story (new or editing), then its rights step |
-//! | `rights.rs` | Sharing and rights: who can see it, licence, signals, how a story travels |
+//! | `rights.rs` | Sharing and rights: who can see it, licence, signals, Held in Common Signals, how a story travels |
 //! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
 
 use crate::model::RemoteEntry;
@@ -53,6 +53,7 @@ pub use federated::federated;
 pub use guide::{run_a_commons, steward_node_note};
 pub use invites::{invite_code, steward_invite};
 pub use owner::OwnerPanel;
+pub use parts::Chosen;
 pub use profile::profile;
 pub use publish::publish_form;
 pub use sharing::{shared, shared_pending, vouched, withdrawn};

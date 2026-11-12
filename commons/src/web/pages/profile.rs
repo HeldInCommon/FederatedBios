@@ -3,9 +3,10 @@
 use maud::{html, Markup};
 
 use super::owner::{next_step_block, profile_actions, tab_nav, tab_panel, OwnerPanel};
-use super::parts::{reach_label, signals_line};
+use super::parts::{own_terms_note, reach_label, signals_line};
 use crate::canonical::short;
 use crate::governance::license_name;
+use crate::held_signals::HeldSignals;
 use crate::model::{display_name_or_handle, HandleRec, Profile, Reach, Version};
 use crate::ramp::Tab;
 
@@ -42,21 +43,28 @@ fn profile_content(rec: &HandleRec, version: Option<&Version>, readable: Option<
             }
         };
     };
-    let terms = terms_line(v.reach(), &v.license, &v.signals);
+    let terms = terms_line(v.reach(), &v.license, &v.signals, &v.held_signals);
     html! {
         (profile_header(&rec.handle, readable, &terms))
         @if let Some(p) = readable { (places_list(p)) }
         section class="profile-meta" {
+            // Own terms are content: a members-only version shows them only to
+            // those who can read it.
+            @if readable.is_some() { (own_terms_note(&rec.handle, &v.held_signals)) }
             p class="cid" { "Version " span class="mono" { (short(&v.cid)) } " \u{b7} permanent content address" }
         }
     }
 }
 
-/// The terms a profile travels with, as one line ("Public · CC BY 4.0 · Signals: Credit").
-pub(super) fn terms_line(reach: Reach, license: &str, signals: &[String]) -> String {
+/// The terms a profile travels with, as one line ("Public · CC BY 4.0 ·
+/// Signals: Credit · Held in Common: Withdraw even after training").
+pub(super) fn terms_line(reach: Reach, license: &str, signals: &[String], held: &HeldSignals) -> String {
     let mut line = format!("{} \u{b7} {}", reach_label(reach), license_name(license));
     if !signals.is_empty() {
         line.push_str(&format!(" \u{b7} Signals: {}", signals_line(signals)));
+    }
+    if !held.is_empty() {
+        line.push_str(&format!(" \u{b7} Held in Common: {}", held.summary()));
     }
     line
 }

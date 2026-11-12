@@ -15,6 +15,7 @@ use crate::app::Shared;
 use crate::federation;
 use crate::governance::license_url;
 use crate::handle;
+use crate::held_signals::HeldSignals;
 use crate::model::{HandleRec, Reach, Version};
 
 /// `GET /health` — liveness, the service name and version. When the request
@@ -41,6 +42,9 @@ pub struct DirEntry {
     pub cid: String,
     pub license: String,
     pub signals: Vec<String>,
+    /// Held in Common Signals (decision record 0025). On a node these are the
+    /// node's statement beside the version; they are signed when shared.
+    pub held_signals: HeldSignals,
 }
 
 /// `GET /api/directory` — this server's members with a public or commons
@@ -63,6 +67,7 @@ pub async fn directory(State(st): State<Shared>) -> Json<Vec<DirEntry>> {
                     cid: v.cid,
                     license: v.license,
                     signals: v.signals,
+                    held_signals: v.held_signals,
                 }
             })
         })
@@ -80,6 +85,7 @@ pub fn profile_json(h: &HandleRec, v: &Version) -> Value {
         "license": v.license,
         "license_url": license_url(&v.license),
         "signals": v.signals,
+        "held_signals": v.held_signals,
         "profile": v.payload,
         "ed25519_public": h.ed_pub,
         "box_public": h.box_pub,
@@ -293,6 +299,7 @@ mod tests {
             signature: String::new(),
             payload: None,
             enc: None,
+            held_signals: Default::default(),
         }
     }
 

@@ -151,6 +151,7 @@ pub fn share_of(rec: &hic_commons::model::HandleRec, invite: Option<&str>) -> se
         license: "cc-by".into(),
         signals: vec![],
         created_at: hic_commons::now(),
+        held_signals: Default::default(),
     };
     let v = publishing::sign_version(rec, draft, &[]).unwrap();
     let mut m =
