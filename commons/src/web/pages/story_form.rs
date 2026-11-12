@@ -21,12 +21,17 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
         Some(s) => (
             format!("Edit story \u{b7} {}", s.title),
             format!("/story/{}/edit", s.id),
-            "Save changes",
+            "Save",
             "Saved on this computer",
         ),
     };
     html! {
-        (page_head(&eyebrow, "The sound of your street", Some(PROMPT)))
+        // A new story starts from the workshop prompt; an edit is just an edit.
+        @if editing.is_some() {
+            (page_head(&eyebrow, "Edit story", None))
+        } @else {
+            (page_head(&eyebrow, "The sound of your street", Some(PROMPT)))
+        }
         form method="post" action=(action) class="stack-form write-form" {
             input type="hidden" name="handle" value=(me);
             input type="hidden" name="csrf" value=(csrf);

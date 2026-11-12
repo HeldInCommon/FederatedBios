@@ -28,9 +28,10 @@ pub fn invite_code(handle: &str, commons_url: &str, code: &str, days: u64) -> Ma
 
 /// A steward-made invite code, with an email button.
 pub fn steward_invite(site: &Site, code: &str) -> Markup {
-    let label = host_label(&site.base_url);
+    // The public address, so an invite emailed outside the room still works.
+    let label = host_label(site.public_url());
     let from = format!("— the steward of {}", site.instance);
-    let (subject, body) = crate::web::email::invitation(&label, &site.base_url, code, &from, None);
+    let (subject, body) = crate::web::email::invitation(&label, site.public_url(), code, &from, None);
     html! {
         header class="intro" {
             h1 { "Invite code" }

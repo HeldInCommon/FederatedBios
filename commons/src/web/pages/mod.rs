@@ -57,7 +57,7 @@ pub use profile::profile;
 pub use publish::publish_form;
 pub use sharing::{shared, shared_pending, vouched, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
-pub use stories::{commons_stories, node_stories};
+pub use stories::{author_stories, commons_stories, node_stories};
 pub use story::{held_story, own_story, StoryOutcome, StoryOwner};
 pub use story_form::{rights_form, write_form};
 

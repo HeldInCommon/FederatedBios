@@ -151,9 +151,20 @@ fn follow_app_link(app: &tauri::AppHandle, url: &str) {
 /// [`follow_app_link`].
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
     let handle = app.clone();
+    // Size the window to the screen it opens on (see `sidecar::window_size`);
+    // if the screen can't be read, a size that fits most laptops.
+    let (width, height) = match app.primary_monitor() {
+        Ok(Some(m)) => {
+            let screen = m.size().to_logical::<f64>(m.scale_factor());
+            sidecar::window_size((screen.width, screen.height))
+        }
+        _ => (1100.0, 760.0),
+    };
     tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
         .title("Held in Common")
-        .inner_size(1100.0, 820.0)
+        .inner_size(width, height)
+        .min_inner_size(760.0, 560.0)
+        .center()
         .on_navigation(move |url| match url.scheme() {
             "mailto" => {
                 use tauri_plugin_opener::OpenerExt;

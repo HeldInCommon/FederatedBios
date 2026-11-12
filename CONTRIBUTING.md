@@ -65,6 +65,10 @@ file, and the path a request takes.
   to restyle everywhere. Use a token rather than a raw value in rules, and
   reuse the shared patterns (the mono label, buttons, panels) before adding
   a class. `./scripts/lint-css.sh --fix` lays the files out.
+- **The quilt backgrounds** (`commons/static/quilt/`) are generated, not
+  drawn: change the rules or seeds in `scripts/make-quilts.py` and run
+  `python3 scripts/make-quilts.py`. The output is deterministic, so
+  re-running it without changes leaves the files as they are.
 - **Before pushing:** `cargo fmt`, `cargo clippy --all-targets -- -D warnings`,
   `./scripts/lint-css.sh`, `python3 scripts/check-docs.py`, and the tests
   above. CI runs the same checks.

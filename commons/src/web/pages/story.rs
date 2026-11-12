@@ -41,6 +41,7 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
             section class="flash flash-withdrawn" role="status" {
                 p class="flash-label" { "Withdrawn" }
                 p { strong { "Your story is gone from " (at) "." } " That commons deleted its copy and won't take the same one back. Anyone who already read it, or copied it, keeps that. It's still here on your node, and you can share it again." }
+                p { a class="btn-ink" href="/stories/new" { "Write a new story" } }
             }
         },
         StoryOutcome::Saved => html! {
@@ -82,13 +83,14 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
                 p class="eyebrow" { "Your story" }
                 h1 class="story-title" { (st.title) }
                 p class="story-meta" { "@" (st.handle) " \u{b7} " (words(st.word_count())) " \u{b7} written " (ago(s.created_at(), now)) }
-                (story_text(st))
+                // Your own story: edit it from the top, before reading on.
                 @if owner.is_some() {
-                    div class="actions" {
+                    div class="story-tools" {
                         a class="btn-line" href={ "/story/" (st.id) "/edit" } { "Edit story" }
                         a class="link-btn" href={ "/story/" (st.id) "/text" } { "Export as a text file" }
                     }
                 }
+                (story_text(st))
             }
             aside class="story-side" {
                 @if let Some(o) = owner { (owner_side(s, o, now)) }
