@@ -46,6 +46,7 @@ Writes happen in clearly named places that say what they change.
 | `federation.rs` | Build and verify shares and withdrawals; `admit()` a share or not; `apply_withdraw()`. | yes |
 | `ramp.rs` | The member's next step and which profile tabs they see (decision record 0022). | yes |
 | `story.rs` | Stories (decision record 0020): check a written story, sign it, verify a shared one, `admit()` it on a commons (author must be listed), withdrawals. | yes |
+| `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
