@@ -52,7 +52,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     }
     for k in Kind::ALL {
         let text = match (k, saved.runs(k)) {
-            (_, true) => saved.shown_name(k),
+            // Every server says where it is: "Your node (on this computer,
+            // only you)", "Thursday session (local commons, anyone on this Wi-Fi)".
+            (_, true) => format!("{} ({})", saved.shown_name(k), saved.where_is(k)),
             (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
             (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
             (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),

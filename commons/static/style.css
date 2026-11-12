@@ -578,11 +578,23 @@ a.rail-foot:hover {
 
 /* "Go to the Held in Common Collective Commons": the node's default commons
    as a button at the foot of the rail, rather than its long address. */
+.rail-go-wrap {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
 .rail-go {
   position: relative;
-  align-self: flex-start;
-  margin-top: auto;
+  justify-self: start;
   font-size: var(--text-sm);
+}
+
+/* Says the button leaves this computer: the commons is somewhere else. */
+.rail-go-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .server-text {

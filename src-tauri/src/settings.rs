@@ -162,6 +162,19 @@ impl Saved {
         }
     }
 
+    /// Where `kind` is and who can reach it, in a few words, so the app's
+    /// buttons and menu never leave anyone guessing: "on this computer, only
+    /// you", "local commons, anyone on this Wi-Fi", "online commons, hosted
+    /// on this computer".
+    pub fn where_is(&self, kind: Kind) -> &'static str {
+        match kind {
+            Kind::Node => "on this computer, only you",
+            Kind::Practice => "local commons, anyone on this Wi-Fi",
+            Kind::Commons if self.public_address.is_some() => "online commons, hosted on this computer",
+            Kind::Commons => "commons on this computer, anyone on this Wi-Fi",
+        }
+    }
+
     /// Does this computer run `kind`?
     pub fn runs(&self, kind: Kind) -> bool {
         self.name_of(kind).is_some()
@@ -474,6 +487,11 @@ mod tests {
         assert_eq!(s.shown_name(Kind::Commons), "Held in Common Collective Commons");
         assert_eq!(s.shown_name(Kind::Node), "Your node", "the node is the person's own");
         assert_eq!(s.shown_name(Kind::Practice), PRACTICE_NAME);
+        assert_eq!(s.where_is(Kind::Node), "on this computer, only you");
+        assert_eq!(s.where_is(Kind::Practice), "local commons, anyone on this Wi-Fi");
+        assert_eq!(s.where_is(Kind::Commons), "commons on this computer, anyone on this Wi-Fi");
+        let online = Saved { public_address: Some("https://hic.tail.ts.net".into()), ..s.clone() };
+        assert_eq!(online.where_is(Kind::Commons), "online commons, hosted on this computer");
         for k in Kind::ALL {
             assert!(!k.label().to_lowercase().contains("your commons"), "{k:?}");
             assert!(!s.shown_name(k).to_lowercase().contains("your commons"), "{k:?}");

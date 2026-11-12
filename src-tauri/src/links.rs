@@ -66,8 +66,9 @@ pub struct Place {
     /// Which kind of server it is (`node`, `commons`, `practice`): the rail's
     /// card picks its starburst colour from this.
     pub kind: &'static str,
-    /// What this computer calls it ("Studio laptop"), or empty.
-    pub name: String,
+    /// Where it is and who can reach it ("on this computer, only you",
+    /// "local commons, anyone on this Wi-Fi"): the card's second line.
+    pub place: String,
 }
 
 /// The buttons for a page whose own server is `here` (`None` for a page
@@ -97,7 +98,7 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
                 Kind::Practice => "#1f5cff",
             },
             kind: k.key(),
-            name: saved.name_of(k).unwrap_or_default().to_string(),
+            place: saved.where_is(k).to_string(),
         })
         .collect()
 }
@@ -124,7 +125,7 @@ pub fn switcher_js(places: &[Place]) -> String {
       var text=document.createElement('span'); text.className='server-text';
       var name=document.createElement('span'); name.className='server-name'; name.textContent=p.label;
       text.appendChild(name);
-      if(p.name){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.name; text.appendChild(sub);}}
+      if(p.place){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.place; text.appendChild(sub);}}
       a.appendChild(star); a.appendChild(text); slot.appendChild(a);
     }});
     slot.hidden=!places.length;
@@ -182,11 +183,15 @@ mod tests {
     }
 
     #[test]
-    fn each_rail_card_knows_its_kind_and_name() {
+    fn each_rail_card_says_what_it_is_and_where() {
         let s = saved(Some("Room 4"), false);
         let from_node = places(&s, Some(Kind::Node));
         assert_eq!(from_node.len(), 1);
-        assert_eq!((from_node[0].kind, from_node[0].name.as_str()), ("commons", "Room 4"));
+        assert_eq!(from_node[0].label, "Room 4");
+        assert_eq!(
+            (from_node[0].kind, from_node[0].place.as_str()),
+            ("commons", "commons on this computer, anyone on this Wi-Fi")
+        );
     }
 
     #[test]
@@ -225,10 +230,10 @@ mod tests {
             url: "x".into(),
             tone: "#000",
             kind: "node",
-            name: evil.into(),
+            place: evil.into(),
         }]);
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
-        assert!(js.contains(r#""name":"'); alert(1); ('""#), "the name too");
+        assert!(js.contains(r#""place":"'); alert(1); ('""#), "the place line too");
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
         assert!(switcher_js(&[]).contains("places=[]"));
     }

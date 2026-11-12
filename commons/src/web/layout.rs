@@ -138,26 +138,86 @@ pub fn quilt_for(title: &str) -> usize {
     (hash % 8) as usize + 1
 }
 
-/// What kind of server this is, as the rail names it, and the class that
-/// picks its starburst colour: your node, a local commons (anyone on this
-/// Wi-Fi), an online commons (it has a public address, such as a Tailscale
-/// or server one) or a shared commons, so nobody confuses them. A commons is
-/// never "your commons": everyone who visits it sees this rail, and it
-/// belongs to its community.
-fn server_kind(site: &Site) -> (&'static str, &'static str) {
-    match (site.is_commons(), site.practice) {
-        (true, true) => ("is-practice", "Local commons"),
-        (true, false) if !site.also_known_as.is_empty() => ("is-commons", "Online commons"),
-        (true, false) => ("is-commons", "Shared commons"),
-        (false, _) => ("is-node", "Your node"),
+/// Where a server is and who can reach it, as the rail says it. Holding this
+/// apart is the idea: your work stays on your node, and a commons is a shared
+/// place, so the rail always says which is which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// Your node: on this computer, only you.
+    Node,
+    /// A local commons (`HIC_PRACTICE`): on its host's computer, reached by
+    /// anyone on the same Wi-Fi.
+    Local,
+    /// A commons whose address is on a local network (a room commons).
+    OnThisWifi,
+    /// A commons anyone can reach: a public address, its own or one it is
+    /// also known by (Tailscale, a server).
+    Online,
+}
+
+impl Place {
+    /// Where `site` is.
+    pub fn of(site: &Site) -> Place {
+        match (site.is_commons(), site.practice) {
+            (false, _) => Place::Node,
+            (true, true) => Place::Local,
+            (true, false) if !site.also_known_as.is_empty() || !is_local_address(&site.base_url) => Place::Online,
+            (true, false) => Place::OnThisWifi,
+        }
     }
+
+    /// The kind, as the rail's card names it: "Your node", "Local commons"…
+    pub fn kind_name(self) -> &'static str {
+        match self {
+            Place::Node => "Your node",
+            Place::Local => "Local commons",
+            Place::OnThisWifi => "Commons on this Wi-Fi",
+            Place::Online => "Online commons",
+        }
+    }
+
+    /// Where it is and who can reach it, in a few words.
+    pub fn reach(self) -> &'static str {
+        match self {
+            Place::Node => "on this computer, only you",
+            Place::Local => "anyone on this Wi-Fi",
+            Place::OnThisWifi => "anyone on this Wi-Fi",
+            Place::Online => "anyone with its address",
+        }
+    }
+
+    /// The class that picks the card's starburst colour.
+    fn class(self) -> &'static str {
+        match self {
+            Place::Node => "is-node",
+            Place::Local => "is-practice",
+            Place::OnThisWifi | Place::Online => "is-commons",
+        }
+    }
+}
+
+/// True when `url`'s host is on this computer or a local network (a private,
+/// loopback or `.local` address), so only people nearby can reach it.
+fn is_local_address(url: &str) -> bool {
+    let host = url.split("://").nth(1).unwrap_or(url).split('/').next().unwrap_or("");
+    // Drop the port; keep an IPv6 address in brackets intact.
+    let host = match host.rsplit_once(':') {
+        Some((h, port)) if port.chars().all(|c| c.is_ascii_digit()) && !h.ends_with(':') => h,
+        _ => host,
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    // A name with no dot ("studio", "localhost") can only be found nearby.
+    if !host.contains('.') && !host.contains(':') || host.ends_with(".local") {
+        return true;
+    }
+    host.parse::<std::net::IpAddr>().is_ok_and(|ip| !matches!(crate::outbound::kind(ip), crate::outbound::Kind::Public))
 }
 
 /// The side rail: the logo, the server this page belongs to, a slot the
 /// desktop app fills with the other servers on this computer (see
 /// `src-tauri/src/links.rs`), and a line about where this server reaches.
 fn rail(site: &Site) -> Markup {
-    let (kind, label) = server_kind(site);
+    let place = Place::of(site);
     html! {
         aside class="rail" {
             a class="wordmark" href="/" {
@@ -170,20 +230,23 @@ fn rail(site: &Site) -> Markup {
                 p class="rail-label" id="hic-servers-label" {
                     @if site.in_app && !site.is_commons() { "On this computer" } @else { "You're on" }
                 }
-                div class={ "server-card is-here " (kind) } aria-current="true" {
+                div class={ "server-card is-here " (place.class()) } aria-current="true" {
                     span class="star" aria-hidden="true" {}
                     span class="server-text" {
                         // A commons leads with its own name ("Held in Common
-                        // Collective Commons"); a node with "Your node".
+                        // Collective Commons"), then what it is and who can
+                        // reach it; a node with "Your node", then its name.
                         @if site.is_commons() && !site.instance.trim().is_empty() {
                             span class="server-name" { (site.instance) }
-                            span class="server-sub" { (label) }
+                            span class="server-sub" { (place.kind_name()) ": " (place.reach()) }
+                        } @else if site.is_commons() {
+                            span class="server-name" { (place.kind_name()) }
+                            span class="server-sub" { (place.reach()) }
                         } @else {
-                            span class="server-name" { (label) }
-                            @if !site.instance.is_empty() {
-                                span class="server-sub" {
-                                    (site.instance) @if site.in_app { ", open now" }
-                                }
+                            span class="server-name" { (place.kind_name()) }
+                            span class="server-sub" {
+                                @if !site.instance.trim().is_empty() { (site.instance) ": " }
+                                (place.reach())
                             }
                         }
                     }
@@ -200,13 +263,17 @@ fn rail(site: &Site) -> Markup {
                 p class="rail-foot" {
                     "Nodes share to "
                     code { (site.public_url()) }
+                    ". It holds signed copies; the originals stay on each person's node."
                 }
             } @else if !site.share_default.is_empty() {
                 // The address can be a long Tailscale name: the button says
                 // where it goes instead (HIC_SHARE_DEFAULT_NAME).
-                a class="btn-solid rail-go" href=(site.share_default) {
-                    @if site.share_default_name.is_empty() { "Go to the commons" } @else { "Go to the " (site.share_default_name) }
-                    " \u{2197}"
+                div class="rail-go-wrap" {
+                    a class="btn-solid rail-go" href=(site.share_default) {
+                        @if site.share_default_name.is_empty() { "Go to the commons" } @else { "Go to the " (site.share_default_name) }
+                        " \u{2197}"
+                    }
+                    p class="rail-go-note" { "An online commons, hosted elsewhere. Your node and your originals stay on this computer." }
                 }
             }
         }
@@ -446,7 +513,7 @@ mod tests {
     fn commons_banner_shows_share_address() {
         let m = frame(&site(Role::Commons), &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Nodes share to"));
-        assert!(m.contains("Shared commons"));
+        assert!(m.contains("Commons on this Wi-Fi"), "a commons at a nearby address");
         let public = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
         let m = frame(&public, &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Nodes share to <code>https://hic.tail.ts.net</code>"), "only the public address");
@@ -472,11 +539,45 @@ mod tests {
         assert!(node.contains(r#"id="hic-servers""#), "the app fills this slot");
         let in_app = Site { in_app: true, instance: "Held in Common Collective Commons".into(), ..site(Role::Commons) };
         let commons = frame(&in_app, &Page::new("t", None, html! {})).into_string();
-        assert!(commons.contains("Held in Common Collective Commons") && commons.contains("Shared commons"));
+        assert!(commons.contains("Held in Common Collective Commons") && commons.contains("Commons on this Wi-Fi"));
         assert!(!commons.contains("Your commons"), "a commons belongs to its community, not to whoever visits");
         assert!(!commons.contains("On this computer"), "visitors reach a commons over the network");
         let node = frame(&Site { in_app: true, ..site(Role::Node) }, &Page::new("t", None, html! {})).into_string();
-        assert!(node.contains("On this computer") && node.contains("open now"));
+        assert!(node.contains("On this computer") && node.contains("on this computer, only you"));
+    }
+
+    #[test]
+    fn each_server_says_where_it_is_and_who_can_reach_it() {
+        assert_eq!(Place::of(&site(Role::Node)), Place::Node);
+        let local = Site { practice: true, ..site(Role::Commons) };
+        assert_eq!(Place::of(&local), Place::Local);
+        let room = Site { base_url: "http://192.168.1.5:8081".into(), ..site(Role::Commons) };
+        assert_eq!(Place::of(&room), Place::OnThisWifi);
+        let tunnel = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..room.clone() };
+        assert_eq!(Place::of(&tunnel), Place::Online);
+        let server = Site { base_url: "https://commons.example".into(), ..site(Role::Commons) };
+        assert_eq!(Place::of(&server), Place::Online);
+        let page =
+            frame(&Site { instance: "Studio laptop".into(), ..site(Role::Node) }, &Page::new("t", None, html! {}))
+                .into_string();
+        assert!(page.contains("Studio laptop: on this computer, only you"));
+    }
+
+    #[test]
+    fn local_addresses_are_told_apart_from_online_ones() {
+        for local in [
+            "http://192.168.1.5:8081",
+            "http://10.0.0.2",
+            "http://127.0.0.1:8082",
+            "http://localhost:8080",
+            "http://studio.local:8081",
+            "http://[::1]:8080",
+        ] {
+            assert!(is_local_address(local), "{local}");
+        }
+        for online in ["https://hic.tail.ts.net", "https://commons.example:8443", "http://8.8.8.8"] {
+            assert!(!is_local_address(online), "{online}");
+        }
     }
 
     #[test]
