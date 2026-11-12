@@ -25,9 +25,9 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD as B64URL, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::config::commons_host;
 use crate::envelope::{self, Envelope, Signed};
 use crate::keys::ct_eq;
-use crate::web::layout::host_label;
 
 /// The envelope `type` of a member's signed invite.
 pub const INVITE: &str = "Invite";
@@ -159,7 +159,7 @@ pub fn make_waiting_request(
     commons_url: &str,
     now: u64,
 ) -> Result<Signed, String> {
-    let body = json!({ "commons": host_label(commons_url) });
+    let body = json!({ "commons": commons_host(commons_url) });
     envelope::sign(Envelope::new(WAITING_LIST_REQUEST, member_pub, now, None, body), member_priv)
 }
 
@@ -189,7 +189,7 @@ pub fn check_waiting_request(
 /// A member's invite to this commons, made in advance.
 pub fn make_invite(member_pub: &str, member_priv: &str, commons_url: &str, now: u64) -> Result<Signed, String> {
     let body = json!({
-        "commons": host_label(commons_url),
+        "commons": commons_host(commons_url),
         "code_id": crate::sessions::random_hex(16),
         "expires_at": now + INVITE_TTL,
     });
@@ -205,7 +205,7 @@ pub fn make_vouch(
     newcomer_key: &str,
     now: u64,
 ) -> Result<Signed, String> {
-    let body = json!({ "commons": host_label(commons_url), "handle": handle, "key": newcomer_key });
+    let body = json!({ "commons": commons_host(commons_url), "handle": handle, "key": newcomer_key });
     envelope::sign(Envelope::new(VOUCH, member_pub, now, None, body), member_priv)
 }
 
@@ -293,7 +293,7 @@ mod tests {
     /// the rest of the program and can be borrowed as `'static`. Fine in a test;
     /// in real code it would be a memory leak.
     fn ctx<'a>(members: &'a [String], used: &'a [String], intros: &'a [Intro], now: u64) -> Ctx<'a> {
-        let hosts: &'static [String] = Box::leak(vec![host_label(URL)].into_boxed_slice());
+        let hosts: &'static [String] = Box::leak(vec![commons_host(URL)].into_boxed_slice());
         Ctx { my_hosts: hosts, now, member_keys: members, used_codes: used, intros, limit: 2 }
     }
 
@@ -356,7 +356,7 @@ mod tests {
     fn a_listed_member_may_ask_who_is_waiting() {
         let m = keys::generate();
         let members = vec![m.ed_pub.clone()];
-        let hosts = vec![host_label(URL)];
+        let hosts = vec![commons_host(URL)];
         let req = make_waiting_request(&m.ed_pub, &m.ed_priv, URL, 1_000).unwrap();
         assert_eq!(check_waiting_request(&req, &hosts, &members, 1_000).unwrap(), m.ed_pub);
         // A little clock difference either way is fine.
@@ -368,7 +368,7 @@ mod tests {
     fn someone_not_listed_here_cannot_ask_who_is_waiting() {
         let (m, stranger) = (keys::generate(), keys::generate());
         let members = vec![m.ed_pub.clone()];
-        let hosts = vec![host_label(URL)];
+        let hosts = vec![commons_host(URL)];
         let req = make_waiting_request(&stranger.ed_pub, &stranger.ed_priv, URL, 1_000).unwrap();
         assert!(check_waiting_request(&req, &hosts, &members, 1_000).unwrap_err().contains("isn't a member"));
     }
@@ -378,7 +378,7 @@ mod tests {
         // A member of both commons: their request to one can't be replayed at the other.
         let m = keys::generate();
         let members = vec![m.ed_pub.clone()];
-        let hosts = vec![host_label(URL)];
+        let hosts = vec![commons_host(URL)];
         let req = make_waiting_request(&m.ed_pub, &m.ed_priv, "http://other.example", 1_000).unwrap();
         let why = check_waiting_request(&req, &hosts, &members, 1_000).unwrap_err();
         assert!(why.contains("different commons"), "{why}");
@@ -388,7 +388,7 @@ mod tests {
     fn an_old_or_future_dated_waiting_list_request_is_refused() {
         let m = keys::generate();
         let members = vec![m.ed_pub.clone()];
-        let hosts = vec![host_label(URL)];
+        let hosts = vec![commons_host(URL)];
         let req = make_waiting_request(&m.ed_pub, &m.ed_priv, URL, 10_000).unwrap();
         let late = 10_000 + REQUEST_FRESH_FOR + 1;
         assert!(check_waiting_request(&req, &hosts, &members, late).unwrap_err().contains("too old"));
@@ -399,7 +399,7 @@ mod tests {
     fn a_forged_or_retyped_waiting_list_request_is_refused() {
         let (m, forger) = (keys::generate(), keys::generate());
         let members = vec![m.ed_pub.clone()];
-        let hosts = vec![host_label(URL)];
+        let hosts = vec![commons_host(URL)];
         // Signed by someone else, but claiming the member as its author.
         let mut forged = make_waiting_request(&forger.ed_pub, &forger.ed_priv, URL, 1_000).unwrap();
         forged.envelope.author = m.ed_pub.clone();

@@ -12,7 +12,7 @@ ok(){ echo "  PASS  $1"; PASS=$((PASS+1)); }
 no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
-HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >"$T/node.log" 2>&1 & NPID=$!
+HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 HIC_SHARE_DEFAULT_NAME="Test Collective" "$BIN" >"$T/node.log" 2>&1 & NPID=$!
 cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
@@ -89,7 +89,7 @@ curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8092/he
 ISID=$(curl -is -X POST http://localhost:8092/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega Brain" --data-urlencode "passphrase=supersecret3" --data-urlencode "passphrase_again=supersecret3" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
 ICSRF=$(curl -s http://localhost:8092/new -H "Cookie: hic_session=$ISID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
 curl -s -o /dev/null -X POST http://localhost:8092/publish -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "name=Tega Brain" --data-urlencode "bio=Definitely the real one." --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
-curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "already used on localhost:8091" && ok "same handle from another node + key refused (409)" || no "impostor @tega was not refused"
+curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "already used on " && ok "same handle from another node + key refused (409)" || no "impostor @tega was not refused"
 grep -rq "Definitely the real one" "$T/commons/remote/" 2>/dev/null && no "impostor profile stored on the commons" || ok "impostor profile not stored"
 curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -qi "federated to" && ok "original @tega can still re-share (same key)" || no "original @tega re-share refused"
 
@@ -100,7 +100,7 @@ curl -s http://localhost:8091/api/handle/nobody_yet | grep -q '"available":true'
 mkdir -p "$T/node3"
 HIC_DATA="$T/node3" PORT=8093 HIC_ROLE=node HIC_INSTANCE="Third node" HIC_BASE_URL=http://localhost:8093 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >"$T/node3.log" 2>&1 & N3PID=$!
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8093/health >/dev/null || no "third node failed to start"
-curl -s -X POST http://localhost:8093/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega" --data-urlencode "passphrase=supersecret4" --data-urlencode "passphrase_again=supersecret4" | grep -q "already used on localhost:8091" && ok "sign-up refused when default commons has the handle" || no "sign-up allowed a handle taken on the default commons"
+curl -s -X POST http://localhost:8093/join --data-urlencode "handle=tega" --data-urlencode "display_name=Tega" --data-urlencode "passphrase=supersecret4" --data-urlencode "passphrase_again=supersecret4" | grep -q "already used on " && ok "sign-up refused when default commons has the handle" || no "sign-up allowed a handle taken on the default commons"
 [ -e "$T/node3/handles/tega.json" ] && no "refused sign-up still minted @tega" || ok "refused sign-up minted no identity"
 # ...but the same handle may live on a different commons (one key per handle per commons).
 mkdir -p "$T/commons2"
@@ -109,7 +109,7 @@ curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8094/he
 FOUND2=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons2/founding-invite.json" 2>/dev/null)
 curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8094" --data-urlencode "invite=$FOUND2" | grep -qi "federated to" && ok "other @tega accepted on a different commons" || no "per-commons uniqueness wrongly global"
 # The origin is shown with the card: node address + key fingerprint.
-curl -s http://localhost:8091/ | grep -q 'from localhost:8090' && ok "commons card shows origin address" || no "card missing origin address"
+curl -s http://localhost:8091/ | grep -qE 'from [^<]*:8090' && ok "commons card shows origin address" || no "card missing origin address"
 curl -s http://localhost:8091/ | grep -q 'class="dir-key"' && ok "commons card shows key fingerprint" || no "card missing key fingerprint"
 
 # A stand-in "commons" on 8099 that keeps the last thing posted to its inbox.
@@ -170,7 +170,7 @@ printf '%s' "$PEOPLE" | grep -q "Vouch for @amy" && printf '%s' "$PEOPLE" | grep
 printf '%s' "$PEOPLE" | grep -q "Not for review" && no "the People tab shows a waiting person's profile" || ok "the People tab shows no profile content"
 AKEY=$(printf '%s' "$PEOPLE" | grep -oE 'name="key" value="[0-9a-f]{64}"' | head -1 | grep -oE '[0-9a-f]{64}')
 curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=amy" --data-urlencode "key=$AKEY" | grep -q "is now listed" && no "Vouch worked without the CSRF token" || ok "Vouch without the CSRF token is refused"
-curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=amy" --data-urlencode "key=$AKEY" | grep -q "@amy is now listed on localhost:8091" && ok "one click vouched for amy" || no "one-click vouch failed"
+curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=amy" --data-urlencode "key=$AKEY" | grep -q "@amy is now listed on Test Collective" && ok "one click vouched for amy" || no "one-click vouch failed"
 grep -rq '"amy"' "$T/commons/remote/" 2>/dev/null && ok "amy listed after the one-click vouch" || no "amy still not listed"
 
 # The steward approves someone waiting (ADR 0017).
@@ -182,7 +182,7 @@ WKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"handle":"walker","
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/steward/approve -H "Cookie: hic_session=$STEWARD" --data-urlencode "csrf=$SCSRF" --data-urlencode "key=$WKEY")" = "303" ] && grep -rq '"walker"' "$T/commons/remote/" && ok "steward approved someone waiting with one click" || no "steward approval failed"
 curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "Waiting to be listed" && ok "node shows it is waiting, with Check now" || no "no waiting panel"
 curl -s -o /dev/null -X POST http://localhost:8093/waiting/check -H "Cookie: hic_session=$WSID" --data-urlencode "csrf=$WCSRF"
-curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "@walker is now listed on localhost:8091" && ok "Check now tells the node it was approved" || no "no 'now listed' notice"
+curl -s http://localhost:8093/@walker -H "Cookie: hic_session=$WSID" | grep -q "@walker is now listed on " && ok "Check now tells the node it was approved" || no "no 'now listed' notice"
 
 # Stories: tega writes one on their node, shares it to the commons they're
 # listed on, then withdraws it; the commons lists it, then doesn't.

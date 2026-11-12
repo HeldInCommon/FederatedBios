@@ -213,6 +213,11 @@ fn is_local_address(url: &str) -> bool {
     host.parse::<std::net::IpAddr>().is_ok_and(|ip| !matches!(crate::outbound::kind(ip), crate::outbound::Kind::Public))
 }
 
+/// Said beside a Wi-Fi address: the router hands it out and can change it,
+/// and the desktop app moves the commons when it does (`watch_addresses` in
+/// `src-tauri/src/sidecar.rs`).
+const ADDRESS_CAN_CHANGE: &str = "Your Wi-Fi gives this address and can change it; if it does, the app moves the commons to the new one and tells you.";
+
 /// The side rail: the logo, the server this page belongs to, a slot the
 /// desktop app fills with the other servers on this computer (see
 /// `src-tauri/src/links.rs`), and a line about where this server reaches.
@@ -257,13 +262,15 @@ fn rail(site: &Site) -> Markup {
                 p class="rail-foot" {
                     "Anyone on this Wi-Fi can share to "
                     code { (site.base_url) }
-                    ". It's here while this computer is awake and the app is open."
+                    ". It's here while this computer is awake and the app is open. "
+                    (ADDRESS_CAN_CHANGE)
                 }
             } @else if site.is_commons() {
                 p class="rail-foot" {
                     "Nodes share to "
                     code { (site.public_url()) }
                     ". It holds signed copies; the originals stay on each person's node."
+                    @if place == Place::OnThisWifi { " " (ADDRESS_CAN_CHANGE) }
                 }
             } @else if !site.share_default.is_empty() {
                 // The address can be a long Tailscale name: the button says
@@ -466,21 +473,59 @@ pub fn name_default_commons(url: &str, name: &str) {
 
 /// A readable label for a server address: the default commons' name if this
 /// is the default commons and it has one (see [`name_default_commons`]),
-/// else its host, without scheme or trailing slash.
+/// else its host, without scheme or trailing slash. A commons on this same
+/// computer (`127.0.0.1:8082`) is shown at this computer's network address
+/// (`10.0.0.5:8082`), the one other people use: this node keeps talking to
+/// it through `127.0.0.1`, which never changes.
 pub fn host_label(url: &str) -> String {
-    label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())))
+    label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())), this_computer_ip())
 }
 
-/// [`host_label`] with the named commons passed in: `named` is (address,
-/// name). Pure, so it is tested directly.
-fn label_for(url: &str, named: Option<(&str, &str)>) -> String {
+/// [`host_label`] with what it looks up passed in: `named` is (address,
+/// name), `here` this computer's network address. Pure, so it is tested
+/// directly.
+fn label_for(url: &str, named: Option<(&str, &str)>, here: Option<std::net::IpAddr>) -> String {
     let url = url.trim_end_matches('/');
     if let Some((named_url, name)) = named {
         if url == named_url {
             return name.to_string();
         }
     }
-    url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).unwrap_or(url).to_string()
+    let host = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).unwrap_or(url);
+    // "127.0.0.1:8082" or "localhost:8082" means this computer: show the
+    // address the rest of the network knows it by.
+    let this_computer = ["127.0.0.1:", "localhost:"].iter().find_map(|p| host.strip_prefix(p));
+    match (this_computer, here) {
+        (Some(port), Some(ip)) if port.chars().all(|c| c.is_ascii_digit()) => format!("{ip}:{port}"),
+        _ => host.to_string(),
+    }
+}
+
+/// This computer's address on its local network (`10.0.0.5`), if it has
+/// one, looked up at most every ten seconds: the router can change it.
+///
+/// It asks the operating system which address it would send from to reach
+/// the internet; connecting a UDP socket sends nothing. Like
+/// [`DEFAULT_COMMONS`] this is shared state for display only, behind a lock.
+fn this_computer_ip() -> Option<std::net::IpAddr> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    /// When the address was last looked up, and what it was.
+    static CACHE: Mutex<Option<(Instant, Option<std::net::IpAddr>)>> = Mutex::new(None);
+    let mut cache = CACHE.lock().unwrap();
+    if let Some((at, ip)) = *cache {
+        if at.elapsed() < Duration::from_secs(10) {
+            return ip;
+        }
+    }
+    let ip = std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|s| s.connect("8.8.8.8:80").map(|_| s))
+        .and_then(|s| s.local_addr())
+        .ok()
+        .map(|a| a.ip())
+        .filter(|ip| !ip.is_loopback() && !ip.is_unspecified());
+    *cache = Some((Instant::now(), ip));
+    ip
 }
 
 #[cfg(test)]
@@ -632,6 +677,7 @@ mod tests {
         let m = frame(&local, &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Local commons"));
         assert!(m.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
+        assert!(m.contains("can change it"), "says the address can change");
         assert!(!m.contains("Shared commons") && !m.contains("Online commons"));
         let online = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
         let m = frame(&online, &Page::new("t", None, html! {})).into_string();
@@ -658,14 +704,24 @@ mod tests {
     #[test]
     fn host_label_strips_scheme_and_slash() {
         assert_eq!(host_label("https://c.example/"), "c.example");
-        assert_eq!(host_label("http://localhost:8081"), "localhost:8081");
+        assert_eq!(label_for("http://localhost:8081", None, None), "localhost:8081");
+    }
+
+    #[test]
+    fn a_commons_on_this_computer_is_shown_at_its_network_address() {
+        let here = Some("10.106.64.25".parse().unwrap());
+        assert_eq!(label_for("http://127.0.0.1:8082", None, here), "10.106.64.25:8082");
+        assert_eq!(label_for("http://localhost:8081/", None, here), "10.106.64.25:8081");
+        assert_eq!(label_for("http://127.0.0.1:8082", None, None), "127.0.0.1:8082", "no network: as it is");
+        assert_eq!(label_for("http://10.0.0.9:8082", None, here), "10.0.0.9:8082", "another computer stays itself");
+        assert_eq!(label_for("http://127.0.0.1.evil.example:80", None, here), "127.0.0.1.evil.example:80");
     }
 
     #[test]
     fn the_default_commons_is_called_by_its_name() {
         let named = Some(("https://hic.example.ts.net", "Held in Common Collective Commons"));
-        assert_eq!(label_for("https://hic.example.ts.net/", named), "Held in Common Collective Commons");
-        assert_eq!(label_for("http://10.0.0.5:8081", named), "10.0.0.5:8081", "other commons keep their address");
-        assert_eq!(label_for("https://hic.example.ts.net", None), "hic.example.ts.net");
+        assert_eq!(label_for("https://hic.example.ts.net/", named, None), "Held in Common Collective Commons");
+        assert_eq!(label_for("http://10.0.0.5:8081", named, None), "10.0.0.5:8081", "other commons keep their address");
+        assert_eq!(label_for("https://hic.example.ts.net", None, None), "hic.example.ts.net");
     }
 }

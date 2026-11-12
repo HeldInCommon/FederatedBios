@@ -28,7 +28,6 @@ use crate::governance::{license_from_form, signals_from_form, LICENSES, SIGNALS}
 use crate::handle;
 use crate::held_signals::{self, HeldSignals};
 use crate::model::{Reach, RemoteEntry};
-use crate::web::layout::host_label;
 
 /// The `hic/v1` type of a story.
 pub const STORY: &str = "Story";
@@ -524,7 +523,7 @@ pub fn build_withdraw(
     commons_url: &str,
     created_at: u64,
 ) -> Result<Value, String> {
-    let body = json!({ "story": id, "commons": host_label(commons_url) });
+    let body = json!({ "story": id, "commons": crate::config::commons_host(commons_url) });
     let signed = envelope::sign(Envelope::new(STORY_WITHDRAW, author_pub, created_at, None, body), author_priv)?;
     Ok(json!({ "type": "StoryWithdraw", "schema": envelope::SCHEMA, "withdraw": signed }))
 }

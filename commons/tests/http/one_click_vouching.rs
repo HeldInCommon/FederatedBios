@@ -219,7 +219,9 @@ async fn a_member_vouches_with_one_click_from_their_node() {
     // With it, one click lists her.
     let press = format!("handle=tega&csrf={}&commons_url={commons_url}&who=amy&key={key}", field(&page, "csrf"));
     let r = send(&node, post_form("/vouch", &press, Some(&sid))).await;
-    assert!(r.text.contains("@amy is now listed on 127.0.0.1"), "{}", r.text);
+    // The commons is on this computer, so it's named by this computer's
+    // network address (or 127.0.0.1 without a network).
+    assert!(r.text.contains("@amy is now listed on "), "{}", r.text);
     assert!(commons_store.pending().is_empty());
     let intro = commons_store.intros().into_iter().find(|i| i.handle == "amy").unwrap();
     let tega_key = node_store.handle("tega").unwrap().unwrap().ed_pub;
@@ -227,11 +229,11 @@ async fn a_member_vouches_with_one_click_from_their_node() {
 
     // Pressing again: she isn't waiting any more, said in plain words.
     let r = send(&node, post_form("/vouch", &press, Some(&sid))).await;
-    assert!(r.text.contains("Not vouched") && r.text.contains("isn't waiting on 127.0.0.1"), "{}", r.text);
+    assert!(r.text.contains("Not vouched") && r.text.contains("isn't waiting on "), "{}", r.text);
 
     // And the list is now empty.
     let page = send(&node, get("/@tega?tab=people", Some(&sid))).await.text;
-    assert!(page.contains("Nobody is waiting on 127.0.0.1"));
+    assert!(page.contains("Nobody is waiting on "));
 }
 
 /// A commons that can't be reached gets a clear message, not an error page.
@@ -245,5 +247,5 @@ async fn an_unreachable_commons_is_named_on_the_people_tab() {
     node_store.save_handle(&rec).unwrap();
     let page = send(&node, get("/@tega?tab=people", Some(&sid))).await;
     assert_eq!(page.status, StatusCode::OK);
-    assert!(page.text.contains("Couldn't reach 127.0.0.1:1"), "{}", page.text);
+    assert!(page.text.contains("Couldn't reach ") && page.text.contains(":1 to see who"), "{}", page.text);
 }

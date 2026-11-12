@@ -45,7 +45,7 @@ fn kind_or_first(which: Option<String>, saved: &Saved) -> Result<Kind, String> {
 }
 
 /// Wait up to three seconds for whatever is on `port` to let go of it.
-fn wait_until_free(port: u16, token: &str) {
+pub(crate) fn wait_until_free(port: u16, token: &str) {
     for _ in 0..30 {
         if network::probe(port, token) == Probe::Nothing {
             return;

@@ -336,6 +336,9 @@ pub fn run() {
             app.manage(cfg);
             app.manage(Chosen(Mutex::new(saved)));
             app.manage(servers);
+            // The router can give this computer a new address; move a
+            // commons or local commons onto it and say so.
+            sidecar::watch_addresses(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
