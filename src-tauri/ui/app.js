@@ -6,6 +6,7 @@
 //   do=add&role=node|commons      run the other role too: name it, start it
 //   do=rename&role=node|commons   rename it
 //   do=remove-practice            confirm removing the practice commons
+//   do=steward-link               show the commons' steward link (ADR 0024)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
 //   setup_state  -> { role, name, node_name, commons_name, practice, lan_url }
@@ -13,6 +14,7 @@
 //   add_role     (role, name)           add the other role and start it
 //   set_name     (role, name)           name (or rename) the node or commons
 //   remove_practice_now                 delete the practice commons
+//   steward_links -> [string]           the commons' steward link, per address
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
 //   port_problem (which) -> string|null why it hasn't started (another program has the port)
@@ -193,6 +195,32 @@ function showRemove(){
   });
 }
 
+// The steward link: one row per address, each with a Copy button. If the
+// clipboard can't be reached, the link is selected so the person can copy
+// it themselves.
+async function showStewardLink(){
+  $('steward').hidden = false;
+  $('steward-close').addEventListener('click', () => invoke('close_setup'));
+  let links = [];
+  try { links = await invoke('steward_links'); }
+  catch(err){ $('steward-err').textContent = ('' + err) || 'Could not find the steward link.'; return; }
+  for (const link of links){
+    const li = document.createElement('li');
+    const code = document.createElement('code'); code.textContent = link;
+    const copy = document.createElement('button');
+    copy.className = 'link'; copy.type = 'button'; copy.textContent = 'Copy';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied'; }
+      catch(e){
+        getSelection().selectAllChildren(code);
+        copy.textContent = 'Selected: copy with \u2318C or Ctrl+C';
+      }
+    });
+    li.append(code, copy);
+    $('steward-links').append(li);
+  }
+}
+
 function showChooser(){
   if (lanUrl){
     const d = $('room-detail');
@@ -229,6 +257,7 @@ async function init(){
   if (todo === 'add') showNaming(role, 'add', '');
   else if (todo === 'rename') showNaming(role, 'rename', role === 'commons' ? st.commons_name : st.node_name);
   else if (todo === 'remove-practice') showRemove();
+  else if (todo === 'steward-link') showStewardLink();
   // The main window.
   else if (st.role && st.name) showLoading(st.role);
   else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed

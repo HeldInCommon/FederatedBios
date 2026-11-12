@@ -167,7 +167,8 @@ A new handle is listed only when someone already there vouches for it
 
 The **steward view** opens at the commons' own computer (the desktop app goes
 straight there), or with the private **steward link** the commons prints in its
-log. Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
+log (in the desktop app: **Go → Show steward link…**; the app keeps it out of
+its own log, ADR 0024). Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
 `HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
 
 **Seeing who is waiting** ([0026](adr/0026-vouch-with-a-click.md)): when a

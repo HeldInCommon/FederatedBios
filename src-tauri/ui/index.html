@@ -80,6 +80,18 @@
     <p class="err" id="remove-err" role="alert"></p>
   </main>
 
+  <!-- The commons' steward link (Go → Show steward link…), ADR 0024 -->
+  <main class="choose" id="steward" hidden>
+    <p class="eyebrow">Held in Common · your commons</p>
+    <h1>Steward link<span class="dot">.</span></h1>
+    <p class="sub">Opens your commons' steward view from any computer. Anyone who has it can approve people and make invite codes, so keep it private: don't paste it into group chats, issues or shared documents.</p>
+    <ul class="links" id="steward-links"></ul>
+    <div class="row">
+      <button class="link" id="steward-close" type="button">Close</button>
+    </div>
+    <p class="err" id="steward-err" role="alert"></p>
+  </main>
+
   <!-- Loading: the server is starting -->
   <div class="box" id="loading" hidden>
     <img class="logo" src="logo.png" alt="Held in Common" width="173" height="46" />

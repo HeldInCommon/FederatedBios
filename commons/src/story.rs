@@ -62,11 +62,13 @@ impl Story {
     }
 
     /// The first line with any words in it, cut to about 140 characters: a
-    /// card's preview.
+    /// card's preview. A Markdown-style link shows only its words (see
+    /// `crate::text_links`), so a cut never leaves half of `[…](…)` behind.
     pub fn first_line(&self) -> String {
         let line = self.text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+        let line = crate::text_links::without_link_markup(line);
         if line.chars().count() <= 140 {
-            line.to_string()
+            line
         } else {
             format!("{}\u{2026}", line.chars().take(139).collect::<String>().trim_end())
         }
@@ -510,6 +512,8 @@ mod tests {
         assert_eq!(s.first_line(), "The 38 sighs at the stop.");
         let long = Story { text: "w".repeat(300), ..s.clone() };
         assert_eq!(long.first_line().chars().count(), 140);
+        let linked = Story { text: "Hear [the bus](https://example.org/38) sigh.".into(), ..s.clone() };
+        assert_eq!(linked.first_line(), "Hear the bus sigh.", "previews show a link's words");
         assert!(s.as_text_file().starts_with("Night bus\n\nThe 38 sighs"));
         assert!(s.as_text_file().contains("@ada · CC BY 4.0"));
     }
