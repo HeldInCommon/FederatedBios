@@ -1,0 +1,59 @@
+{
+  "canonical": "{\"author\":\"03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8\",\"body\":{\"commons\":\"room.example:8081\",\"first_line\":\"The 38 sighs at the stop.\",\"handle\":\"tega\",\"id\":\"0123456789abcdef\",\"license\":\"cc-by-nc\",\"signals\":[\"credit\",\"open\"],\"text_sha256\":\"7b8c5786cd6aa2b37aa61c9805763a8cf6671da033d9cc9bc8ae282dd2e020ba\",\"title\":\"Night bus\",\"visibility\":\"commons\",\"words\":12},\"created_at\":1700000500,\"prev\":null,\"schema\":\"hic/v1\",\"type\":\"StoryCard\"}",
+  "cid": "01487b4cf6e53265e83052084da058a9c16693885b858be6229bbcaf30c59cac",
+  "description": "A StoryCard (\"Only while I'm here\", decision record 0021): the story in 05 without its text, carrying the SHA-256 of that text, addressed to one commons.",
+  "envelope": {
+    "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "body": {
+      "commons": "room.example:8081",
+      "first_line": "The 38 sighs at the stop.",
+      "handle": "tega",
+      "id": "0123456789abcdef",
+      "license": "cc-by-nc",
+      "signals": [
+        "credit",
+        "open"
+      ],
+      "text_sha256": "7b8c5786cd6aa2b37aa61c9805763a8cf6671da033d9cc9bc8ae282dd2e020ba",
+      "title": "Night bus",
+      "visibility": "commons",
+      "words": 12
+    },
+    "created_at": 1700000500,
+    "prev": null,
+    "schema": "hic/v1",
+    "type": "StoryCard"
+  },
+  "name": "07-story-card.json",
+  "signed": {
+    "cid": "01487b4cf6e53265e83052084da058a9c16693885b858be6229bbcaf30c59cac",
+    "envelope": {
+      "author": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "body": {
+        "commons": "room.example:8081",
+        "first_line": "The 38 sighs at the stop.",
+        "handle": "tega",
+        "id": "0123456789abcdef",
+        "license": "cc-by-nc",
+        "signals": [
+          "credit",
+          "open"
+        ],
+        "text_sha256": "7b8c5786cd6aa2b37aa61c9805763a8cf6671da033d9cc9bc8ae282dd2e020ba",
+        "title": "Night bus",
+        "visibility": "commons",
+        "words": 12
+      },
+      "created_at": 1700000500,
+      "prev": null,
+      "schema": "hic/v1",
+      "type": "StoryCard"
+    },
+    "sig": "b966fce14af9368bae7ea8bce37910c9589585fd0ebc15d0b7f048f75b1be5db57f0038cd6619ff6400b3077389c627c74e0e6fa8c2a8436ac0e23932833b608"
+  },
+  "signing_input": "hic/v1/StoryCard\n01487b4cf6e53265e83052084da058a9c16693885b858be6229bbcaf30c59cac",
+  "test_private_keys": {
+    "A": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "B": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  }
+}

@@ -34,7 +34,7 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0018](0018-hearing-you-were-listed.md) | How a node hears it was listed | Accepted | 2026-11-10 |
 | [0019](0019-node-and-commons-side-by-side.md) | One computer can run a node, a commons and a practice commons | Accepted (built) | 2026-11-11 |
 | [0020](0020-stories.md) | Stories: written on a node, shared as signed copies | Accepted (built) | 2026-11-11 |
-| [0021](0021-held-not-copied.md) | "Only while I'm here": a commons that lists but doesn't keep | Proposed | 2026-11-11 |
+| [0021](0021-held-not-copied.md) | "Only while I'm here": a commons that lists but doesn't keep | Accepted (built) | 2026-11-12 |
 | [0022](0022-the-ramp.md) | The ramp: one next step, and tabs that arrive when they're useful | Accepted (built) | 2026-11-11 |
 | [0023](0023-steward-needs-a-key.md) | The steward view needs a key, not "this computer" | Accepted (built) | 2026-11-11 |
 | [0024](0024-steward-link-out-of-the-log.md) | The steward link stays out of the app's log | Accepted (built) | 2026-11-12 |

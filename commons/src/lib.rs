@@ -39,6 +39,9 @@
 //! | [`sessions`] | signed-in sessions and their cookies | in-memory state |
 //! | [`form`] | parsing form posts | none |
 //! | [`text_links`] | finding web links in a story's text, for display | none |
+//! | [`here`] | "Only while I'm here": the signed card and poll, and a commons' rules for them | none |
+//! | [`relay`] | a commons' readers waiting for an author's node, and who is here | in-memory state |
+//! | [`relay_node`] | a node's outgoing connection to each commons holding its cards | asks commons; in-memory status |
 //! | [`web`] | HTML pages (pure rendering) and the request handlers | handlers only |
 //! | [`api`] | JSON and ActivityStreams endpoints | handlers only |
 //! | [`app`] | shared state and the route table | none |
@@ -56,6 +59,7 @@ pub mod federation;
 pub mod form;
 pub mod governance;
 pub mod handle;
+pub mod here;
 pub mod identity;
 pub mod jcs;
 pub mod keys;
@@ -66,6 +70,8 @@ pub mod passphrase;
 pub mod publishing;
 pub mod ramp;
 pub mod ratelimit;
+pub mod relay;
+pub mod relay_node;
 pub mod role;
 pub mod sessions;
 pub mod store;

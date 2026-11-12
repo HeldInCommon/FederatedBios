@@ -1,7 +1,7 @@
 //! Writing and changing a story on a node, in two steps (decision record
 //! 0022): `GET|POST /stories/new` and `GET|POST /story/{id}/edit` for the
 //! words, then `GET|POST /story/{id}/rights` for who can read it, its
-//! licence and signals, ending in "Share to the room" or "Keep it on this
+//! licence, signals and how it travels, ending in "Share to the room" or "Keep it on this
 //! computer for now". Every change is a new signed version with the same id.
 
 use axum::extract::{Path, State};
@@ -15,7 +15,7 @@ use crate::form::Form;
 use crate::governance::DEFAULT_LICENSE;
 use crate::now;
 use crate::sessions;
-use crate::story::{self, OwnStory, TEXT_MAX, TITLE_MAX};
+use crate::story::{self, OwnStory, Travel, TEXT_MAX, TITLE_MAX};
 use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page, Section};
 use crate::web::pages;
 
@@ -79,7 +79,7 @@ pub async fn story_create(State(st): State<Shared>, headers: HeaderMap, body: St
         Ok(x) => x,
         Err(e) => return server_error(&st.site, &e),
     };
-    let own = OwnStory { story: s, signed, shared_to: vec![], shared_at: Default::default() };
+    let own = OwnStory::new(s, signed);
     let saved = {
         let _g = st.write.lock().unwrap();
         st.store.save_own_story(&own)
@@ -135,7 +135,7 @@ pub async fn rights_form(State(st): State<Shared>, Path(id): Path<String>, heade
         Err(resp) => return *resp,
     };
     let suggested = known_commons_for(&st, &rec).into_iter().next();
-    let body = pages::rights_form(&s.story, &sess.csrf, suggested.as_deref());
+    let body = pages::rights_form(&s.story, s.travel, &sess.csrf, suggested.as_deref());
     render(&st.site, Page::new("Who can read it", Some(&sess.handle), body).at(Section::Stories))
 }
 
@@ -164,6 +164,18 @@ pub async fn rights_submit(
             return server_error(&st.site, &e);
         }
         s.with_version(terms, signed)
+    };
+    // How it travels: the author's choice, kept beside the story (not signed
+    // into it, so no new version is needed). It applies the next time the
+    // story is shared.
+    let travel = Travel::from_form(&f.one("travel"));
+    let s = if travel == s.travel {
+        s
+    } else {
+        if let Err(e) = update_story(&st, &id, |old| old.with_travel(travel)) {
+            return server_error(&st.site, &e);
+        }
+        s.with_travel(travel)
     };
     if f.one("action") != "share" {
         return redirect(&format!("/story/{id}?done=saved"));

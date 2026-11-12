@@ -12,6 +12,7 @@ use axum::Extension;
 use crate::app::{AppState, Shared};
 use crate::envelope::Signed;
 use crate::federation::{self, Admission, Holders};
+use crate::here;
 use crate::identity::{self, Identity};
 use crate::model::{PendingShare, RemoteEntry};
 use crate::story::{self, HeldStory, StoryAdmission};
@@ -321,7 +322,16 @@ fn receive_story(st: &AppState, activity: &serde_json::Value) -> Response {
     };
     let _g = st.write.lock().unwrap();
     let held = st.store.held_stories();
-    match story::admit(&s, &signed, &st.store.remotes(), &held, &st.store.story_tombstones()) {
+    // An "Only while I'm here" card as new or newer wins (decision record 0021).
+    let author = signed.envelope.author.clone();
+    let created_at = signed.envelope.created_at;
+    let admission = match story::admit(&s, &signed, &st.store.remotes(), &held, &st.store.story_tombstones()) {
+        StoryAdmission::Accept if here::card_blocks_copy(&st.store.story_cards(), &author, &s.id, created_at) => {
+            StoryAdmission::Stale
+        }
+        other => other,
+    };
+    match admission {
         StoryAdmission::NotListed => reply(
             StatusCode::FORBIDDEN,
             "stories can be shared here once you're listed: share your profile to this commons first",
@@ -329,20 +339,46 @@ fn receive_story(st: &AppState, activity: &serde_json::Value) -> Response {
         StoryAdmission::Stale => {
             reply(StatusCode::CONFLICT, "this commons already holds a newer version of that story, or it was withdrawn")
         }
-        StoryAdmission::Accept => match st.store.save_held_story(&HeldStory { story: s, signed, received_at: now() }) {
-            Ok(()) => reply(StatusCode::OK, "story shared"),
-            Err(e) => store_failed(&e),
-        },
+        StoryAdmission::Accept => {
+            let id = s.id.clone();
+            // Keep the copy, then remove any older card for the same story
+            // (the author switched from "Only while I'm here" to a copy).
+            let saved = st
+                .store
+                .save_held_story(&HeldStory { story: s, signed, received_at: now() })
+                .and_then(|_| st.store.delete_story_card(&author, &id));
+            st.relay.remove_story(&author, &id);
+            match saved {
+                Ok(()) => reply(StatusCode::OK, "story shared"),
+                Err(e) => store_failed(&e),
+            }
+        }
     }
 }
 
-/// A story's withdrawal from this commons.
+/// A story's withdrawal from this commons: of its copy, or of its "Only
+/// while I'm here" card (decision record 0021). A card's withdrawal takes
+/// effect at once: the card is deleted, and readers waiting for its text
+/// are told it's gone.
 fn receive_story_withdraw(st: &AppState, activity: &serde_json::Value) -> Response {
     let w = match story::verify_withdraw(activity, &st.own_hosts) {
         Ok(w) => w,
         Err(e) => return reply(StatusCode::BAD_REQUEST, &format!("rejected: {e}")),
     };
     let _g = st.write.lock().unwrap();
+    let card = st.store.story_cards().into_iter().find(|c| c.author() == w.author && c.card.id == w.id);
+    if let Some(card) = card {
+        let tomb = match here::apply_card_withdraw(&w, &card) {
+            Ok(t) => t,
+            Err(e) => return reply(StatusCode::CONFLICT, e),
+        };
+        let removed = st.store.save_story_tombstone(&tomb).and_then(|_| st.store.delete_story_card(&w.author, &w.id));
+        st.relay.remove_story(&w.author, &w.id);
+        return match removed {
+            Ok(()) => reply(StatusCode::OK, "story withdrawn"),
+            Err(e) => store_failed(&e),
+        };
+    }
     let tomb = match story::apply_withdraw(&w, &st.store.held_stories(), &st.store.story_tombstones()) {
         Ok(t) => t,
         Err(e) => return reply(StatusCode::CONFLICT, e),

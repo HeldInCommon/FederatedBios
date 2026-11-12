@@ -106,6 +106,41 @@ impl Story {
     }
 }
 
+/// How a story travels to a commons (the "How it travels" choice).
+///
+/// This is the author's choice on their own node, kept beside the story and
+/// not inside its signed body, so choosing it doesn't change the signed
+/// `Story` format. What a commons receives differs instead: a signed copy,
+/// or a signed card (decision record 0021, `crate::here`).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Travel {
+    /// The commons keeps a signed copy until it's withdrawn (decision record 0020).
+    #[default]
+    Copy,
+    /// "Only while I'm here": the commons keeps a signed card, and asks this
+    /// node for the text each time someone reads it (decision record 0021).
+    Here,
+}
+
+impl Travel {
+    /// The choice from a form value: `here`, or anything else for a copy.
+    pub fn from_form(value: &str) -> Travel {
+        match value {
+            "here" => Travel::Here,
+            _ => Travel::Copy,
+        }
+    }
+
+    /// The form value for this choice.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Travel::Copy => "copy",
+            Travel::Here => "here",
+        }
+    }
+}
+
 /// A story on the node that wrote it: what it says, its signed form, and the
 /// commons it has been shared to.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -117,12 +152,34 @@ pub struct OwnStory {
     /// The commons it is shared to now (their addresses).
     #[serde(default)]
     pub shared_to: Vec<String>,
-    /// When it was last shared to each commons in `shared_to`.
+    /// When it was last shared to each commons in `shared_to`. For a card
+    /// ("Only while I'm here") this is the card's signed time.
     #[serde(default)]
     pub shared_at: BTreeMap<String, u64>,
+    /// How the author wants it to travel next time it's shared. Stories
+    /// written before this choice existed travel as copies.
+    #[serde(default)]
+    pub travel: Travel,
+    /// How it was shared to each commons in `shared_to`. Missing means a
+    /// copy (everything shared before "Only while I'm here" existed).
+    #[serde(default)]
+    pub shared_as: BTreeMap<String, Travel>,
 }
 
 impl OwnStory {
+    /// A story just written: signed, shared nowhere, and set to travel as a
+    /// copy until its author chooses otherwise.
+    pub fn new(story: Story, signed: Signed) -> OwnStory {
+        OwnStory {
+            story,
+            signed,
+            shared_to: vec![],
+            shared_at: BTreeMap::new(),
+            travel: Travel::Copy,
+            shared_as: BTreeMap::new(),
+        }
+    }
+
     /// When it was written (the signed time).
     pub fn created_at(&self) -> u64 {
         self.signed.envelope.created_at
@@ -136,12 +193,19 @@ impl OwnStory {
         now.max(self.created_at() + 1)
     }
 
-    /// The same story, recorded as shared to `commons` at time `at`.
-    pub fn with_shared_to(mut self, commons: &str, at: u64) -> OwnStory {
+    /// The same story, recorded as shared to `commons` at time `at`, as a copy.
+    pub fn with_shared_to(self, commons: &str, at: u64) -> OwnStory {
+        self.with_shared_as(commons, at, Travel::Copy)
+    }
+
+    /// The same story, recorded as shared to `commons` at time `at`, the way
+    /// `how` says (a copy, or a card for "Only while I'm here").
+    pub fn with_shared_as(mut self, commons: &str, at: u64, how: Travel) -> OwnStory {
         if !self.shared_to.iter().any(|c| c == commons) {
             self.shared_to.push(commons.to_string());
         }
         self.shared_at.insert(commons.to_string(), at);
+        self.shared_as.insert(commons.to_string(), how);
         self
     }
 
@@ -149,7 +213,46 @@ impl OwnStory {
     pub fn without_shared_to(mut self, commons: &str) -> OwnStory {
         self.shared_to.retain(|c| c != commons);
         self.shared_at.remove(commons);
+        self.shared_as.remove(commons);
         self
+    }
+
+    /// The same story, to travel as `travel` the next time it's shared.
+    /// Where it's shared already doesn't change until it's re-shared.
+    pub fn with_travel(mut self, travel: Travel) -> OwnStory {
+        self.travel = travel;
+        self
+    }
+
+    /// How it's shared to `commons` now, if it is: a copy or a card.
+    pub fn shared_as(&self, commons: &str) -> Option<Travel> {
+        if !self.shared_to.iter().any(|c| c == commons) {
+            return None;
+        }
+        Some(self.shared_as.get(commons).copied().unwrap_or_default())
+    }
+
+    /// The time to date whatever is sent to `commons` next (a new copy or a
+    /// card): after this story's current version (see
+    /// [`OwnStory::next_version_at`]) and, if a card is there now, after that
+    /// card. A commons keeps only what is newer than what it holds for this
+    /// story, so switching between a copy and a card must always move forward.
+    pub fn next_share_at(&self, commons: &str, now: u64) -> u64 {
+        let after_card = match self.shared_as(commons) {
+            Some(Travel::Here) => self.shared_at.get(commons).map_or(0, |at| at + 1),
+            _ => 0,
+        };
+        self.next_version_at(now).max(after_card)
+    }
+
+    /// The time to date a withdrawal from `commons`: `now`, but never before
+    /// what was sent there (a copy, at most this version; or a card). A
+    /// commons refuses a withdrawal older than what it holds, and a version
+    /// or card can be dated a second ahead of the clock (see
+    /// [`OwnStory::next_share_at`]).
+    pub fn withdraw_at(&self, commons: &str, now: u64) -> u64 {
+        let sent = self.shared_at.get(commons).copied().unwrap_or(0);
+        now.max(sent).max(self.created_at())
     }
 
     /// The same story, a new version: `story` signed as `signed`. Where it's
@@ -225,10 +328,12 @@ pub struct RecentWithdrawal {
 
 /// The withdrawals to show on a commons' stories page, newest first: within
 /// [`WITHDRAWN_SHOWN_FOR`] of `now`, by someone still listed here (for their
-/// handle), and not since shared again.
+/// handle), and not since shared again (as a copy in `held`, or as a card in
+/// `cards`).
 pub fn recent_withdrawals(
     withdrawn: &[StoryTombstone],
     held: &[HeldStory],
+    cards: &[crate::here::HeldCard],
     listed: &[RemoteEntry],
     now: u64,
 ) -> Vec<RecentWithdrawal> {
@@ -236,6 +341,7 @@ pub fn recent_withdrawals(
         .iter()
         .filter(|t| now.saturating_sub(t.withdrawn_at) <= WITHDRAWN_SHOWN_FOR)
         .filter(|t| !held.iter().any(|h| h.author() == t.author && h.story.id == t.id))
+        .filter(|t| !cards.iter().any(|c| c.author() == t.author && c.card.id == t.id))
         .filter_map(|t| {
             let who = listed.iter().find(|r| r.ed_pub == t.author)?;
             Some(RecentWithdrawal { handle: who.handle.clone(), at: t.withdrawn_at })
@@ -301,27 +407,43 @@ pub fn share_message(signed: &Signed) -> Value {
 /// Why a story can't be federated, if it can't: everything a commons checks
 /// about the content itself.
 fn check(story: &Story) -> Result<(), String> {
-    if !handle::is_valid(&story.handle) {
-        return Err("invalid handle".into());
-    }
-    if !is_story_id(&story.id) {
-        return Err("invalid story id".into());
-    }
-    if story.title.trim().is_empty() || story.title.chars().count() > TITLE_MAX {
-        return Err("the title is empty or too long".into());
-    }
+    check_terms(&story.id, &story.handle, &story.title, &story.visibility, &story.license, &story.signals)?;
     if story.text.trim().is_empty() || story.text.chars().count() > TEXT_MAX {
         return Err("the story is empty or too long".into());
     }
-    match Reach::parse(&story.visibility) {
+    Ok(())
+}
+
+/// The checks a commons makes on everything a story carries except its
+/// text: the id, handle, title, reach, licence and signals. Shared by a
+/// story and its "Only while I'm here" card (`crate::here`), which carries
+/// the same terms without the text.
+pub(crate) fn check_terms(
+    id: &str,
+    handle_: &str,
+    title: &str,
+    visibility: &str,
+    license: &str,
+    signals: &[String],
+) -> Result<(), String> {
+    if !handle::is_valid(handle_) {
+        return Err("invalid handle".into());
+    }
+    if !is_story_id(id) {
+        return Err("invalid story id".into());
+    }
+    if title.trim().is_empty() || title.chars().count() > TITLE_MAX {
+        return Err("the title is empty or too long".into());
+    }
+    match Reach::parse(visibility) {
         Some(Reach::Members) => return Err("members-only stories are not federated".into()),
         None => return Err("unknown visibility".into()),
         Some(_) => {}
     }
-    if !LICENSES.iter().any(|l| l.0 == story.license) {
+    if !LICENSES.iter().any(|l| l.0 == license) {
         return Err("unknown licence".into());
     }
-    if !story.signals.iter().all(|s| SIGNALS.iter().any(|k| k.0 == s)) {
+    if !signals.iter().all(|s| SIGNALS.iter().any(|k| k.0 == s)) {
         return Err("unknown signal".into());
     }
     Ok(())
@@ -610,6 +732,8 @@ mod tests {
             story: s.clone(),
             shared_to: vec![],
             shared_at: BTreeMap::new(),
+            travel: Travel::Copy,
+            shared_as: BTreeMap::new(),
         }
         .with_shared_to("http://room", 150);
         assert!(!own.changed_since_shared("http://room"));
@@ -630,10 +754,48 @@ mod tests {
             story: s,
             shared_to: vec![],
             shared_at: BTreeMap::new(),
+            travel: Travel::Copy,
+            shared_as: BTreeMap::new(),
         };
         assert_eq!(own.next_version_at(900), 900, "normally, now");
         assert_eq!(own.next_version_at(500), 501, "same second: one later");
         assert_eq!(own.next_version_at(10), 501, "a clock that went back: still later");
+    }
+
+    #[test]
+    fn switching_between_a_copy_and_a_card_always_moves_forward_in_time() {
+        let k = keys::generate();
+        let s = story("ada");
+        let own = OwnStory::new(s.clone(), sign(&s, &k.ed_pub, &k.ed_priv, 500).unwrap());
+        assert_eq!(own.shared_as("http://room"), None, "not shared");
+        assert_eq!(own.next_share_at("http://room", 900), 900);
+        // A card dated 1,000 is there now: whatever comes next is later.
+        let carded = own.with_shared_as("http://room", 1_000, Travel::Here);
+        assert_eq!(carded.shared_as("http://room"), Some(Travel::Here));
+        assert_eq!(carded.next_share_at("http://room", 900), 1_001, "after the card, even if the clock is behind");
+        assert_eq!(carded.withdraw_at("http://room", 900), 1_000, "a withdrawal is never older than the card");
+        // A copy shared before this choice existed reads as a copy.
+        let old = carded.without_shared_to("http://room").with_shared_to("http://room", 600);
+        assert_eq!(old.shared_as("http://room"), Some(Travel::Copy));
+        assert_eq!(old.next_share_at("http://room", 700), 700);
+    }
+
+    #[test]
+    fn the_travel_choice_reads_from_a_form_and_defaults_to_a_copy() {
+        assert_eq!(Travel::from_form("here"), Travel::Here);
+        assert_eq!(Travel::from_form("copy"), Travel::Copy);
+        assert_eq!(Travel::from_form("anything"), Travel::Copy);
+        // A story file saved before the choice existed has neither field.
+        let k = keys::generate();
+        let own = OwnStory::new(story("ada"), sign(&story("ada"), &k.ed_pub, &k.ed_priv, 1).unwrap())
+            .with_travel(Travel::Here)
+            .with_shared_as("http://room", 5, Travel::Here);
+        let mut saved = serde_json::to_value(&own).unwrap();
+        saved.as_object_mut().unwrap().remove("travel");
+        saved.as_object_mut().unwrap().remove("shared_as");
+        let older: OwnStory = serde_json::from_value(saved).unwrap();
+        assert_eq!(older.travel, Travel::Copy);
+        assert_eq!(older.shared_as("http://room"), Some(Travel::Copy));
     }
 
     #[test]
@@ -650,17 +812,17 @@ mod tests {
         let k = keys::generate();
         let tomb = StoryTombstone { author: k.ed_pub.clone(), id: ID.into(), withdrawn_at: 1_000 };
         let ada = [listed("ada", &k.ed_pub)];
-        let recent = recent_withdrawals(std::slice::from_ref(&tomb), &[], &ada, 1_100);
+        let recent = recent_withdrawals(std::slice::from_ref(&tomb), &[], &[], &ada, 1_100);
         assert_eq!(recent, vec![RecentWithdrawal { handle: "ada".into(), at: 1_000 }]);
         let a_day_later = 1_000 + WITHDRAWN_SHOWN_FOR + 1;
-        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &ada, a_day_later).is_empty(), "old news");
-        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &[], 1_100).is_empty(), "they left");
+        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &[], &ada, a_day_later).is_empty(), "old news");
+        assert!(recent_withdrawals(std::slice::from_ref(&tomb), &[], &[], &[], 1_100).is_empty(), "they left");
         let again = [HeldStory {
             story: story("ada"),
             signed: sign(&story("ada"), &k.ed_pub, &k.ed_priv, 1_050).unwrap(),
             received_at: 1_050,
         }];
-        assert!(recent_withdrawals(&[tomb], &again, &ada, 1_100).is_empty(), "shared again");
+        assert!(recent_withdrawals(&[tomb], &again, &[], &ada, 1_100).is_empty(), "shared again");
     }
 
     #[test]

@@ -54,6 +54,17 @@ pub struct Config {
     /// `HIC_PRACTICE=1`: this commons is a practice one, for learning to run a
     /// commons. Only changes what its pages say.
     pub practice: bool,
+    /// `HIC_RELAY_HOLD` and `HIC_RELAY_WAIT`, in seconds: how long a commons
+    /// holds a node's poll open, and how long a reader waits for the node's
+    /// answer, for "Only while I'm here" (decision record 0021). Defaults 25
+    /// and 8; tests make them short. Each is kept between 1 and 60.
+    pub relay: crate::relay::Timing,
+}
+
+/// A number of seconds from a setting, kept between 1 and 60, or `default`
+/// when it's missing or not a number.
+fn seconds(value: Option<String>, default: u64) -> u64 {
+    value.and_then(|v| v.trim().parse::<u64>().ok()).map_or(default, |s| s.clamp(1, 60))
 }
 
 /// The host (and port, if any) of a URL: `https://c.example/x` → `c.example`.
@@ -105,6 +116,10 @@ impl Config {
                 .filter(|c| valid_cookie_name(c))
                 .unwrap_or_else(|| DEFAULT_SESSION_COOKIE.into()),
             practice: get("HIC_PRACTICE").is_some_and(|v| v.trim() == "1"),
+            relay: crate::relay::Timing {
+                hold: seconds(get("HIC_RELAY_HOLD"), crate::relay::DEFAULT_TIMING.hold),
+                wait: seconds(get("HIC_RELAY_WAIT"), crate::relay::DEFAULT_TIMING.wait),
+            },
         }
     }
 

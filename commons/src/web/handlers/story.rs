@@ -7,13 +7,16 @@ use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 
-use super::{authorised_as, post_to_commons, session};
+use std::time::Duration;
+
+use super::{authorised_as, post_to_commons, post_to_commons_at, session};
 use crate::app::{AppState, Shared};
 use crate::form::Form;
+use crate::here;
 use crate::model::{HandleRec, Reach};
 use crate::now;
 use crate::sessions::Session;
-use crate::story::{self, OwnStory};
+use crate::story::{self, OwnStory, Travel};
 use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page, Section};
 use crate::web::pages::{self, StoryOwner};
 
@@ -71,12 +74,15 @@ pub async fn own_story(
         Err(e) => return server_error(&st.site, &e),
     };
     let owner = match &me {
-        Some(m) if m.handle == s.story.handle => st
-            .store
-            .handle(&m.handle)
-            .ok()
-            .flatten()
-            .map(|rec| StoryOwner { csrf: m.csrf.clone(), known: known_commons_for(&st, &rec) }),
+        Some(m) if m.handle == s.story.handle => st.store.handle(&m.handle).ok().flatten().map(|rec| StoryOwner {
+            csrf: m.csrf.clone(),
+            known: known_commons_for(&st, &rec),
+            links: s
+                .shared_to
+                .iter()
+                .filter_map(|c| st.links.status(c, &s.story.handle).map(|link| (c.clone(), link)))
+                .collect(),
+        }),
         _ => None,
     };
     let done = owner.as_ref().and_then(|_| outcome(&q));
@@ -183,16 +189,18 @@ pub(crate) fn forget_shares(st: &AppState, h: &str, only: Option<&str>) -> Resul
     for s in st.store.own_stories().into_iter().filter(|s| s.story.handle == h && !s.shared_to.is_empty()) {
         let next = match only {
             Some(c) => s.without_shared_to(c),
-            None => OwnStory { shared_to: vec![], shared_at: Default::default(), ..s },
+            None => OwnStory { shared_to: vec![], shared_at: Default::default(), shared_as: Default::default(), ..s },
         };
         st.store.save_own_story(&next).map_err(|e| format!("couldn't update a story of @{h}: {e}"))?;
     }
     Ok(())
 }
 
-/// Send story `s` to `commons` and, if it's taken, record when. After a key
-/// change the story is signed again with the member's current key first.
-/// **Writes the story file.** The error is a sentence to show the member.
+/// Send story `s` to `commons` the way its author chose ("How it travels"):
+/// a signed copy, or an "Only while I'm here" card (decision record 0021).
+/// If it's taken, record when and how. After a key change the story is
+/// signed again with the member's current key first. **Writes the story
+/// file.** The error is a sentence to show the member.
 pub(crate) async fn share_story_to(
     st: &AppState,
     mut s: OwnStory,
@@ -205,18 +213,54 @@ pub(crate) async fn share_story_to(
     if !(commons.starts_with("http://") || commons.starts_with("https://")) {
         return Err("That isn't a commons address.".into());
     }
-    if s.signed.envelope.author != rec.ed_pub {
-        let signed = story::sign(&s.story, &rec.ed_pub, &rec.ed_priv, s.next_version_at(now()))?;
+    // Re-sign after a key change (the old signature names the old key), or
+    // when a card is there now: a copy replacing it must be dated after it.
+    let after_card = s.travel == Travel::Copy && s.shared_as(commons) == Some(Travel::Here);
+    if s.signed.envelope.author != rec.ed_pub || after_card {
+        let signed = story::sign(&s.story, &rec.ed_pub, &rec.ed_priv, s.next_share_at(commons, now()))?;
         s.signed = signed.clone();
         update_story(st, &s.story.id, |old| OwnStory { signed, ..old })?;
     }
+    match s.travel {
+        Travel::Copy => share_copy_to(st, &s, commons).await,
+        Travel::Here => share_card_to(st, &s, rec, commons).await,
+    }
+}
+
+/// Send the signed copy of `s` to `commons`' inbox and record it.
+/// **Writes the story file.**
+async fn share_copy_to(st: &AppState, s: &OwnStory, commons: &str) -> Result<(), String> {
     let label = host_label(commons);
     let r = post_to_commons(st, commons, &story::share_message(&s.signed)).await?;
     if !r.status().is_success() {
         let why = r.text().await.unwrap_or_default();
         return Err(format!("{label} didn't take the story: {why}"));
     }
-    update_story(st, &s.story.id, |old| old.with_shared_to(commons, now()))
+    update_story(st, &s.story.id, |old| old.with_shared_as(commons, now(), Travel::Copy))
+        .map_err(|e| format!("Shared to {label}, but this node couldn't record it: {e}"))
+}
+
+/// Send `s`'s signed card (no text) to `commons`' `/here/card` and record
+/// it; the relay (`crate::relay_node`) then keeps a connection open so
+/// readers there can fetch the words while this node runs. A commons that
+/// predates "Only while I'm here" answers 404. **Writes the story file.**
+async fn share_card_to(st: &AppState, s: &OwnStory, rec: &HandleRec, commons: &str) -> Result<(), String> {
+    let label = host_label(commons);
+    let at = s.next_share_at(commons, now());
+    let card = here::card_for(&s.story, commons);
+    let signed = here::sign_card(&card, &rec.ed_pub, &rec.ed_priv, at)?;
+    let r =
+        post_to_commons_at(st, commons, "/here/card", &here::card_message(&signed), Duration::from_secs(10)).await?;
+    if r.status() == StatusCode::NOT_FOUND {
+        return Err(format!(
+            "{label} doesn't support Only while I'm here yet. To share it there, choose \u{201c}Keep a copy on the commons\u{201d} in its terms."
+        ));
+    }
+    if !r.status().is_success() {
+        let why = r.text().await.unwrap_or_default();
+        return Err(format!("{label} didn't take the story's card: {why}"));
+    }
+    update_story(st, &s.story.id, |old| old.with_shared_as(commons, at, Travel::Here))
         .map_err(|e| format!("Shared to {label}, but this node couldn't record it: {e}"))
 }
 
@@ -251,7 +295,8 @@ pub async fn story_withdraw(State(st): State<Shared>, headers: HeaderMap, body: 
     let Some(rec) = st.store.handle(&s.story.handle).ok().flatten().filter(|r| r.ed_pub == author) else {
         return error_page(&st.site, "Your key has changed since you shared this; share it again, then withdraw.");
     };
-    let withdrawn_at = now();
+    // Never older than what was sent there (see `OwnStory::withdraw_at`).
+    let withdrawn_at = s.withdraw_at(&commons, now());
     let msg = match story::build_withdraw(&rec.ed_pub, &rec.ed_priv, &s.story.id, &commons, withdrawn_at) {
         Ok(m) => m,
         Err(e) => return server_error(&st.site, &e),

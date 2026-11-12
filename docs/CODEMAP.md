@@ -47,6 +47,9 @@ Writes happen in clearly named places that say what they change.
 | `federation.rs` | Build and verify shares and withdrawals; `admit()` a share or not; `apply_withdraw()`. | yes |
 | `ramp.rs` | The member's next step and which profile tabs they see (decision record 0022). | yes |
 | `story.rs` | Stories (decision record 0020): check a written story, sign it, verify a shared one, `admit()` it on a commons (author must be listed), withdrawals. | yes |
+| `here.rs` | "Only while I'm here" (decision record 0021): the signed `StoryCard` (no text, its SHA-256) and `StoryRelay` (a node's poll with its answers); a commons' rules for them (`admit_card`, `text_matches`). | yes |
+| `relay.rs` | A commons' side of "Only while I'm here": who is here (`Presence`) and readers waiting (`RequestState`), as enums with pure transitions, kept in memory only. | in-memory state |
+| `relay_node.rs` | A node's side: which commons need a connection, what to answer, the connection's state (`Link`), and the loop that keeps each long poll open. | rules yes; asks commons |
 | `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
@@ -64,6 +67,7 @@ Writes happen in clearly named places that say what they change.
 | `web/pages/owner_people.rs` | The People tab: who is waiting on each commons, with Vouch buttons; invite someone; vouch by handle and key. | yes |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
 | `web/handlers/stories.rs` | Story lists (a node's; a commons', with recent withdrawals) and a story on a commons. | no |
+| `web/handlers/here.rs` | "Only while I'm here" on a commons: `/here/card`, the long poll `/here/poll`, and reading a card's story (page and `here.json`), never cached. | no |
 | `web/handlers/story.rs` | One story on its author's node: the page, export, share (`share_story_to`), withdraw. | no |
 | `web/handlers/story_edit.rs` | Writing a story in two steps (the words, then its rights), editing it, changing its terms. | no |
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
@@ -87,6 +91,21 @@ Writes happen in clearly named places that say what they change.
    older than the one already held.
 7. `store.rs::save_remote` — writes `remote/<keyid>.json` atomically.
 8. `web/handlers/directory.rs` → `web/pages/directory.rs` lists it.
+
+### Following a request: reading a story shared "Only while I'm here"
+
+1. **Node**, `relay_node::run` (started in `main.rs`) sees a story shared as a
+   card and keeps `POST <commons>/here/poll` open (`keep_open`).
+2. **Commons**, `web/handlers/here.rs::here_poll` — `here::verify_relay`
+   (signed, addressed, recent), `relay::Relay::open_poll` (refuses a replay),
+   then holds the request open.
+3. A reader opens `/stories/<keyid>/<id>`: `handlers/stories.rs::held_story`
+   finds a card, not a copy → `here::card_page` → `fetch_text` records a
+   request; the open poll hands it over (`Relay::hand_over`).
+4. **Node**, `relay_node::answers_for` → the next poll carries the text.
+5. **Commons**, `Relay::apply_answers` checks it with `here::text_matches`
+   against the card's signed hash → the reader's page takes it
+   (`take_reading`) and the text is dropped. Nothing is written to disk.
 
 ### Following a request: someone withdraws
 
@@ -137,7 +156,7 @@ interleave) → redirect to the profile.
 |---|---|---|
 | `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http/` (the whole router in-process; `cargo test --test http vouching` runs one area). | ~5 s |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | The app's pure rules (role migration, health check, labels). | ~1 s once built |
-| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching (including with a click), steward approval, Check now, withdrawal, key rotation and recovery. | ~25 s |
+| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching (including with a click), steward approval, Check now, withdrawal, key rotation and recovery, and "Only while I'm here" (stop and restart a node). | ~25 s |
 | `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
 All four run on every pull request (`.github/workflows/pr-checks.yml`), with

@@ -40,6 +40,12 @@ pub struct AppState {
     /// Limits `/inbox` and `/api/waiting` requests per sender address, in
     /// one shared count (see [`crate::ratelimit`]).
     pub inbox_limit: RateLimiter,
+    /// On a commons: readers waiting for an author's node, and who is here
+    /// now, for "Only while I'm here" (see [`crate::relay`]).
+    pub relay: crate::relay::Relay,
+    /// On a node: the state of each outgoing connection to a commons holding
+    /// one of our cards (see [`crate::relay_node`]).
+    pub links: crate::relay_node::Links,
 }
 
 /// The state as handlers receive it.
@@ -71,6 +77,8 @@ impl AppState {
                 .build()
                 .expect("HTTP client builds"),
             inbox_limit: RateLimiter::new(INBOX_PER_MINUTE, 60),
+            relay: Default::default(),
+            links: Default::default(),
         }
     }
 }
@@ -141,6 +149,7 @@ pub fn router(state: Shared) -> Router {
         .route("/stories", get(handlers::stories))
         .route("/stories/new", get(handlers::story_form).post(handlers::story_create))
         .route("/stories/{kid}/{id}", get(handlers::held_story))
+        .route("/stories/{kid}/{id}/here.json", get(handlers::here_json))
         .route("/story/{id}", get(handlers::own_story))
         .route("/story/{id}/text", get(handlers::story_text))
         .route("/story/{id}/edit", get(handlers::story_edit_form).post(handlers::story_edit))
@@ -151,6 +160,9 @@ pub fn router(state: Shared) -> Router {
         .route("/federated/{kid}", get(handlers::federated))
         // Federation
         .route("/inbox", post(handlers::inbox))
+        // "Only while I'm here" (decision record 0021): nodes open these; nothing opens a node.
+        .route("/here/card", post(handlers::here_card))
+        .route("/here/poll", post(handlers::here_poll))
         // JSON
         .route("/api/directory", get(api::directory))
         .route("/api/@{handle}", get(api::profile))
