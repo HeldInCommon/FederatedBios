@@ -5,21 +5,61 @@ use maud::{html, Markup};
 
 use super::parts::{ago, page_head, section_label};
 use crate::governance::{license_name, signal_name};
+use crate::here::{Card, HeldCard};
 use crate::keys::keyid;
 use crate::model::Reach;
 use crate::story::{HeldStory, OwnStory, RecentWithdrawal, Story};
 
+/// What a story card shows, from a story (its text is there) or from an
+/// "Only while I'm here" card (only its signed first line is).
+struct Preview<'a> {
+    /// The author's handle.
+    handle: &'a str,
+    /// The title.
+    title: &'a str,
+    /// The first line.
+    first_line: String,
+    /// The licence key.
+    license: &'a str,
+    /// The signal keys.
+    signals: &'a [String],
+}
+
+impl<'a> Preview<'a> {
+    /// The preview of a story.
+    fn of_story(s: &'a Story) -> Preview<'a> {
+        Preview {
+            handle: &s.handle,
+            title: &s.title,
+            first_line: s.first_line(),
+            license: &s.license,
+            signals: &s.signals,
+        }
+    }
+
+    /// The preview of a card.
+    fn of_card(c: &'a Card) -> Preview<'a> {
+        Preview {
+            handle: &c.handle,
+            title: &c.title,
+            first_line: c.first_line.clone(),
+            license: &c.license,
+            signals: &c.signals,
+        }
+    }
+}
+
 /// The licence and signals as small chips. With `edit_terms` (the story is
 /// the viewer's own), the chips are one link to its rights step, named for
 /// screen readers by what it does.
-fn chips(s: &Story, edit_terms: Option<&str>) -> Markup {
+fn chips(s: &Preview, edit_terms: Option<&str>) -> Markup {
     let inner = html! {
-        span class="story-chip" { (license_name(&s.license)) }
-        @for sig in &s.signals { span class="story-chip" { (signal_name(sig)) } }
+        span class="story-chip" { (license_name(s.license)) }
+        @for sig in s.signals { span class="story-chip" { (signal_name(sig)) } }
     };
     match edit_terms {
         Some(href) => {
-            let mut terms = vec![license_name(&s.license).to_string()];
+            let mut terms = vec![license_name(s.license).to_string()];
             terms.extend(s.signals.iter().map(|sig| signal_name(sig).to_string()));
             let label = format!("Change the terms of {}: {}", s.title, terms.join(", "));
             html! { a class="story-chips is-editable" href=(href) aria-label=(label) title="Change its terms" { (inner) } }
@@ -39,14 +79,14 @@ fn tone_for(reach: Reach) -> &'static str {
 
 /// One story as a card: its author, title (the link), first line, terms, and
 /// something at the end of the foot (where it is, or that it's verified).
-fn card(href: &str, s: &Story, tone: &str, foot_end: Markup, edit_terms: Option<&str>) -> Markup {
+fn card(href: &str, s: &Preview, tone: &str, foot_end: Markup, edit_terms: Option<&str>) -> Markup {
     html! {
         article class={ "story-card " (tone) } {
             div class="card-bar" {}
             div class="card-body" {
                 p class="card-label" { "Story \u{b7} @" (s.handle) }
                 h2 class="card-title" { a href=(href) { (s.title) } }
-                p class="card-first" { (s.first_line()) }
+                p class="card-first" { (s.first_line) }
                 div class="card-foot" {
                     (chips(s, edit_terms))
                     // Your own story: edit it from the card.
@@ -110,43 +150,59 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
                 };
                 // `bool::then`: `Some(link)` when it's the viewer's own story, else `None`.
                 @let edit = (me == Some(s.story.handle.as_str())).then(|| format!("/story/{}/rights", s.story.id));
-                (card(&format!("/story/{}", s.story.id), &s.story, tone_for(s.story.reach()), html! { (where_) }, edit.as_deref()))
+                (card(&format!("/story/{}", s.story.id), &Preview::of_story(&s.story), tone_for(s.story.reach()), html! { (where_) }, edit.as_deref()))
             }
         }
     }
+}
+
+/// A shared copy as a card in a commons' grid.
+fn copy_card(h: &HeldStory) -> Markup {
+    let href = format!("/stories/{}/{}", keyid(h.author()), h.story.id);
+    card(&href, &Preview::of_story(&h.story), "tone-violet", verified(), None)
+}
+
+/// An "Only while I'm here" card in a commons' grid: jade, and saying so,
+/// since it can only be read while its author is online.
+fn here_card(h: &HeldCard) -> Markup {
+    let href = format!("/stories/{}/{}", keyid(h.author()), h.card.id);
+    let foot = html! { "Only while @" (h.card.handle) " is here" };
+    card(&href, &Preview::of_card(&h.card), "tone-jade", foot, None)
 }
 
 /// The stories one member has shared to this commons, under their profile:
-/// everything of theirs this commons holds, in one place.
-pub fn author_stories(handle: &str, held: &[&HeldStory]) -> Markup {
-    let count = format!("{} shared here", held.len());
+/// everything of theirs this commons holds, in one place (copies, then
+/// "Only while I'm here" cards).
+pub fn author_stories(handle: &str, held: &[&HeldStory], cards: &[HeldCard]) -> Markup {
+    let count = format!("{} shared here", held.len() + cards.len());
     html! {
         (section_label(&format!("Stories by @{handle}"), Some(&count)))
-        @if held.is_empty() {
+        @if held.is_empty() && cards.is_empty() {
             p class="empty-note" { "@" (handle) " hasn't shared any stories here yet." }
         } @else {
             div class="story-grid" {
-                @for h in held {
-                    (card(&format!("/stories/{}/{}", keyid(h.author()), h.story.id), &h.story, "tone-violet", verified(), None))
-                }
+                @for h in held { (copy_card(h)) }
+                @for c in cards { (here_card(c)) }
             }
         }
     }
 }
 
-/// The stories shared to this commons, most recently arrived first, then
-/// any withdrawn in the last day.
+/// The stories shared to this commons: copies, then "Only while I'm here"
+/// cards, each most recently arrived first; then any withdrawn in the last day.
 pub fn commons_stories(
     instance: &str,
     in_app: bool,
     held: &[HeldStory],
+    cards: &[HeldCard],
     withdrawn: &[RecentWithdrawal],
     now: u64,
 ) -> Markup {
+    let shared = held.len() + cards.len();
     let count = if withdrawn.is_empty() {
-        format!("{} shared", held.len())
+        format!("{shared} shared")
     } else {
-        format!("{} shared \u{b7} {} withdrawn", held.len(), withdrawn.len())
+        format!("{shared} shared \u{b7} {} withdrawn", withdrawn.len())
     };
     html! {
         (page_head(&format!("{instance} \u{b7} stories"), "Stories", Some("Small stories, each still held by the person who wrote it.")))
@@ -159,9 +215,8 @@ pub fn commons_stories(
             } @else {
                 (new_story_card("/join", "Stories are written on your own node. Here's how to get one."))
             }
-            @for h in held {
-                (card(&format!("/stories/{}/{}", keyid(h.author()), h.story.id), &h.story, "tone-violet", verified(), None))
-            }
+            @for h in held { (copy_card(h)) }
+            @for c in cards { (here_card(c)) }
             @for w in withdrawn {
                 article class="story-card is-withdrawn" {
                     div class="card-bar" {}
@@ -175,6 +230,9 @@ pub fn commons_stories(
         }
         @if !held.is_empty() {
             p class="hint" { "Verified: the commons checked each story's signature against its author's key." }
+        }
+        @if !cards.is_empty() {
+            p class="hint" { "Only while they're here: this commons keeps a signed card, and fetches the words from the author's own computer while they're online." }
         }
     }
 }
@@ -196,15 +254,15 @@ mod tests {
 
     #[test]
     fn a_commons_leads_to_a_node_for_writing() {
-        let in_app = commons_stories("Room 4", true, &[], &[], 10).into_string();
+        let in_app = commons_stories("Room 4", true, &[], &[], &[], 10).into_string();
         assert!(in_app.contains(r#"class="new-story-card" href="hic-app://open/node""#), "in the app: your node");
-        let visitor = commons_stories("Room 4", false, &[], &[], 10).into_string();
+        let visitor = commons_stories("Room 4", false, &[], &[], &[], 10).into_string();
         assert!(visitor.contains(r#"class="new-story-card" href="/join""#), "elsewhere: how to get one");
     }
 
     #[test]
     fn room_cards_show_terms_and_verification() {
-        let m = commons_stories("Room 4", false, &[held("Night bus")], &[], 10).into_string();
+        let m = commons_stories("Room 4", false, &[held("Night bus")], &[], &[], 10).into_string();
         assert!(m.contains("Room 4 \u{b7} stories") && m.contains("Night bus") && m.contains("First line."));
         assert!(m.contains("CC BY 4.0") && m.contains("Credit") && m.contains("Verified"));
         assert!(m.contains("1 shared"));
@@ -220,6 +278,8 @@ mod tests {
             story: s,
             shared_to: vec![],
             shared_at: Default::default(),
+            travel: Default::default(),
+            shared_as: Default::default(),
         }];
         let mine = node_stories(&own, Some("ada")).into_string();
         assert!(mine.contains("href=\"/story/0123456789abcdef/rights\""));
@@ -227,13 +287,15 @@ mod tests {
         let theirs = node_stories(&own, Some("sam")).into_string();
         assert!(!theirs.contains("/rights"), "only the author can change the terms");
         assert!(!node_stories(&own, None).into_string().contains("/rights"));
-        assert!(!commons_stories("Room 4", false, &[held("Night bus")], &[], 10).into_string().contains("/rights"));
+        assert!(!commons_stories("Room 4", false, &[held("Night bus")], &[], &[], 10)
+            .into_string()
+            .contains("/rights"));
     }
 
     #[test]
     fn a_withdrawal_names_who_and_when_but_keeps_nothing_of_the_story() {
         let w = [RecentWithdrawal { handle: "sam".into(), at: 100 }];
-        let m = commons_stories("Room 4", false, &[], &w, 220).into_string();
+        let m = commons_stories("Room 4", false, &[], &[], &w, 220).into_string();
         assert!(m.contains("Withdrawn by @sam \u{b7} 2 min ago"));
         assert!(m.contains("0 shared \u{b7} 1 withdrawn"));
         assert!(!m.contains("card-title"), "no title");

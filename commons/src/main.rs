@@ -82,6 +82,11 @@ async fn run(config: Config) -> Result<(), String> {
         tokio::spawn(async move {
             hic_commons::waiting::check_once(&st).await;
         });
+        // For as long as the node runs: keep an outgoing connection open to
+        // each commons holding one of our "Only while I'm here" cards, so
+        // readers there can fetch the words (decision record 0021). The node
+        // opens these itself; it still accepts nothing (decision record 0004).
+        tokio::spawn(hic_commons::relay_node::run(state.clone()));
     }
     let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
     println!("hic-commons listening on {addr}");

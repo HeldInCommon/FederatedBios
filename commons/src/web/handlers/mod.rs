@@ -16,6 +16,7 @@
 //! | `publish.rs` | `GET /new`, `POST /publish` |
 //! | `share.rs` | `POST /share`, `POST /withdraw`, and sending to a commons |
 //! | `inbox.rs` | `POST /inbox`: what a commons receives from nodes |
+//! | `here.rs` | "Only while I'm here" on a commons: `POST /here/card`, `POST /here/poll`, reading a card's story |
 //! | `backup.rs` | `POST /backup`, `/restore` |
 //! | `federated.rs` | `GET /federated/{keyid}` |
 //! | `about.rs` | `GET /about`, `GET /run-a-commons` |
@@ -39,6 +40,7 @@ mod about;
 mod backup;
 mod directory;
 mod federated;
+mod here;
 mod inbox;
 mod notices;
 mod profile;
@@ -57,12 +59,13 @@ pub use about::{about, run_a_commons};
 pub use backup::{backup, backup_later, restore_form, restore_submit};
 pub use directory::directory;
 pub use federated::federated;
+pub use here::{here_card, here_json, here_poll};
 pub use inbox::inbox;
 pub(crate) use inbox::list_entry_response;
 pub use notices::{check_waiting, dismiss_notices};
 pub use profile::profile;
 pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
-pub(crate) use share::{post_to_commons, send_share};
+pub(crate) use share::{post_to_commons, post_to_commons_at, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};
 pub use stories::{held_story, stories};

@@ -25,6 +25,7 @@ pub async fn federated(State(st): State<Shared>, Path(kid): Path<String>, header
     // Everything this member has shared here, under their profile.
     let held = st.store.held_stories();
     let theirs = story::by_author(&held, &r.ed_pub);
-    let body = html! { (pages::federated(&r)) (pages::author_stories(&r.handle, &theirs)) };
+    let cards: Vec<_> = st.store.story_cards().into_iter().filter(|c| c.author() == r.ed_pub).collect();
+    let body = html! { (pages::federated(&r)) (pages::author_stories(&r.handle, &theirs, &cards)) };
     render(&st.site, Page::new(&title, me.as_deref(), body).noindex(noindex))
 }

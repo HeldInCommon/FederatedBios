@@ -198,5 +198,49 @@ curl -s "http://localhost:8090/story/$STORY_ID" -H "Cookie: hic_session=$SID" | 
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/inbox -H 'Content-Type: application/json' --data-binary @"$T/cap.json")" = "409" ] && ok "withdrawn version can't be replayed (409)" || no "withdrawn version was accepted again"
 curl -s http://localhost:8091/api/handle/tega | grep -q '"available":false' && ok "@tega stays reserved after withdrawal" || no "@tega freed by withdrawal"
 
+# "Only while I'm here" (decision record 0021): @walker (third node, listed on
+# the commons) shares a story as a card. The commons keeps no text; readers get
+# the words from walker's node over the node's own long poll; when the node
+# stops, readers see "Not here right now"; when it's back, the words are too;
+# a withdrawal removes it at once.
+HTEXT=$'The shelter hums at the stop.\nA man whistles along in B flat.'
+HLOC=$(curl -s -D - -o /dev/null -X POST http://localhost:8093/stories/new -H "Cookie: hic_session=$WSID" --data-urlencode "handle=walker" --data-urlencode "csrf=$WCSRF" --data-urlencode "title=Bus stop hum" --data-urlencode "text=$HTEXT" | grep -i '^location:' | tr -d '\r' | awk '{print $2}')
+HID=$(echo "$HLOC" | cut -d/ -f3)
+curl -s -o /dev/null -X POST "http://localhost:8093/story/$HID/rights" -H "Cookie: hic_session=$WSID" --data-urlencode "csrf=$WCSRF" --data-urlencode "visibility=commons" --data-urlencode "license=cc-by" --data-urlencode "travel=here" --data-urlencode "action=keep"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8093/story/share -H "Cookie: hic_session=$WSID" --data-urlencode "id=$HID" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node shared a story as Only while I'm here" || no "sharing Only while I'm here failed"
+HLIST=$(curl -s http://localhost:8091/stories)
+printf '%s' "$HLIST" | grep -q "Only while @walker is here" && ok "commons lists the card" || no "card not listed"
+grep -rq "B flat" "$T/commons" && no "the commons stored the words" || ok "the commons keeps only the card, no words"
+HPATH=$(printf '%s' "$HLIST" | grep -oE "/stories/[0-9a-f]+/$HID" | head -1)
+# read: wait (up to ~15 s) for the node's connection, then for the words.
+read_here(){ for _ in $(seq 15); do curl -s "http://localhost:8091$HPATH" | grep -q "$1" && return 0; sleep 1; done; return 1; }
+read_here "B flat" && ok "a reader got the words from the author's node" || no "reader didn't get the words"
+# The words match the hash the author signed (checked here independently).
+curl -s "http://localhost:8091$HPATH/here.json" > "$T/here.json"
+python3 - "$T/here.json" <<'PY' && ok "the words match the card's signed SHA-256" || no "words don't match the signed hash"
+import hashlib, json, sys
+got = json.load(open(sys.argv[1]))
+card = got["card"]["envelope"]["body"]
+ok = "text" in got and hashlib.sha256(got["text"].encode("utf-8")).hexdigest() == card["text_sha256"]
+if not ok:
+    print("    here.json:", {k: v for k, v in got.items() if k != "card"})
+sys.exit(0 if ok else 1)
+PY
+curl -s -D - -o /dev/null "http://localhost:8091$HPATH" | grep -qi '^cache-control: no-store' && ok "the commons tells browsers not to keep it" || no "no Cache-Control: no-store"
+grep -rq "B flat" "$T/commons" && no "the words were written to the commons' disk" || ok "after reading, still no words on the commons' disk"
+# The author's node stops (laptop closed).
+kill $N3PID 2>/dev/null; wait $N3PID 2>/dev/null
+curl -s "http://localhost:8091$HPATH" | grep -q "Not here right now: @walker shares this only while they're online." && ok "with the node gone, readers see Not here right now" || no "no Not here right now"
+# ...and comes back: the words are readable again, with no action needed.
+HIC_DATA="$T/node3" PORT=8093 HIC_ROLE=node HIC_INSTANCE="Third node" HIC_BASE_URL=http://localhost:8093 HIC_SHARE_DEFAULT=http://localhost:8091 "$BIN" >>"$T/node3.log" 2>&1 & N3PID=$!
+curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8093/health >/dev/null || no "third node failed to restart"
+read_here "B flat" && ok "after the node restarts, readers get the words again" || no "words not back after restart"
+# Withdraw (sessions don't survive a restart, so sign in again).
+WSID=$(curl -is -X POST http://localhost:8093/login --data-urlencode "handle=walker" --data-urlencode "passphrase=supersecret6" | tr -d '\r' | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+WCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$WSID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8093/story/withdraw -H "Cookie: hic_session=$WSID" --data-urlencode "id=$HID" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node withdrew the Only while I'm here story" || no "withdrawing the card failed"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8091$HPATH")" = "404" ] && ok "a withdrawn card can't be read, at once" || no "withdrawn card still readable"
+curl -s http://localhost:8091/stories | grep -q "Bus stop hum" && no "withdrawn card still listed" || ok "withdrawn card gone from the list"
+
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"
 exit $FAIL

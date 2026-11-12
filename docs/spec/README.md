@@ -97,12 +97,14 @@ deterministic, so an implementation MUST reproduce them exactly.
 | `04-profile.json` | A shared profile, picture included. |
 | `05-story.json` | A story, with its terms. |
 | `06-story-withdraw.json` | Withdrawing a story from one commons. |
+| `07-story-card.json` | An "Only while I'm here" card for the story in 05: no text, its SHA-256. |
+| `08-story-relay.json` | A node's poll answering one request with that text (it must match 07's hash). |
 
 Check them:
 
 ```text
 cargo test --manifest-path commons/Cargo.toml --test spec_vectors   # everything, including signatures
-python3 scripts/check_spec_vectors.py                              # canonical bytes, cid and signing input, independently
+python3 scripts/check_spec_vectors.py                              # canonical bytes, cid, signing input and the card hash, independently
 ```
 
 ## 4. Versions and change
@@ -214,7 +216,59 @@ public host (from its base URL), and SHOULD also accept `127.0.0.1:<port>` and
 `localhost:<port>` for its own port: a node on the commons' own computer
 reaches it that way while the commons announces its network address.
 
-### 5.5 Planned
+### 5.5 "Only while I'm here" (decision record 0021)
+
+A second way to share a story: the commons keeps a signed **card** (no
+text), and fetches the text from the author's node each time someone reads
+it, over a connection the node opens. Two new types; nothing in 5.4 changes.
+
+A node shares a card to a commons' **`/here/card`** (not `/inbox`) as
+
+```json
+{ "type": "StoryCardShare", "schema": "hic/v1", "card": <signed StoryCard> }
+```
+
+and keeps a **long poll** open to `/here/poll`, sending
+
+```json
+{ "type": "StoryRelay", "schema": "hic/v1", "relay": <signed StoryRelay> }
+```
+
+The commons answers a poll with `{ "requests": [ { "request": "<32 hex>", "story": "<id>" } ] }`
+when a reader asks, or with no requests after its hold time (about 25
+seconds). The node answers those requests in its next poll.
+
+| `type` | `author` | `body` |
+|---|---|---|
+| `StoryCard` | the member's key | `id`, `handle`, `title`, `first_line` (at most 140 characters), `words`, `visibility` (`public` or `commons`), `license`, `signals`, `text_sha256` (lowercase hex SHA-256 of the story's `text` as UTF-8), `commons` (host) |
+| `StoryRelay` | the member's key | `commons` (host), `seq` (an integer higher than any earlier poll from this key), `answers`: at most 32 of `{ "request", "story", "text" }` |
+
+A commons:
+
+- MUST apply the same gate and terms checks to a card as to a story (5.4),
+  and MUST refuse a card addressed to another commons;
+- keeps one card *or* one copy per (author, `id`): a newer card replaces a
+  copy and a newer copy replaces a card; anything not newer than what it
+  holds, or than a recorded withdrawal, MUST be refused;
+- MUST NOT store a card's text, and MUST NOT pass a text to a reader unless
+  its SHA-256 equals the card's `text_sha256`;
+- MUST accept a poll only if it is signed by a key with a card here,
+  addressed to this commons, dated within 300 seconds of its clock, and
+  numbered higher than the last poll it took from that key; MUST ignore an
+  answer to a request it didn't hand to that key;
+- withdraws a card with `StoryWithdraw` (5.4), at once.
+
+A reader (or a reader's node) that wants to check the text without trusting
+the commons fetches `GET /stories/<keyid>/<id>/here.json`, which returns the
+signed card and the text, and compares the text's SHA-256 with the card's
+signed `text_sha256`.
+
+A commons that predates this section answers `/here/card` with 404; a node
+SHOULD then tell the member that commons doesn't support "Only while I'm
+here" yet. Vectors 07 and 08 are a card for the story in 05 and a poll
+answering it.
+
+### 5.6 Planned
 
 Dataset listings, rights records, licences, adapters, model versions,
 governance decisions will be added as `hic/v1` types as they are

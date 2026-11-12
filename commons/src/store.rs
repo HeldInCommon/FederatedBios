@@ -18,6 +18,7 @@
 //!   my-stories/<id>.json     stories members wrote here (nodes)
 //!   stories/<keyid>-<id>.json stories shared in from other nodes (commons)
 //!   story-tombstones/<keyid>-<id>.json what remains after a story is withdrawn (commons)
+//!   story-cards/<keyid>-<id>.json "Only while I'm here" cards: no text (commons)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -37,6 +38,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::canonical::is_cid;
 use crate::handle;
+use crate::here::HeldCard;
 use crate::identity::Identity;
 use crate::keys::{is_keyid, keyid};
 use crate::model::{HandleRec, Notice, PendingShare, RemoteEntry, Tombstone, Version};
@@ -116,6 +118,7 @@ impl Store {
             "my-stories",
             "stories",
             "story-tombstones",
+            "story-cards",
         ] {
             std::fs::create_dir_all(root.join(sub))?;
         }
@@ -342,12 +345,50 @@ impl Store {
         Self::remove_if_present(self.root.join("stories").join(Self::held_story_name(author, id)))
     }
 
-    /// Remove every story by `author` (when they withdraw their profile here).
+    /// Remove every story by `author`, copies and "Only while I'm here" cards
+    /// (when they withdraw their profile here, or their key is replaced).
     pub fn delete_stories_by(&self, author: &str) -> Result<(), StoreError> {
         for h in self.held_stories().iter().filter(|h| h.author() == author) {
             self.delete_held_story(author, &h.story.id)?;
         }
+        for c in self.story_cards().iter().filter(|c| c.author() == author) {
+            self.delete_story_card(author, &c.card.id)?;
+        }
         Ok(())
+    }
+
+    // ---- "Only while I'm here" cards (decision record 0021) ----------------
+
+    /// A story's card held on this commons, by its author's [`keyid`] and the
+    /// story's id. The card has no text: that stays on the author's node.
+    pub fn story_card(&self, kid: &str, id: &str) -> Result<Option<HeldCard>, StoreError> {
+        if !is_keyid(kid) || !is_story_id(id) {
+            return Ok(None);
+        }
+        Self::read(&self.root.join("story-cards").join(format!("{kid}-{id}.json")))
+    }
+
+    /// Save a story's card, replacing that author's earlier card for it.
+    pub fn save_story_card(&self, c: &HeldCard) -> Result<(), StoreError> {
+        if !is_story_id(&c.card.id) {
+            return Err(StoreError::Io(self.root.join("story-cards"), std::io::ErrorKind::InvalidInput.into()));
+        }
+        Self::write(&self.root.join("story-cards").join(Self::held_story_name(c.author(), &c.card.id)), c)
+    }
+
+    /// Every card held on this commons, most recently received first.
+    pub fn story_cards(&self) -> Vec<HeldCard> {
+        let mut out: Vec<HeldCard> = self.read_all("story-cards");
+        out.sort_by_key(|c| std::cmp::Reverse(c.received_at));
+        out
+    }
+
+    /// Remove a card. Removing one that isn't there is not an error.
+    pub fn delete_story_card(&self, author: &str, id: &str) -> Result<(), StoreError> {
+        if !is_story_id(id) {
+            return Ok(());
+        }
+        Self::remove_if_present(self.root.join("story-cards").join(Self::held_story_name(author, id)))
     }
 
     /// Save the record of a story's withdrawal.

@@ -7,7 +7,10 @@ use maud::{html, Markup};
 use super::parts::{ago, terms_panel, words};
 use crate::keys::keyid;
 use crate::model::Reach;
-use crate::story::{HeldStory, OwnStory, Story};
+use std::collections::BTreeMap;
+
+use crate::relay_node::Link;
+use crate::story::{HeldStory, OwnStory, Travel};
 use crate::text_links::{find_links, Piece};
 use crate::web::layout::host_label;
 
@@ -27,6 +30,23 @@ pub struct StoryOwner {
     pub csrf: String,
     /// The commons they can share to in one click (where their profile is shared).
     pub known: Vec<String>,
+    /// For each commons holding this story's "Only while I'm here" card, the
+    /// node's connection to it (see `crate::relay_node`). Missing: not
+    /// connected yet.
+    pub links: BTreeMap<String, Link>,
+}
+
+/// What the author is told about a card's connection to a commons: whether
+/// readers there can read it now.
+fn link_note(link: Option<Link>) -> &'static str {
+    match link {
+        Some(Link::Open) => "Here now: people there can read it from this computer.",
+        None | Some(Link::Connecting) => "Connecting\u{2026}",
+        Some(Link::Retrying { .. }) => {
+            "Can't reach that commons right now; trying again. Readers there see \u{201c}Not here right now\u{201d}."
+        }
+        Some(Link::Unsupported) => "This commons doesn't support Only while I'm here yet.",
+    }
 }
 
 /// The confirmation block for an outcome.
@@ -79,11 +99,12 @@ fn story_line(line: &str) -> Markup {
 
 /// A story's text: blank lines separate paragraphs, single line breaks stay,
 /// and links are made clickable (see [`story_line`]). The same for every
-/// view of a story: its author's node, and a commons.
-fn story_text(s: &Story) -> Markup {
+/// view of a story: its author's node, a commons' copy, and a text fetched
+/// "Only while I'm here" (`here.rs`).
+pub(super) fn story_text(text: &str) -> Markup {
     html! {
         div class="story-text" {
-            @for para in s.text.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
+            @for para in text.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
                 p {
                     @for (i, line) in para.lines().enumerate() {
                         @if i > 0 { br; }
@@ -113,7 +134,7 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
                         a class="btn-line" href={ "/story/" (st.id) "/text" } { "Export as a text file" }
                     }
                 }
-                (story_text(st))
+                (story_text(&st.text))
             }
             aside class="story-side" {
                 @if let Some(o) = owner { (owner_side(s, o, now)) }
@@ -136,13 +157,19 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
     let unshared: Vec<&String> = o.known.iter().filter(|c| !s.shared_to.contains(c)).collect();
     html! {
         @for c in &s.shared_to {
+            // A card ("Only while I'm here") or a copy: the wording differs.
+            @let is_card = s.shared_as(c) == Some(Travel::Here);
             div class="share-card" {
                 div class="card-bar" {}
                 div class="card-body" {
-                    p class="card-label" { "Shared to" }
+                    p class="card-label" { @if is_card { "Only while you're here" } @else { "Shared to" } }
                     p class="share-host" { (host_label(c)) }
                     @if s.changed_since_shared(c) {
-                        p class="share-when is-stale" { "You've changed it since. Re-share to update the copy there." }
+                        p class="share-when is-stale" {
+                            "You've changed it since. Re-share to update the " (if is_card { "card" } else { "copy" }) " there."
+                        }
+                    } @else if is_card {
+                        p class="share-when" { (link_note(o.links.get(c).copied())) }
                     } @else if let Some(at) = s.shared_at.get(c) {
                         p class="share-when" { "Shared " (ago(*at, now)) " \u{b7} a signed copy" }
                     } @else {
@@ -180,6 +207,9 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
                     div class="card-body" {
                         p class="card-label" { "Not shared yet" }
                         p class="share-host" { (host_label(c)) }
+                        @if s.travel == Travel::Here {
+                            p class="share-when" { "Only while you're here: that commons keeps a signed card, not the text." }
+                        }
                         form method="post" action="/story/share" {
                             input type="hidden" name="id" value=(id);
                             input type="hidden" name="csrf" value=(o.csrf);
@@ -193,7 +223,7 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
         @if !s.shared_to.is_empty() {
             div class="side-note" {
                 p class="card-label" { "What withdrawing does" }
-                p { strong { "Removes the copy" } " from that commons, straight away. The story stays on this computer." }
+                p { strong { "Removes the copy or card" } " from that commons, straight away. The story stays on this computer." }
                 p class="muted" { strong { "Can't undo" } " anyone who already read or copied it: they keep what they have. Your licence and signals still say what they may do with it." }
             }
         }
@@ -211,7 +241,7 @@ pub fn held_story(h: &HeldStory, now: u64) -> Markup {
                 p class="eyebrow" { "Story \u{b7} @" (st.handle) }
                 h1 class="story-title" { (st.title) }
                 p class="story-meta" { "@" (st.handle) " \u{b7} " (words(st.word_count())) " \u{b7} shared " (ago(h.received_at, now)) }
-                (story_text(st))
+                (story_text(&st.text))
             }
             aside class="story-side" {
                 (terms_panel(st.reach(), &st.license, &st.signals, false))
@@ -243,17 +273,19 @@ mod tests {
             story: s,
             shared_to: vec![],
             shared_at: Default::default(),
+            travel: Default::default(),
+            shared_as: Default::default(),
         }
     }
 
     /// The author's view, offering these commons.
     fn owner(known: &[&str]) -> StoryOwner {
-        StoryOwner { csrf: "c".into(), known: known.iter().map(|k| k.to_string()).collect() }
+        StoryOwner { csrf: "c".into(), known: known.iter().map(|k| k.to_string()).collect(), links: BTreeMap::new() }
     }
 
     #[test]
     fn paragraphs_and_line_breaks_are_kept_and_text_is_escaped() {
-        let m = story_text(&own("one\ntwo\n\n<b>three</b>", "public").story).into_string();
+        let m = story_text(&own("one\ntwo\n\n<b>three</b>", "public").story.text).into_string();
         assert!(m.contains("<p>one<br>two</p>"));
         assert!(m.contains("&lt;b&gt;three&lt;/b&gt;"));
     }
@@ -310,5 +342,19 @@ mod tests {
         assert!(m.contains("Shared 2 min ago") && m.contains("Withdraw") && m.contains("What withdrawing does"));
         let gone = own_story(&s, None, Some(&StoryOutcome::Withdrawn("room:8081".into())), 10).into_string();
         assert!(gone.contains("Your story is gone from room:8081"));
+    }
+
+    #[test]
+    fn a_card_says_whether_readers_can_read_it_now() {
+        let s = own("hi", "commons").with_shared_as("http://room:8081", 1, Travel::Here);
+        let mut o = owner(&["http://room:8081"]);
+        let connecting = own_story(&s, Some(&o), None, 10).into_string();
+        assert!(connecting.contains("Only while you're here") && connecting.contains("Connecting"));
+        o.links.insert("http://room:8081".into(), Link::Open);
+        let open = own_story(&s, Some(&o), None, 10).into_string();
+        assert!(open.contains("Here now: people there can read it from this computer."));
+        o.links.insert("http://room:8081".into(), Link::Unsupported);
+        let old = own_story(&s, Some(&o), None, 10).into_string();
+        assert!(old.contains("This commons doesn't support Only while I'm here yet."));
     }
 }

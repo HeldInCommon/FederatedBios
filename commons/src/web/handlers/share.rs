@@ -97,15 +97,30 @@ pub(crate) async fn post_to_commons(
     commons: &str,
     body: &serde_json::Value,
 ) -> Result<reqwest::Response, String> {
+    post_to_commons_at(st, commons, "/inbox", body, std::time::Duration::from_secs(10)).await
+}
+
+/// POST `body` to `path` on a commons (`/inbox`, or `/here/card` and
+/// `/here/poll` for "Only while I'm here"), waiting at most `timeout`, after
+/// the same address check as every outgoing request (see
+/// [`crate::outbound`], decision record 0012). Errors are messages for the
+/// member.
+pub(crate) async fn post_to_commons_at(
+    st: &AppState,
+    commons: &str,
+    path: &str,
+    body: &serde_json::Value,
+    timeout: std::time::Duration,
+) -> Result<reqwest::Response, String> {
     let policy = outbound::Policy {
         personal: st.config.bind_addr(st.site.role).is_loopback(),
         allow_private: st.config.allow_private_share,
     };
     let client = outbound::client_for(commons, policy).await?;
     client
-        .post(format!("{commons}/inbox"))
+        .post(format!("{commons}{path}"))
         .json(body)
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(timeout)
         .send()
         .await
         .map_err(|e| format!("Could not reach that commons: {e}"))

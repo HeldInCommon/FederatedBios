@@ -5,7 +5,7 @@ use maud::{html, Markup};
 
 use super::parts::{page_head, section_label, terms_panel};
 use super::rights::{how_it_travels, rights_fields, RightsFor};
-use crate::story::{Story, PROMPT, TEXT_MAX, TITLE_MAX};
+use crate::story::{Story, Travel, PROMPT, TEXT_MAX, TITLE_MAX};
 use crate::web::layout::host_label;
 
 /// Step one: the title and the story. `editing` fills it from a story already
@@ -65,9 +65,10 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
     }
 }
 
-/// Step two: who can read it, its licence and signals, how it travels; then
+/// Step two: who can read it, its licence and signals, how it travels
+/// (`travel`, the story's current choice); then
 /// share it to `share_to` (the commons suggested for this member) or keep it.
-pub fn rights_form(s: &Story, csrf: &str, share_to: Option<&str>) -> Markup {
+pub fn rights_form(s: &Story, travel: Travel, csrf: &str, share_to: Option<&str>) -> Markup {
     html! {
         (page_head(
             &format!("Story \u{b7} {}", s.title),
@@ -77,7 +78,7 @@ pub fn rights_form(s: &Story, csrf: &str, share_to: Option<&str>) -> Markup {
         form method="post" action={ "/story/" (s.id) "/rights" } class="stack-form rights-form" {
             input type="hidden" name="csrf" value=(csrf);
             (rights_fields(RightsFor::Story, s.reach(), &s.license, &s.signals))
-            (how_it_travels())
+            (how_it_travels(travel))
             (section_label("What travels with every copy", None))
             (terms_panel(s.reach(), &s.license, &s.signals, true))
             div class="actions" {
@@ -118,11 +119,11 @@ mod tests {
 
     #[test]
     fn the_rights_step_ends_in_sharing_to_the_room() {
-        let m = rights_form(&story(), "c", Some("http://room:8081")).into_string();
+        let m = rights_form(&story(), Travel::Copy, "c", Some("http://room:8081")).into_string();
         assert!(m.contains("Share to the room") && m.contains("Keep it on this computer for now"));
         assert!(m.contains("Sharing to room:8081") && m.contains("How it travels"));
         assert!(m.contains("value=\"commons\" data-label=\"Listed in the commons\" checked"));
-        let alone = rights_form(&story(), "c", None).into_string();
+        let alone = rights_form(&story(), Travel::Copy, "c", None).into_string();
         assert!(!alone.contains("Share to the room") && alone.contains("first share your profile"));
     }
 }

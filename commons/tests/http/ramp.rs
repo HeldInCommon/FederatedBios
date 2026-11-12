@@ -120,7 +120,8 @@ async fn the_story_form_offers_how_it_travels_and_no_timer() {
     let rights = r.headers.get(header::LOCATION).unwrap().to_str().unwrap().to_string();
     assert!(rights.ends_with("/rights"));
     let page = send(&node, get(&rights, Some(&sid))).await.text;
-    assert!(page.contains("How it travels") && page.contains("Coming soon"));
+    assert!(page.contains("How it travels") && page.contains("Only while I'm here"));
+    assert!(!page.contains("Coming soon"), "Only while I'm here is built (decision record 0021)");
 }
 
 #[tokio::test]

@@ -21,6 +21,7 @@
 //! | `guide.rs` | run your own commons: questions and answers, and a practice commons |
 //! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
 //! | `story.rs` | one story: the author's view with its sharing tools, and a commons' |
+//! | `here.rs` | a story shared "Only while I'm here": its text fetched just now, or "Not here right now" |
 //! | `story_form.rs` | writing a story (new or editing), then its rights step |
 //! | `rights.rs` | Sharing and rights: who can see it, licence, signals, how a story travels |
 //! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
@@ -33,6 +34,7 @@ mod account;
 mod directory;
 mod federated;
 mod guide;
+mod here;
 mod invites;
 mod owner;
 mod owner_account;
@@ -51,6 +53,7 @@ pub use account::{key_change, recovery_code, restore_form};
 pub use directory::{directory, your_next, Card, SignedIn, StewardView, Viewer, YourNext};
 pub use federated::federated;
 pub use guide::{run_a_commons, steward_node_note};
+pub use here::here_story;
 pub use invites::{invite_code, steward_invite};
 pub use owner::OwnerPanel;
 pub use profile::profile;

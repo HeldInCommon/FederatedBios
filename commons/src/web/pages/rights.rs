@@ -12,6 +12,7 @@ use maud::{html, Markup};
 use super::parts::{burst, Tone};
 use crate::governance::{license_terms, LICENSES, SIGNALS};
 use crate::model::Reach;
+use crate::story::Travel;
 
 /// Whose rights these are: the wording differs a little.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -129,9 +130,10 @@ pub fn rights_fields(kind: RightsFor, reach: Reach, license: &str, signals: &[St
     }
 }
 
-/// The fourth step for a story: does the commons keep a copy? Only the first
-/// way exists today; the second is proposed (decision record 0021).
-pub fn how_it_travels() -> Markup {
+/// The fourth step for a story: does the commons keep a copy, or only a card
+/// and the words while you're online (decision record 0021)? `travel` is the
+/// story's current choice.
+pub fn how_it_travels(travel: Travel) -> Markup {
     html! {
         fieldset class="rights-step" {
             legend { (burst(4, Tone::Violet)) span { "How it travels" } }
@@ -139,19 +141,18 @@ pub fn how_it_travels() -> Markup {
             div class="choice-panel" {
                 label class="choice" {
                     span class="choice-head" {
-                        input type="radio" name="travel" value="copy" checked;
-                        span class="choice-title" { "Leave a copy in the commons" }
+                        input type="radio" name="travel" value=(Travel::Copy.as_str()) data-label="Keep a copy on the commons" checked[travel == Travel::Copy];
+                        span class="choice-title" { "Keep a copy on the commons" }
                     }
                     span class="choice-body" { "A signed copy stays on the commons, so it's still readable when you leave. Withdraw it any time and the copy is deleted." }
                     span class="choice-facts" { "Commons keeps \u{b7} a signed copy\nReadable when you leave \u{b7} yes" }
                 }
-                label class="choice is-soon" {
+                label class="choice" {
                     span class="choice-head" {
-                        input type="radio" name="travel" value="here" disabled;
+                        input type="radio" name="travel" value=(Travel::Here.as_str()) data-label="Only while I'm here" checked[travel == Travel::Here];
                         span class="choice-title" { "Only while I'm here" }
-                        span class="soon-tag" { "Coming soon" }
                     }
-                    span class="choice-body" { "The commons lists it, but reads it from your laptop each time and never stores it. Close your laptop and it's gone from the room." }
+                    span class="choice-body" { "The commons lists a signed card, and fetches the words from this computer each time someone reads them. It never stores them. Close your laptop and the room sees \u{201c}Not here right now\u{201d}." }
                     span class="choice-facts" { "Commons keeps \u{b7} a signed card only\nReadable when you leave \u{b7} no" }
                 }
             }
@@ -181,8 +182,11 @@ mod tests {
     }
 
     #[test]
-    fn only_while_im_here_is_not_offered_yet() {
-        let m = how_it_travels().into_string();
-        assert!(m.contains("value=\"here\" disabled") && m.contains("Coming soon"));
+    fn both_ways_to_travel_are_offered_and_the_current_one_is_chosen() {
+        let copy = how_it_travels(Travel::Copy).into_string();
+        assert!(copy.contains(r#"value="copy" data-label="Keep a copy on the commons" checked"#));
+        assert!(!copy.contains("disabled") && !copy.contains("Coming soon"));
+        let here = how_it_travels(Travel::Here).into_string();
+        assert!(here.contains(r#"value="here" data-label="Only while I'm here" checked"#));
     }
 }

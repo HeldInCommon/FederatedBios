@@ -150,6 +150,22 @@ Sessions live in memory and expire after 24 hours.
 
 Members-only versions are never sent.
 
+### Stories: a copy, or a card
+
+A **story** travels to a commons in one of two ways, the author's choice
+("How it travels"):
+
+- **a copy** ([0020](adr/0020-stories.md)): the commons keeps the signed
+  story until it's withdrawn;
+- **a card**, "Only while I'm here" ([0021](adr/0021-held-not-copied.md)):
+  the commons keeps a signed **card** (title, author, first line, terms and
+  the SHA-256 of the text, but not the text). The author's node keeps a
+  long poll open to the commons (`/here/poll`; the node opens it, and still
+  accepts nothing). When someone reads the story, the commons hands the
+  request to that poll, checks the text the node sends against the card's
+  signed hash, passes it to the reader and keeps nothing. When the node is
+  away, readers see "Not here right now".
+
 ---
 
 ## 5. Joining a commons
@@ -242,6 +258,8 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | POST | `/waiting/check`, `/notices/dismiss` | Check now; hide the news banner |
 | POST | `/backup`, `/recovery/new`, `/rotate`, `/recover` | Backup; recovery key; replace key; recover |
 | POST | `/inbox` | Receive shares, withdrawals, vouches, key changes (commons) |
+| POST | `/here/card`, `/here/poll` | "Only while I'm here": a node shares a story's card; a node's long poll (commons) |
+| GET | `/stories/{keyid}/{id}/here.json` | A card and, if its author is here, the text, to check against the card (commons) |
 | GET | `/steward`; POST `/steward/approve`, `/steward/decline`, `/steward/invite` | The steward view (commons) |
 | GET | `/api/directory`, `/api/@{handle}`, `/api/handle/{h}`, `/api/pending`, `/api/status` | JSON |
 | POST | `/api/notices/claim` | For the desktop app (needs its launch token) |
@@ -266,6 +284,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 | `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
 | `HIC_PRACTICE` | *(off)* | `1`: a practice commons; its pages say so |
+| `HIC_RELAY_HOLD`, `HIC_RELAY_WAIT` | `25`, `8` | Seconds a commons holds a node's "Only while I'm here" poll open, and a reader waits for the node (1–60) |
 
 ---
 
