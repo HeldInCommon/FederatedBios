@@ -38,7 +38,11 @@ async fn a_practice_commons_says_so() {
 #[tokio::test]
 async fn each_server_reads_only_its_own_cookie() {
     let (node, _) = server_with(Role::Node, &[("HIC_SESSION_COOKIE", "hic_session_8081")]);
-    let r = send(&node, post_form("/join", "handle=ada&display_name=Ada&passphrase=supersecret1", None)).await;
+    let r = send(
+        &node,
+        post_form("/join", "handle=ada&display_name=Ada&passphrase=supersecret1&passphrase_again=supersecret1", None),
+    )
+    .await;
     let set = r.headers.get(header::SET_COOKIE).and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
     assert!(set.starts_with("hic_session_8081="), "set-cookie was {set:?}");
     let token = set.trim_start_matches("hic_session_8081=").split(';').next().unwrap().to_string();

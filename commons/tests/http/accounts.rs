@@ -29,9 +29,24 @@ async fn wrong_passphrases_are_limited() {
 async fn damaged_identity_is_never_overwritten_by_sign_up() {
     let (app, store) = server(Role::Node);
     std::fs::write(store.root().join("handles/tega.json"), b"{\"handle\":\"te").unwrap();
-    let r = send(&app, post_form("/join", "handle=tega&display_name=T&passphrase=supersecret1", None)).await;
+    let r = send(
+        &app,
+        post_form("/join", "handle=tega&display_name=T&passphrase=supersecret1&passphrase_again=supersecret1", None),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(std::fs::read(store.root().join("handles/tega.json")).unwrap(), b"{\"handle\":\"te");
+}
+
+/// A typo in one of the two boxes must not leave a handle nobody can sign in to.
+#[tokio::test]
+async fn sign_up_with_passphrases_that_differ_creates_nothing() {
+    let (app, store) = server(Role::Node);
+    let body = "handle=tega&display_name=T&passphrase=supersecret1&passphrase_again=supersecret2";
+    let r = send(&app, post_form("/join", body, None)).await;
+    assert!(r.text.contains("The two passphrases don't match"), "{}", r.text);
+    assert!(session_from(&r).is_none(), "not signed in");
+    assert!(store.handle("tega").unwrap().is_none(), "no handle was saved");
 }
 
 #[tokio::test]

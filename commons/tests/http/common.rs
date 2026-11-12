@@ -89,8 +89,15 @@ pub fn csrf_in(html: &str) -> String {
 
 /// Sign up `handle` and publish a profile with `visibility`; returns the session.
 pub async fn join_and_publish(app: &Router, handle: &str, visibility: &str) -> String {
-    let r =
-        send(app, post_form("/join", &format!("handle={handle}&display_name=T&passphrase=supersecret1"), None)).await;
+    let r = send(
+        app,
+        post_form(
+            "/join",
+            &format!("handle={handle}&display_name=T&passphrase=supersecret1&passphrase_again=supersecret1"),
+            None,
+        ),
+    )
+    .await;
     assert_eq!(r.status, StatusCode::OK);
     assert!(r.text.contains("Your recovery code"), "sign-up shows the recovery code once");
     let sid = session_from(&r).expect("session");

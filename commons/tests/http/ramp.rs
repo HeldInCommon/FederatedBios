@@ -8,8 +8,15 @@ use crate::common::*;
 
 /// Sign up without publishing; returns the session.
 async fn join_only(app: &axum::Router, handle: &str) -> String {
-    let r =
-        send(app, post_form("/join", &format!("handle={handle}&display_name=T&passphrase=supersecret1"), None)).await;
+    let r = send(
+        app,
+        post_form(
+            "/join",
+            &format!("handle={handle}&display_name=T&passphrase=supersecret1&passphrase_again=supersecret1"),
+            None,
+        ),
+    )
+    .await;
     session_from(&r).expect("session")
 }
 

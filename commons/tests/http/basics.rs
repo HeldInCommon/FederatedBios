@@ -45,7 +45,11 @@ async fn health_never_reveals_the_launch_token() {
 #[tokio::test]
 async fn commons_has_no_sign_up() {
     let (app, store) = server(Role::Commons);
-    let r = send(&app, post_form("/join", "handle=sneak&display_name=S&passphrase=supersecret1", None)).await;
+    let r = send(
+        &app,
+        post_form("/join", "handle=sneak&display_name=S&passphrase=supersecret1&passphrase_again=supersecret1", None),
+    )
+    .await;
     assert!(r.text.contains("This is a shared commons"));
     assert!(session_from(&r).is_none());
     assert!(store.handles().is_empty());
