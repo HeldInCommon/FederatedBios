@@ -84,6 +84,10 @@
   --rule-soft: 1px solid var(--line);
   --accent-edge: 4px;
   --focus: 2px solid var(--blue);
+
+  /* A card rising onto a hard ink shadow, as on heldincommon.org's model landscape */
+  --lift: translate(-4px, -4px);
+  --shadow-lift: 9px 9px 0 var(--ink);
   --measure: 70ch; /* longest comfortable line of text */
   --panel-width: 640px;
   --page-width: 1180px;
@@ -372,6 +376,25 @@ fieldset {
   user-select: all;
 }
 
+/* Lift: a card rises onto a hard ink shadow under the pointer or keyboard
+   focus, like the model cards on heldincommon.org's landscape page. */
+.dir-card,
+.story-card {
+  transition:
+    transform 0.13s ease,
+    box-shadow 0.13s ease;
+}
+
+.dir-card:hover,
+.dir-card:focus-visible,
+.story-card:not(.is-withdrawn):hover,
+.story-card:not(.is-withdrawn):focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--ink),
+    var(--shadow-lift);
+  transform: var(--lift);
+}
+
 /* 4. Site frame ------------------------------------------------------------ */
 
 .page {
@@ -624,10 +647,6 @@ fieldset {
   background: var(--surface);
   color: var(--text);
   text-decoration: none;
-}
-
-.dir-card:hover {
-  box-shadow: inset 0 0 0 1px var(--ink);
 }
 
 .dir-bar {
@@ -1522,6 +1541,7 @@ fieldset {
 
 .story-card,
 .share-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -1561,6 +1581,14 @@ fieldset {
 .card-title a {
   color: var(--ink);
   text-decoration: none;
+}
+
+/* The title link covers the whole story card, so anywhere on it opens the
+   story (the "change its terms" chips sit above it and still work). */
+.story-card .card-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .card-title a:hover {
@@ -1613,6 +1641,8 @@ fieldset {
 
 /* On your own stories the chips open the rights step. */
 .story-chips.is-editable {
+  position: relative;
+  z-index: 1;
   text-decoration: none;
 }
 
@@ -1631,12 +1661,6 @@ fieldset {
 .story-chips.is-editable:focus-visible {
   outline: var(--focus);
   outline-offset: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .story-chip {
-    transition: none;
-  }
 }
 
 .verified {
