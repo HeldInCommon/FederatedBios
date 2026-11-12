@@ -180,6 +180,11 @@ async fn writing_a_story_on_a_node() {
     assert!(page.text.contains("Night bus"));
     assert!(page.text.contains("Share your profile to a commons first"), "not shared anywhere yet");
 
+    // Writing another is always offered first in your stories, and only to you.
+    let list = send(&node, get("/stories", Some(&sid))).await.text;
+    assert!(list.contains(r#"class="new-story-card" href="/stories/new""#), "a card to write another");
+    assert!(!send(&node, get("/stories", None)).await.text.contains("Write a new story"), "not for visitors");
+
     let text = send(&node, get(&format!("/story/{id}/text"), None)).await;
     assert_eq!(text.status, StatusCode::OK);
     assert!(text.headers.get(header::CONTENT_DISPOSITION).unwrap().to_str().unwrap().contains("attachment"));

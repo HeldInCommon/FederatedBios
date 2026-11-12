@@ -41,6 +41,7 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
             section class="flash flash-withdrawn" role="status" {
                 p class="flash-label" { "Withdrawn" }
                 p { strong { "Your story is gone from " (at) "." } " That commons deleted its copy and won't take the same one back. Anyone who already read it, or copied it, keeps that. It's still here on your node, and you can share it again." }
+                p { a class="btn-ink" href="/stories/new" { "Write a new story" } }
             }
         },
         StoryOutcome::Saved => html! {

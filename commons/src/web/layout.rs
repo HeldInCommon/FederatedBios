@@ -59,6 +59,8 @@ pub struct NoticeBar {
 pub enum Section {
     /// The directory, the front page.
     Directory,
+    /// The front page as the steward sees it, with their tools.
+    Steward,
     /// Story lists and story pages.
     Stories,
     /// The signed-in member's own profile and its forms.
@@ -212,7 +214,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                             a href="/" aria-current=[current(page, Section::Directory)] { "Directory" }
                             a href="/stories" aria-current=[current(page, Section::Stories)] { "Stories" }
                             @if page.me == Some("@steward") {
-                                a href="/" { "Steward view" }
+                                a href="/" aria-current=[current(page, Section::Steward)] { "Steward view" }
                                 form method="post" action="/logout" class="inline-form" {
                                     button class="linklike" type="submit" { "Sign out" }
                                 }
@@ -432,6 +434,10 @@ mod tests {
         assert_eq!(page.matches(r#"aria-current="page""#).count(), 1, "one section at a time");
         let none = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
         assert!(!none.contains(r#"aria-current="page""#), "a page outside the menu marks nothing");
+        let steward = Page::new("t", Some("@steward"), html! {}).at(Section::Steward);
+        let page = frame(&site(Role::Commons), &steward).into_string();
+        assert!(page.contains(r#"aria-current="page">Steward view"#), "the steward view, not the directory");
+        assert_eq!(page.matches(r#"aria-current="page""#).count(), 1);
     }
 
     #[test]

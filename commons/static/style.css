@@ -1846,6 +1846,46 @@ a.rail-foot {
   color: var(--ink);
 }
 
+/* "Write a new story": the first card in your story grid, ink with a
+   starburst, rising like the others on hover. */
+.new-story-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 14rem;
+  padding: var(--space-6);
+  background: var(--ink);
+  color: var(--white);
+  text-decoration: none;
+}
+
+.new-story-card:hover,
+.new-story-card:focus-visible {
+  top: var(--lift-by);
+  left: var(--lift-by);
+  box-shadow: 10px 10px 0 var(--accent);
+}
+
+.new-story-card .star {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  font: 700 var(--text-xl) var(--font-mono);
+  color: var(--ink);
+}
+
+.new-story-title {
+  font: 700 var(--text-xl) / 1.2 var(--font-text);
+}
+
+.new-story-sub {
+  font-size: var(--text-sm);
+  color: rgb(255 255 255 / 80%);
+}
+
 /* On your own stories the chips open the rights step. */
 .story-chips.is-editable {
   position: relative;

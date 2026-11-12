@@ -76,9 +76,6 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
     };
     html! {
         (page_head("Your node \u{b7} stories", "Stories", Some("Small pieces of writing made on this node. Each stays here until its author shares it.")))
-        @if signed_in {
-            div class="actions" { a class="btn-ink" href="/stories/new" { "Write a story" } }
-        }
         (section_label("Stories", Some(&count)))
         @if stories.is_empty() {
             p class="empty-note" {
@@ -87,6 +84,15 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
             }
         }
         div class="story-grid" {
+            // Writing another is always the first card, so it's there after
+            // a withdrawal or whenever there's more to say.
+            @if signed_in && !stories.is_empty() {
+                a class="new-story-card" href="/stories/new" {
+                    span class="star step-1" aria-hidden="true" { "+" }
+                    span class="new-story-title" { "Write a new story" }
+                    span class="new-story-sub" { "It stays on this computer until you share it." }
+                }
+            }
             @for s in stories {
                 @let where_ = match s.shared_to.len() {
                     0 => "On this computer".to_string(),
