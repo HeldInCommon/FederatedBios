@@ -130,13 +130,19 @@ pub fn lan_url(port: u16) -> Option<String> {
 /// system, as hex. It is a **secret**: it tells our servers apart from others,
 /// collects the node's notices, and opens a commons' steward view (ADR 0023).
 /// Only this app and the servers it starts know it.
-pub fn launch_token() -> String {
-    use std::io::Read;
-    let mut b = [0u8; 32];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut b))
-        .expect("the operating system provides /dev/urandom on macOS and Linux");
-    b.iter().map(|x| format!("{x:02x}")).collect()
+///
+/// The bytes come from `OsRng`, the operating system's secure random source
+/// on every platform (macOS, Linux and Windows), the same source the server
+/// uses for session tokens. Returns an error if that source fails, which
+/// means the system is broken: the app can't make a secret, so it doesn't
+/// start (see `app_config`).
+pub fn launch_token() -> Result<String, rand::Error> {
+    // `RngCore` is the trait (an interface, §2 of the house style) that gives
+    // `OsRng` its `try_fill_bytes` method; it has to be in scope to call it.
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.try_fill_bytes(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 #[cfg(test)]
@@ -191,9 +197,10 @@ mod tests {
 
     #[test]
     fn launch_tokens_are_random_and_url_safe() {
-        let a = launch_token();
+        let a = launch_token().expect("the test machine has a random source");
+        let b = launch_token().expect("the test machine has a random source");
         assert_eq!(a.len(), 64);
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_ne!(a, launch_token());
+        assert_ne!(a, b, "a token is never reused");
     }
 }
