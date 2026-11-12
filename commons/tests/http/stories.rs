@@ -50,6 +50,25 @@ async fn a_listed_member_shares_a_story_and_anyone_can_read_it() {
     assert!(page.text.contains("checked when it arrived"));
 }
 
+/// A member's profile on a commons shows everything they've shared there,
+/// and nobody else's.
+#[tokio::test]
+async fn a_members_profile_lists_their_stories_and_only_theirs() {
+    let (commons, _, ada) = commons_with_ada().await;
+    let bea = person("bea");
+    assert!(send(&commons, post_json("/inbox", &share_of(&bea, None))).await.status.is_success());
+    send(&commons, post_json("/inbox", &story_share(&ada, ID, 100, "Night bus"))).await;
+
+    let kid = |rec: &hic_commons::model::HandleRec| hic_commons::keys::keyid(&rec.ed_pub);
+    let adas = send(&commons, get(&format!("/federated/{}", kid(&ada)), None)).await.text;
+    assert!(adas.contains("Stories by @ada") && adas.contains("Night bus"), "ada's story is on her profile");
+    assert!(adas.contains(&format!("/stories/{}/{ID}", kid(&ada))), "and links to it");
+
+    let beas = send(&commons, get(&format!("/federated/{}", kid(&bea)), None)).await.text;
+    assert!(!beas.contains("Night bus"), "nobody else's stories");
+    assert!(beas.contains("@bea hasn't shared any stories here yet."));
+}
+
 #[tokio::test]
 async fn someone_not_listed_cannot_share_a_story() {
     let (commons, _, _) = commons_with_ada().await;

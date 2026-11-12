@@ -10,7 +10,7 @@ use crate::form::Form;
 use crate::governance::{license_from_form, signals_from_form, DEFAULT_LICENSE};
 use crate::model::{Place, Profile, Reach};
 use crate::publishing::{self, Draft};
-use crate::web::layout::{error_page, redirect, render, server_error, Page};
+use crate::web::layout::{error_page, redirect, render, server_error, Page, Section};
 use crate::web::pages;
 use crate::{handle, now};
 
@@ -67,7 +67,7 @@ pub async fn publish_form(State(st): State<Shared>, headers: HeaderMap) -> Respo
         }
         None => pages::publish_form(&s.handle, &s.csrf, &Profile::default(), Reach::Public, DEFAULT_LICENSE, &[], true),
     };
-    render(&st.site, Page::new("Publish", Some(&s.handle), body))
+    render(&st.site, Page::new("Publish", Some(&s.handle), body).at(Section::You))
 }
 
 /// `POST /publish` — sign and store a new version, and make it current.

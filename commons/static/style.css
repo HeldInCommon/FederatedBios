@@ -36,7 +36,7 @@
   --ink: #111;
   --ink-soft: #2b2b2b; /* body text: softer than pure ink */
   --felt: #e3e1e6; /* the quilt's ground */
-  --panel-grey: #efeef1; /* the page panel behind a grid of cards */
+  --stage: #f8f8fa; /* the panels: a soft near-white, well clear of the felt */
   --gray: #6f6f6f;
   --faint: #a4a29b;
   --white: #fff;
@@ -89,7 +89,6 @@
   --rule: 2px solid var(--ink);
   --rule-strong: 2px solid var(--ink);
   --rule-soft: 0 solid transparent;
-  --accent-edge: 4px;
   --focus: 2px solid var(--blue);
 
   /* A card rising onto a hard ink shadow, as on heldincommon.org's model landscape */
@@ -243,7 +242,7 @@ code,
 
 .link-btn {
   color: var(--accent);
-  border-bottom: 1.5px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
   text-decoration: none;
 }
 
@@ -339,13 +338,6 @@ fieldset {
   margin-top: var(--space-2);
 }
 
-/* Panels: a block set apart with an edge in its --tone colour. */
-.caution,
-.origin-box,
-.notice-bar {
-  border-left: var(--accent-edge) solid var(--tone);
-}
-
 .caution {
   --tone: var(--accent);
 
@@ -404,6 +396,19 @@ fieldset {
   transform: var(--lift);
 }
 
+/* Everything that lifts gets its own compositing layer, so the browser
+   redraws it whole as it settles back down. Without this, WebKit (the
+   desktop app's web view) can leave a thin grey trace of the shadow behind
+   on screens with fractional scaling. */
+.primary,
+.secondary,
+.dir-card,
+.story-card,
+.story-chip,
+:where(.btn-ink, .btn-line, .btn-solid, .btn-outline) {
+  will-change: transform;
+}
+
 /* 4. Site frame ------------------------------------------------------------ */
 
 /* The quilt behind each page: one of eight, picked from the page's title
@@ -452,7 +457,7 @@ fieldset {
 .rail,
 .stage {
   border-radius: var(--radius-panel);
-  background: var(--surface);
+  background: var(--stage);
 }
 
 /* The rail stays in view while the page scrolls. */
@@ -494,13 +499,23 @@ fieldset {
   color: var(--accent);
 }
 
-/* This computer's servers: the one this page belongs to, then the others
-   (added by the desktop app; see src-tauri/src/links.rs). */
-.servers,
-.server-list {
+/* This computer's servers, always in the same order (node, commons,
+   practice) whichever you're on: the page draws its own card and the
+   desktop app adds the others into .server-list (src-tauri/src/links.rs);
+   display: contents lets them all sort together by `order`. */
+.servers {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.server-list {
+  display: contents;
+}
+
+.server-card.is-node,
+.server-card[data-kind="node"] {
+  order: 1;
 }
 
 .rail-label {
@@ -519,24 +534,46 @@ fieldset {
   background: var(--surface-sunk);
   color: var(--ink);
   text-decoration: none;
+  transition:
+    transform 0.13s ease,
+    box-shadow 0.13s ease,
+    background-color 0.13s ease;
+  will-change: transform;
 }
 
+/* Each kind's starburst colour, and its place in the fixed order. */
 .server-card.is-commons,
 .server-card[data-kind="commons"] {
   --tone: var(--violet);
+
+  order: 2;
 }
 
 .server-card.is-practice,
 .server-card[data-kind="practice"] {
   --tone: var(--blue);
+
+  order: 3;
 }
 
-/* The server you're on: filled ink and set at a tilt. Fill, not colour,
-   marks it, so it reads the same to colour-blind people. */
+/* The server you're on: filled ink. Fill, not colour, marks it, so it
+   reads the same to colour-blind people. */
 .server-card.is-here {
   background: var(--ink);
   color: var(--white);
-  transform: rotate(-2deg);
+}
+
+/* Rollover: the other servers are links, so they rise onto the hard ink
+   shadow like every other card. */
+a.server-card:hover,
+a.server-card:focus-visible {
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+  transform: var(--lift);
+}
+
+a.rail-foot:hover {
+  color: var(--accent);
 }
 
 .server-text {
@@ -606,15 +643,15 @@ a.rail-foot {
 }
 
 /* The page panel: white for reading, grey behind a grid of cards. */
+
+/* A column, so the footer can sit at the bottom of the panel on short pages. */
 .stage {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
   min-height: calc(100vh - 2 * var(--frame-gap));
   padding: var(--space-2) clamp(20px, 3vw, 40px) var(--space-7);
-}
-
-.stage.has-cards {
-  background: var(--panel-grey);
 }
 
 .page {
@@ -641,6 +678,26 @@ a.rail-foot {
 .topbar-links a:hover,
 .topbar-links button:hover {
   color: var(--accent);
+}
+
+/* The link for the section you're in: ink, with a small pink dot centred
+   above it. The dot follows aria-current, so screen readers hear the same
+   thing the dot shows. */
+.topbar-links a[aria-current="page"] {
+  position: relative;
+  color: var(--ink);
+}
+
+.topbar-links a[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
 }
 
 .inline-form {
@@ -672,12 +729,15 @@ a.rail-foot {
   margin: 0;
 }
 
+/* Pushed to the bottom of the panel (margin-top: auto); the padding keeps
+   room above it when the page is long. */
 .site-foot {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-top: var(--space-9);
+  margin-top: auto;
+  padding-top: var(--space-9);
   font: var(--text-xs) var(--font-mono);
   letter-spacing: var(--track);
   text-transform: uppercase;
@@ -768,11 +828,13 @@ a.rail-foot {
   margin-top: var(--space-7);
 }
 
-/* A member card: white and square, with no outline; it rises onto a hard
-   shadow under the pointer (the lift pattern, section 3). */
+/* A member card: white and square with a chunky ink edge (white and black,
+   like the run-a-commons page); it rises onto a hard shadow under the
+   pointer (the lift pattern, section 3). */
 .dir-card {
   display: flex;
   flex-direction: column;
+  border: var(--rule);
   background: var(--surface);
   color: var(--text);
   text-decoration: none;
@@ -1042,10 +1104,9 @@ a.rail-foot {
 
 /* A profile shared in from another node: where it came from */
 .origin-box {
-  --tone: var(--violet);
-
   margin: 0 0 var(--space-3);
-  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-sunk);
 }
 
 .origin-line {
@@ -1489,10 +1550,9 @@ a.rail-foot {
   text-transform: uppercase;
 }
 
+/* Pushes the aside to the right of a section label: space, not a line. */
 .rule-fill {
   flex: 1;
-  height: 1px;
-  background: var(--ink);
 }
 
 .section-aside {
@@ -1582,10 +1642,13 @@ a.rail-foot {
 }
 
 /* One panel of choices split by thin rules; the chosen one is filled in ink */
+
+/* Choices are separate square tiles with space between (no dividers); the
+   chosen one is filled ink. */
 .choice-panel {
   display: flex;
   flex-wrap: wrap;
-  background: var(--surface);
+  gap: var(--space-3);
 }
 
 .choice {
@@ -1594,7 +1657,7 @@ a.rail-foot {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-6) var(--space-5);
-  box-shadow: inset 1px 0 0 var(--line);
+  background: var(--surface-sunk);
   cursor: pointer;
 }
 
@@ -1667,14 +1730,14 @@ a.rail-foot {
 .terms-panel {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-3);
   margin: var(--space-4) 0;
-  background: var(--surface);
 }
 
 .terms-cell {
   flex: 1 1 9rem;
   padding: var(--space-4) var(--space-5);
-  box-shadow: inset 1px 0 0 var(--line);
+  background: var(--surface-sunk);
 }
 
 .terms-cell p {
@@ -1705,6 +1768,7 @@ a.rail-foot {
   position: relative;
   display: flex;
   flex-direction: column;
+  border: var(--rule);
   background: var(--surface);
 }
 
@@ -2134,9 +2198,8 @@ a.rail-foot {
     display: none;
   }
 
-  /* Servers as a row of small chips. */
-  .servers,
-  .server-list {
+  /* Servers as a row of small chips, in the same fixed order. */
+  .servers {
     flex-direction: row;
     gap: var(--space-2);
     overflow-x: auto;
@@ -2146,10 +2209,6 @@ a.rail-foot {
     flex: none;
     gap: var(--space-2);
     padding: 9px 12px;
-  }
-
-  .server-card.is-here {
-    transform: none;
   }
 
   .server-sub {

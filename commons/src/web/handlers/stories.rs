@@ -13,7 +13,7 @@ use crate::app::Shared;
 use crate::model::Reach;
 use crate::now;
 use crate::story::{self, OwnStory};
-use crate::web::layout::{not_found, render, server_error, Page};
+use crate::web::layout::{not_found, render, server_error, Page, Section};
 use crate::web::pages;
 
 /// `GET /stories` — a node's stories, or the stories shared to a commons.
@@ -24,11 +24,14 @@ pub async fn stories(State(st): State<Shared>, headers: HeaderMap) -> Response {
         let withdrawn = story::recent_withdrawals(&st.store.story_tombstones(), &held, &st.store.remotes(), now());
         let noindex = held.iter().any(|h| h.story.reach() == Reach::Commons);
         let body = pages::commons_stories(&st.site.instance, &held, &withdrawn, now());
-        return render(&st.site, Page::new("Stories", me.as_deref(), body).noindex(noindex).with_cards());
+        return render(&st.site, Page::new("Stories", me.as_deref(), body).noindex(noindex).at(Section::Stories));
     }
     let visible: Vec<OwnStory> =
         st.store.own_stories().into_iter().filter(|s| me.is_some() || s.story.reach() != Reach::Members).collect();
-    render(&st.site, Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.as_deref())).with_cards())
+    render(
+        &st.site,
+        Page::new("Stories", me.as_deref(), pages::node_stories(&visible, me.as_deref())).at(Section::Stories),
+    )
 }
 
 /// `GET /stories/{keyid}/{id}` — a story shared to this commons.
@@ -44,7 +47,12 @@ pub async fn held_story(
     match st.store.held_story(&kid, &id) {
         Ok(Some(h)) => {
             let noindex = h.story.reach() == Reach::Commons;
-            render(&st.site, Page::new(&h.story.title, me.as_deref(), pages::held_story(&h, now())).noindex(noindex))
+            render(
+                &st.site,
+                Page::new(&h.story.title, me.as_deref(), pages::held_story(&h, now()))
+                    .noindex(noindex)
+                    .at(Section::Stories),
+            )
         }
         Ok(None) => not_found(&st.site, me.as_deref()),
         Err(e) => server_error(&st.site, &e),

@@ -10,7 +10,7 @@ use crate::form::Form;
 use crate::model::HandleRec;
 use crate::passphrase::{self, Check};
 use crate::sessions;
-use crate::web::layout::{error_page, redirect_with, render, server_error, Page};
+use crate::web::layout::{error_page, redirect_with, render, server_error, Page, Section};
 use crate::web::pages;
 use crate::{handle, identity, keys, now};
 
@@ -18,7 +18,8 @@ use crate::{handle, identity, keys, now};
 pub async fn join_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session(&st, &headers).map(|s| s.handle);
     let body = if st.site.is_commons() { pages::commons_gate(&st.site) } else { pages::join_form(me.as_deref()) };
-    render(&st.site, Page::new(if st.site.is_commons() { "Shared commons" } else { "Join" }, me.as_deref(), body))
+    let title = if st.site.is_commons() { "Shared commons" } else { "Join" };
+    render(&st.site, Page::new(title, me.as_deref(), body).at(Section::Join))
 }
 
 /// Ask the node's default commons whether `h` is free there. `None` when
@@ -106,7 +107,9 @@ pub async fn join_submit(State(st): State<Shared>, body: String) -> Response {
 pub async fn login_form(State(st): State<Shared>, headers: HeaderMap) -> Response {
     let me = session(&st, &headers).map(|s| s.handle);
     let body = if st.site.is_commons() { pages::commons_gate(&st.site) } else { pages::login_form() };
-    render(&st.site, Page::new(if st.site.is_commons() { "Shared commons" } else { "Sign in" }, me.as_deref(), body))
+    let title = if st.site.is_commons() { "Shared commons" } else { "Sign in" };
+    let section = if st.site.is_commons() { Section::Join } else { Section::SignIn };
+    render(&st.site, Page::new(title, me.as_deref(), body).at(section))
 }
 
 /// `POST /login` — check the passphrase and start a session.

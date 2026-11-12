@@ -55,8 +55,10 @@
   --space-7: 2.5rem;
 
   /* Lines and motion */
-  --rule: 1px solid var(--ink);
-  --rule-soft: 1px solid var(--line);
+
+  /* No thin lines: an edge that must show is 2px; a divider is space. */
+  --rule: 2px solid var(--ink);
+  --rule-soft: 0 solid transparent;
   --focus: 2px solid var(--pink);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --pulse: 2.1s; /* one beat of the loader */
@@ -143,7 +145,7 @@ h1 {
 
 .learn a {
   color: var(--ink);
-  border-bottom: 1.5px solid var(--pink);
+  border-bottom: 2px solid var(--pink);
   text-decoration: none;
 }
 
@@ -218,7 +220,7 @@ h1 {
   letter-spacing: var(--track);
   text-transform: uppercase;
   color: var(--gray);
-  border-bottom: 1px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
   cursor: pointer;
 }
 

@@ -101,6 +101,24 @@ pub fn node_stories(stories: &[OwnStory], me: Option<&str>) -> Markup {
     }
 }
 
+/// The stories one member has shared to this commons, under their profile:
+/// everything of theirs this commons holds, in one place.
+pub fn author_stories(handle: &str, held: &[&HeldStory]) -> Markup {
+    let count = format!("{} shared here", held.len());
+    html! {
+        (section_label(&format!("Stories by @{handle}"), Some(&count)))
+        @if held.is_empty() {
+            p class="empty-note" { "@" (handle) " hasn't shared any stories here yet." }
+        } @else {
+            div class="story-grid" {
+                @for h in held {
+                    (card(&format!("/stories/{}/{}", keyid(h.author()), h.story.id), &h.story, "tone-violet", verified(), None))
+                }
+            }
+        }
+    }
+}
+
 /// The stories shared to this commons, most recently arrived first, then
 /// any withdrawn in the last day.
 pub fn commons_stories(instance: &str, held: &[HeldStory], withdrawn: &[RecentWithdrawal], now: u64) -> Markup {
