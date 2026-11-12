@@ -37,7 +37,8 @@ pub struct AppState {
     pub write: Mutex<()>,
     /// Outgoing requests (sharing to a commons, checking a handle).
     pub http: reqwest::Client,
-    /// Limits `/inbox` requests per sender address (see [`crate::ratelimit`]).
+    /// Limits `/inbox` and `/api/waiting` requests per sender address, in
+    /// one shared count (see [`crate::ratelimit`]).
     pub inbox_limit: RateLimiter,
 }
 
@@ -154,6 +155,8 @@ pub fn router(state: Shared) -> Router {
         .route("/api/@{handle}", get(api::profile))
         .route("/api/handle/{handle}", get(api::handle_available))
         .route("/api/pending", get(api::pending))
+        // Members only: the asker signs the request (decision record 0026).
+        .route("/api/waiting", post(handlers::waiting_list))
         .route("/api/status", get(api::share_status))
         .route("/api/notices/claim", post(api::claim_notices))
         .route("/notices/dismiss", post(handlers::dismiss_notices))

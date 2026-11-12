@@ -106,12 +106,18 @@ curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --dat
 curl -s http://localhost:8091/ | grep -q 'from localhost:8090' && ok "commons card shows origin address" || no "card missing origin address"
 curl -s http://localhost:8091/ | grep -q 'class="dir-key"' && ok "commons card shows key fingerprint" || no "card missing key fingerprint"
 
-python3 - "$T/cap.json" <<'PY' & 
+# A stand-in "commons" on 8099 that keeps the last thing posted to its inbox.
+# Only /inbox: the node later asks it who is waiting (/api/waiting, ADR 0026),
+# which must not overwrite the captured share.
+python3 - "$T/cap.json" <<'PY' &
 import http.server,sys
 out=sys.argv[1]
 class H(http.server.BaseHTTPRequestHandler):
   def do_POST(s):
-    n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n); open(out,'wb').write(b)
+    n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)
+    if s.path!='/inbox':
+      s.send_response(404); s.end_headers(); return
+    open(out,'wb').write(b)
     s.send_response(200); s.end_headers(); s.wfile.write(b'{"ok":1}')
   def log_message(s,*a): pass
 http.server.HTTPServer(('127.0.0.1',8099),H).serve_forever()
@@ -144,6 +150,22 @@ NKEY=$(curl -s http://localhost:8091/api/pending | grep -oE '"key":"[0-9a-f]{12}
 curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=newbie" --data-urlencode "key=$NKEY" | grep -q "Vouched" && ok "member vouched for the newcomer from their node" || no "vouch failed"
 grep -rq '"newbie"' "$T/commons/remote/" 2>/dev/null && ok "newcomer listed after the vouch" || no "newcomer still not listed"
 curl -s -X POST http://localhost:8090/invite -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" | grep -q "Invite code" && ok "member can make an invite code" || no "invite code page failed"
+
+# Vouching with a click (ADR 0026): amy waits; tega's node shows her on the
+# People tab (it asks the commons with a request signed by tega's key), and
+# one press of Vouch lists her. Nobody else can read the waiting list.
+R=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=amy" --data-urlencode "display_name=Amy Ng" --data-urlencode "passphrase=supersecret7" --data-urlencode "passphrase_again=supersecret7" | tr -d '\r'); ASID=$(printf '%s\n' "$R" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')
+ACSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$ASID" | grep -oE 'name="csrf" value="[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{8,}')
+curl -s -o /dev/null -X POST http://localhost:8093/publish -H "Cookie: hic_session=$ASID" --data-urlencode "handle=amy" --data-urlencode "csrf=$ACSRF" --data-urlencode "name=Amy Ng" --data-urlencode "bio=Not for review." --data-urlencode "visibility=public" --data-urlencode "license=cc-by"
+curl -s -o /dev/null -X POST http://localhost:8093/share -H "Cookie: hic_session=$ASID" --data-urlencode "handle=amy" --data-urlencode "csrf=$ACSRF" --data-urlencode "commons_url=http://localhost:8091"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/api/waiting -H 'Content-Type: application/json' --data-binary '{}')" = "400" ] && ok "an unsigned waiting-list request is refused" || no "unsigned waiting-list request not refused"
+PEOPLE=$(curl -s "http://localhost:8090/@tega?tab=people" -H "Cookie: hic_session=$SID")
+printf '%s' "$PEOPLE" | grep -q "Vouch for @amy" && printf '%s' "$PEOPLE" | grep -q "Amy Ng" && ok "member's People tab shows amy waiting, with a Vouch button" || no "amy not on the People tab"
+printf '%s' "$PEOPLE" | grep -q "Not for review" && no "the People tab shows a waiting person's profile" || ok "the People tab shows no profile content"
+AKEY=$(printf '%s' "$PEOPLE" | grep -oE 'name="key" value="[0-9a-f]{64}"' | head -1 | grep -oE '[0-9a-f]{64}')
+curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=amy" --data-urlencode "key=$AKEY" | grep -q "is now listed" && no "Vouch worked without the CSRF token" || ok "Vouch without the CSRF token is refused"
+curl -s -X POST http://localhost:8090/vouch -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://localhost:8091" --data-urlencode "who=amy" --data-urlencode "key=$AKEY" | grep -q "@amy is now listed on localhost:8091" && ok "one click vouched for amy" || no "one-click vouch failed"
+grep -rq '"amy"' "$T/commons/remote/" 2>/dev/null && ok "amy listed after the one-click vouch" || no "amy still not listed"
 
 # The steward approves someone waiting (ADR 0017).
 R=$(curl -is -X POST http://localhost:8093/join --data-urlencode "handle=walker" --data-urlencode "display_name=Walker" --data-urlencode "passphrase=supersecret6" --data-urlencode "passphrase_again=supersecret6" | tr -d '\r'); WSID=$(printf '%s\n' "$R" | awk -F'hic_session=' '/[Ss]et-[Cc]ookie/{split($2,a,";"); print a[1]}')

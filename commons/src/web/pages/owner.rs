@@ -6,13 +6,14 @@
 //! |---|---|
 //! | Profile | the profile, and "Update your profile" |
 //! | Sharing | share to a commons, waiting to be listed, your commons and withdrawing |
-//! | People | invite someone, vouch for someone (once listed somewhere) |
-//! | Account | back up your identity, your keys |
+//! | People | who is waiting for a vouch, with Vouch buttons; invite someone (once listed somewhere): `owner_people.rs` |
+//! | Account | back up your identity, your keys: `owner_account.rs` |
 
 use maud::{html, Markup};
 
 use crate::canonical::short;
 use crate::ramp::{self, MemberState, NextStep, Tab};
+use crate::vouch_list::Lookup;
 use crate::web::layout::host_label;
 
 /// What the owner sees on their own profile.
@@ -38,6 +39,10 @@ pub struct OwnerPanel {
     pub key: String,
     /// The tab asked for (`?tab=`); hidden tabs fall back to Profile.
     pub tab: Tab,
+    /// For each commons this member is listed on, who is waiting for a vouch
+    /// there (decision record 0026). Asked for only when the People tab is
+    /// shown; empty otherwise.
+    pub waiting_lists: Vec<(String, Lookup)>,
 }
 
 impl OwnerPanel {
@@ -60,7 +65,7 @@ impl OwnerPanel {
 }
 
 /// The address of one of the member's tabs.
-fn tab_href(handle: &str, t: Tab) -> String {
+pub(super) fn tab_href(handle: &str, t: Tab) -> String {
     if t == Tab::Profile {
         format!("/@{handle}")
     } else {
@@ -181,7 +186,7 @@ pub(super) fn tab_panel(handle: &str, o: &OwnerPanel) -> Markup {
             @match o.active() {
                 Tab::Profile => {}
                 Tab::Sharing => { (sharing_tab(handle, o)) }
-                Tab::People => { (people_tab(handle, o)) }
+                Tab::People => { (super::owner_people::people_tab(handle, o)) }
                 Tab::Account => { (super::owner_account::account_tab(handle, o)) }
             }
         }
@@ -279,84 +284,6 @@ fn your_commons(handle: &str, o: &OwnerPanel) -> Markup {
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/// People: invite and vouch once listed on a commons; before that, what to do
-/// to get listed. Vouching needs a listing because a commons only accepts a
-/// vouch from someone it already lists (ADR 0011).
-fn people_tab(handle: &str, o: &OwnerPanel) -> Markup {
-    if !o.state().listed_on().is_empty() {
-        return html! { (invite_panel(handle, o)) (vouch_panel(handle, o)) };
-    }
-    html! {
-        section class="share-panel" {
-            h2 class="field-label" { "Invite and vouch for people" }
-            p class="hint" { "Once you're listed on a commons, this is where you invite people you know and vouch for people waiting to join it." }
-            @if !o.waiting_on.is_empty() {
-                p class="hint" {
-                    "You're waiting to be listed on "
-                    @for (i, c) in o.waiting_on.iter().enumerate() { @if i > 0 { ", " } strong { (host_label(c)) } }
-                    ". When a member vouches for you or the steward approves you, you can bring others in."
-                }
-            } @else if o.published {
-                div class="actions" { a class="btn-line" href=(tab_href(handle, Tab::Sharing)) { "Share your profile to get listed" } }
-            } @else {
-                div class="actions" { a class="btn-line" href="/new" { "Publish your profile first" } }
-            }
-        }
-    }
-}
-
-/// Invite someone to a commons this member is listed on.
-fn invite_panel(handle: &str, o: &OwnerPanel) -> Markup {
-    html! {
-        section class="share-panel" {
-            h2 class="field-label" { "Invite someone" }
-            p class="hint" { "Makes a one-time code that lets a person you know join that commons straight away, with an " strong { "Email this invite" } " button." }
-            ul class="commons-list" {
-                @for c in o.state().listed_on() {
-                    li class="commons-item commons-row" {
-                        span class="commons-meta" { span class="commons-name" { (host_label(&c)) } }
-                        form method="post" action="/invite" {
-                            input type="hidden" name="handle" value=(handle);
-                            input type="hidden" name="csrf" value=(o.csrf);
-                            input type="hidden" name="commons_url" value=(c);
-                            button class="secondary" type="submit" { "Invite someone" }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Vouch for someone waiting on a commons this member is listed on.
-fn vouch_panel(handle: &str, o: &OwnerPanel) -> Markup {
-    html! {
-        section class="share-panel vouch-panel" {
-            h2 class="field-label" { "Vouch for someone" }
-            p class="hint" { "Someone you know is waiting to be listed on a commons? Its page shows them under " strong { "Waiting for a vouch" } ". Enter their handle and the key shown there. Only vouch for people you actually know." }
-            form method="post" action="/vouch" class="share-form vouch-form" {
-                input type="hidden" name="handle" value=(handle);
-                input type="hidden" name="csrf" value=(o.csrf);
-                div class="field" {
-                    label class="field-label" for="vouch-commons" { "Commons" }
-                    select id="vouch-commons" name="commons_url" { @for c in o.state().listed_on() { option value=(c) { (host_label(&c)) } } }
-                }
-                div class="field-row vouch-row" {
-                    div class="field" {
-                        label class="field-label" for="vouch-who" { "Their handle" }
-                        div class="handle-input" { span class="at" { "@" } input id="vouch-who" name="who" type="text" maxlength="30" placeholder="theirhandle" required autocomplete="off"; }
-                    }
-                    div class="field" {
-                        label class="field-label" for="vouch-key" { "Their key" }
-                        input id="vouch-key" name="key" type="text" class="mono-input" placeholder="e.g. 3f9a0c21b7de" required autocomplete="off" spellcheck="false";
-                    }
-                }
-                div class="actions" { button class="secondary" type="submit" { "Vouch" } }
             }
         }
     }

@@ -162,6 +162,12 @@ sharing keeps working while commons are upgraded.
 |---|---|---|---|
 | `Invite` | a member's key | `commons` (host), `code_id` (random hex), `expires_at` | Made in advance and handed to a newcomer as an **invite code**: the signed object as JSON, URL-safe base64 without padding. The newcomer's share carries it as the field `invite`. |
 | `Vouch` | a member's key | `commons` (host), `handle`, `key` (the newcomer's) | Sent to the commons' `/inbox` for someone on its pending list. |
+| `WaitingListRequest` | a member's key | `commons` (host) | Posted to the commons' `/api/waiting` to ask who is waiting for a vouch (decision record 0026). A request, not a record: it is checked and not kept. |
+
+A commons answers a `WaitingListRequest` only when it is signed by a key it
+lists, names this commons, and its `created_at` is within five minutes of the
+commons' clock (either way). The answer is
+`{"waiting": [{"handle", "name", "key"}, …]}`: no other profile content.
 
 A commons lists a **new** handle only with a valid invite, a valid vouch, or
 its one-time **founding invite** (`hic-founding-` followed by hex; not a

@@ -34,7 +34,8 @@ Writes happen in clearly named places that say what they change.
 | `jcs.rs` | Canonical JSON (RFC 8785) for format `hic/v1`. | yes |
 | `envelope.rs` | Signed `hic/v1` objects: build, sign, cosign, verify. See `docs/spec/`. | yes |
 | `waiting.rs` | Following up on waiting shares (at start-up and on Check now) and recording news. | rule yes; asks and writes |
-| `vouching.rs` | Who may join a commons: invites, vouches, the founding invite, the weekly limit. | yes |
+| `vouching.rs` | Who may join a commons: invites, vouches, the founding invite, the weekly limit; who may see the waiting list (`check_waiting_request`). | yes |
+| `vouch_list.rs` | Vouching with a click (decision record 0026): asking each commons who is waiting, what the answer means (`Lookup`), and the result of a vouch in plain words. | rules yes; asks (reads only) |
 | `ratelimit.rs` | At most N requests per minute per sender (the inbox). | in-memory state |
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
 | `member.rs` | Pure changes to a member's record (moving to new keys). | yes |
@@ -57,7 +58,9 @@ Writes happen in clearly named places that say what they change.
 | `web/handlers/inbox.rs` | What a commons receives from nodes: shares, vouches, withdrawals, identity changes. | no |
 | `web/handlers/share.rs` | Sharing to and withdrawing from a commons; sending to a commons' inbox. | no |
 | `web/handlers/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
-| `web/handlers/membership.rs` | Bringing people in: invite codes and vouches. | no |
+| `web/handlers/membership.rs` | Bringing people in: invite codes and vouches (the People tab's Vouch buttons post here). | no |
+| `web/handlers/waiting_list.rs` | `POST /api/waiting` on a commons: who is waiting for a vouch, for a listed member's signed request only. | no |
+| `web/pages/owner_people.rs` | The People tab: who is waiting on each commons, with Vouch buttons; invite someone; vouch by handle and key. | yes |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
 | `web/handlers/stories.rs` | Story lists (a node's; a commons', with recent withdrawals) and a story on a commons. | no |
 | `web/handlers/story.rs` | One story on its author's node: the page, export, share (`share_story_to`), withdraw. | no |
@@ -92,6 +95,18 @@ to that commons) → `POST <commons>/inbox` → `handlers::inbox` sees
 (refuses if a newer version was shared after it) → `store.save_tombstone` and
 `store.delete_remote`. Later, `federation::admit` consults the tombstones.
 
+### Following a request: a member vouches with a click
+
+`handlers::profile` (node, `?tab=people`) → `vouch_list::ask_each` → for each
+commons the member is listed on, `vouching::make_waiting_request` (signed with
+the member's key) → `POST <commons>/api/waiting` →
+`handlers::waiting_list` (commons: rate limit, then
+`vouching::check_waiting_request`, then `vouch_list::waiting_from`) → back on
+the node, `vouch_list::lookup_from_answer` → `pages/owner_people.rs` shows
+each person with a **Vouch** button. Pressing it: `membership::vouch` →
+`vouching::make_vouch` → `POST <commons>/inbox` (the usual vouch, ADR 0011) →
+`vouch_list::vouch_result` → `pages::vouch_outcome`.
+
 ### Following a request: someone publishes
 
 `handlers::publish` → `Form` → `profile_from_form` (pure) →
@@ -120,7 +135,7 @@ interleave) → redirect to the profile.
 |---|---|---|
 | `cargo test --manifest-path commons/Cargo.toml` | Unit tests in every module, plus `tests/http/` (the whole router in-process; `cargo test --test http vouching` runs one area). | ~5 s |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | The app's pure rules (role migration, health check, labels). | ~1 s once built |
-| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching, steward approval, Check now, withdrawal, key rotation and recovery. | ~25 s |
+| `./scripts/test-federation.sh` | Real processes: nodes, commons, an impostor, tampering, members-only, vouching (including with a click), steward approval, Check now, withdrawal, key rotation and recovery. | ~25 s |
 | `python3 scripts/check_spec_vectors.py` | An independent (Python) check of the spec's canonical bytes and ids. | <1 s |
 
 All four run on every pull request (`.github/workflows/pr-checks.yml`), with
