@@ -125,7 +125,14 @@ pub fn headline(site: &Site) -> String {
     } else if site.instance.trim().is_empty() {
         "Your node".to_string()
     } else {
-        format!("{} node", site.instance.trim())
+        // "Studio laptop" becomes "Studio laptop node", but a name that
+        // already says node ("My node") isn't given a second one.
+        let name = site.instance.trim();
+        if name.to_lowercase().ends_with("node") {
+            name.to_string()
+        } else {
+            format!("{name} node")
+        }
     }
 }
 
@@ -270,6 +277,8 @@ mod tests {
         };
         assert_eq!(headline(&site(crate::role::Role::Node, "phoenixs_machine")), "phoenixs_machine node");
         assert_eq!(headline(&site(crate::role::Role::Node, "  ")), "Your node");
+        assert_eq!(headline(&site(crate::role::Role::Node, "Review node")), "Review node", "no \"node node\"");
+        assert_eq!(headline(&site(crate::role::Role::Node, "Studio NODE")), "Studio NODE");
         assert_eq!(headline(&site(crate::role::Role::Commons, "heldincommon")), "The commons");
     }
 
