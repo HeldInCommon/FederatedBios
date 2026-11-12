@@ -61,7 +61,7 @@ For reference, or to do it step by step:
 cargo build --release --manifest-path commons/Cargo.toml
 cp commons/target/release/hic-commons src-tauri/binaries/hic-commons-$(rustc -vV | sed -n 's/host: //p')
 cd src-tauri && APPLE_SIGNING_IDENTITY="Developer ID Application: NAME (TEAMID)" \
-  HIC_SHARE_DEFAULT="<default commons>" cargo tauri build --bundles app
+  HIC_SHARE_DEFAULT="<default commons>" HIC_SHARE_DEFAULT_NAME="<its name>" cargo tauri build --bundles app
 # notarize and staple the app, wrap it in a .dmg (with an Applications link),
 # sign, notarize and staple the .dmg:
 xcrun notarytool submit app.zip --keychain-profile <profile> --wait && xcrun stapler staple "Held In Common.app"

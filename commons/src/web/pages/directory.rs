@@ -264,6 +264,7 @@ mod tests {
             base_url: "http://n".into(),
             also_known_as: Vec::new(),
             share_default: String::new(),
+            share_default_name: String::new(),
             practice: false,
             in_app: true,
         };

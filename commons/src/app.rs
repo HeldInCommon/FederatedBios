@@ -53,6 +53,7 @@ impl AppState {
             base_url: config.base_url.clone(),
             also_known_as: config.also_known_as.clone(),
             share_default: config.share_default.clone(),
+            share_default_name: config.share_default_name.clone(),
             practice: config.practice,
             in_app: config.in_app(),
         };

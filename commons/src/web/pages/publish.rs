@@ -40,7 +40,7 @@ pub fn publish_form(
                 }
             }
             div class="actions" {
-                button class="btn-ink" type="submit" { "Publish" }
+                button class="btn-action" type="submit" { "Publish" }
                 span class="hint" { "It stays on this computer. Sharing comes next." }
             }
         }

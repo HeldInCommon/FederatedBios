@@ -21,10 +21,21 @@ pub struct AppConfig {
     pub base: PathBuf,
     /// `HIC_INSTANCE` from the host environment, if set.
     pub instance_override: Option<String>,
-    /// The commons pre-filled in "Share to a commons".
-    pub share_default: String,
+    /// The commons pre-filled in "Share to a commons", and its name.
+    pub share_default: DefaultCommons,
     /// Identifies the servers this launch started (see [`crate::network`]).
     pub launch_token: String,
+}
+
+/// The commons a node offers first: its address and, if known, what to call
+/// it ("Held in Common Collective Commons"), so pages show a name rather
+/// than a long Tailscale address.
+#[derive(Clone, Debug, Default)]
+pub struct DefaultCommons {
+    /// Its address, e.g. `https://heldincommon.example.ts.net` (blank: none).
+    pub url: String,
+    /// What to call it (blank: pages show the address).
+    pub name: String,
 }
 
 /// One running server process, if any, and what's needed to restart it
@@ -115,7 +126,7 @@ pub fn server_env(
     port: u16,
     name: &str,
     cfg_override: Option<&str>,
-    share_default: &str,
+    share_default: &DefaultCommons,
     lan: Option<String>,
     public: Option<String>,
 ) -> Vec<(&'static str, String)> {
@@ -126,7 +137,10 @@ pub fn server_env(
         ("HIC_SESSION_COOKIE", cookie_name(port)),
     ];
     match kind {
-        Kind::Node => env.push(("HIC_SHARE_DEFAULT", share_default.to_string())),
+        Kind::Node => env.extend([
+            ("HIC_SHARE_DEFAULT", share_default.url.clone()),
+            ("HIC_SHARE_DEFAULT_NAME", share_default.name.clone()),
+        ]),
         // A room commons: nodes on the same network reach it at this address,
         // and people outside the room at its public one, if it has one.
         Kind::Commons => {
@@ -358,7 +372,7 @@ mod tests {
             port,
             "Name",
             None,
-            "https://c.example",
+            &DefaultCommons { url: "https://c.example".into(), name: "The Collective".into() },
             Some("http://192.168.1.5:8081".into()),
             Some("https://hic.tail.ts.net".into()),
         )
@@ -372,6 +386,7 @@ mod tests {
         assert_eq!(node["HIC_ROLE"], "node");
         assert_eq!(node["HIC_SESSION_COOKIE"], "hic_session");
         assert_eq!(node["HIC_SHARE_DEFAULT"], "https://c.example");
+        assert_eq!(node["HIC_SHARE_DEFAULT_NAME"], "The Collective");
         assert!(!node.contains_key("HIC_BIND"), "a node listens locally by default");
 
         let commons = env_of(Kind::Commons, 8081);

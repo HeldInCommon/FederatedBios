@@ -2,10 +2,14 @@
 //! (badges, the licence row, redirects, error pages).
 //!
 //! All functions here are pure: they turn data into markup or a response.
+//! One documented exception: [`name_default_commons`] records, once at
+//! start-up, what to call the node's default commons, and [`host_label`]
+//! reads it.
 
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use maud::{html, Markup, DOCTYPE};
+use std::sync::OnceLock;
 
 use crate::model::Reach;
 use crate::role::Role;
@@ -26,6 +30,8 @@ pub struct Site {
     pub also_known_as: Vec<String>,
     /// The default commons a node shares to (blank if none).
     pub share_default: String,
+    /// What to call it ("Held in Common Collective Commons"; blank: its address).
+    pub share_default_name: String,
     /// A practice commons, for learning (`HIC_PRACTICE=1`).
     pub practice: bool,
     /// Started by the desktop app, so pages may offer its actions.
@@ -69,6 +75,8 @@ pub enum Section {
     Join,
     /// Signing in.
     SignIn,
+    /// How this works.
+    About,
 }
 
 /// One HTML page to send.
@@ -132,11 +140,11 @@ pub fn quilt_for(title: &str) -> usize {
 
 /// What kind of server this is, as the rail names it, and the class that
 /// picks its starburst colour: your node, a shared commons or a practice
-/// commons, so nobody confuses them.
+/// commons, so nobody confuses them. A commons is never "your commons":
+/// everyone who visits it sees this rail, and it belongs to its community.
 fn server_kind(site: &Site) -> (&'static str, &'static str) {
     match (site.is_commons(), site.practice) {
         (true, true) => ("is-practice", "Practice commons"),
-        (true, false) if site.in_app => ("is-commons", "Your commons"),
         (true, false) => ("is-commons", "Shared commons"),
         (false, _) => ("is-node", "Your node"),
     }
@@ -154,16 +162,25 @@ fn rail(site: &Site) -> Markup {
                 span class="tagline" { "Federated data commons for creative communities" }
             }
             section class="servers" aria-labelledby="hic-servers-label" {
+                // Visitors to a commons reach it over the network, so only
+                // a node says "On this computer".
                 p class="rail-label" id="hic-servers-label" {
-                    @if site.in_app { "On this computer" } @else { "You're on" }
+                    @if site.in_app && !site.is_commons() { "On this computer" } @else { "You're on" }
                 }
                 div class={ "server-card is-here " (kind) } aria-current="true" {
                     span class="star" aria-hidden="true" {}
                     span class="server-text" {
-                        span class="server-name" { (label) }
-                        @if !site.instance.is_empty() {
-                            span class="server-sub" {
-                                (site.instance) @if site.in_app { ", open now" }
+                        // A commons leads with its own name ("Held in Common
+                        // Collective Commons"); a node with "Your node".
+                        @if site.is_commons() && !site.instance.trim().is_empty() {
+                            span class="server-name" { (site.instance) }
+                            span class="server-sub" { (label) }
+                        } @else {
+                            span class="server-name" { (label) }
+                            @if !site.instance.is_empty() {
+                                span class="server-sub" {
+                                    (site.instance) @if site.in_app { ", open now" }
+                                }
                             }
                         }
                     }
@@ -171,14 +188,22 @@ fn rail(site: &Site) -> Markup {
                 div class="server-list" id="hic-servers" hidden {}
             }
             @if site.is_commons() && site.practice {
-                p class="rail-foot" { "Only this computer can reach a practice commons. Nothing here is seen by anyone else." }
+                p class="rail-foot" {
+                    "Only this computer can reach a practice commons. Nothing here is seen by anyone else. Its address: "
+                    code { (site.base_url) }
+                }
             } @else if site.is_commons() {
                 p class="rail-foot" {
                     "Nodes share to "
                     code { (site.public_url()) }
                 }
             } @else if !site.share_default.is_empty() {
-                a class="rail-foot" href=(site.share_default) { "Visit the commons \u{2197}" }
+                // The address can be a long Tailscale name: the button says
+                // where it goes instead (HIC_SHARE_DEFAULT_NAME).
+                a class="btn-solid rail-go" href=(site.share_default) {
+                    @if site.share_default_name.is_empty() { "Go to the commons" } @else { "Go to the " (site.share_default_name) }
+                    " \u{2197}"
+                }
             }
         }
     }
@@ -229,6 +254,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                                 a href="/join" aria-current=[current(page, Section::Join)] { "Add your profile" }
                                 a href="/login" aria-current=[current(page, Section::SignIn)] { "Sign in" }
                             }
+                            a href="/about" aria-current=[current(page, Section::About)] { "How this works" }
                             a href=(PROJECT_URL) { "About the project \u{2197}" }
                         }
                         @if let Some(n) = &page.notices {
@@ -245,7 +271,6 @@ fn frame(site: &Site, page: &Page) -> Markup {
                             span { "A federated commons for creative data." }
                             span class="foot-links" {
                                 @if !site.is_commons() { a href="/run-a-commons" { "Run your own commons" } }
-                                a href="/about" { "How this works" }
                                 a href=(PROJECT_URL) { "About the project \u{2197}" }
                             }
                         }
@@ -349,14 +374,42 @@ pub fn redirect_with(to: &str, set_cookie: Option<String>) -> Response {
     (StatusCode::SEE_OTHER, h).into_response()
 }
 
-/// A readable label for a server address: its host, without scheme or
-/// trailing slash.
+/// The node's default commons and its name, once known (address, name).
+///
+/// The house style passes config in rather than reading globals. This is
+/// the one exception, and only for display: [`host_label`] is called from
+/// dozens of views that don't otherwise need the config, and the name never
+/// changes while the server runs. Set once by [`name_default_commons`].
+static DEFAULT_COMMONS: OnceLock<(String, String)> = OnceLock::new();
+
+/// Record, once at start-up, that the commons at `url` is called `name`, so
+/// [`host_label`] shows the name instead of a long address (a Tailscale one,
+/// for example). Does nothing when either is blank, or if already set.
+/// Writes only that in-memory note.
+pub fn name_default_commons(url: &str, name: &str) {
+    let (url, name) = (url.trim().trim_end_matches('/'), name.trim());
+    if !url.is_empty() && !name.is_empty() {
+        let _ = DEFAULT_COMMONS.set((url.to_string(), name.to_string()));
+    }
+}
+
+/// A readable label for a server address: the default commons' name if this
+/// is the default commons and it has one (see [`name_default_commons`]),
+/// else its host, without scheme or trailing slash.
 pub fn host_label(url: &str) -> String {
-    url.strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .unwrap_or(url)
-        .trim_end_matches('/')
-        .to_string()
+    label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())))
+}
+
+/// [`host_label`] with the named commons passed in: `named` is (address,
+/// name). Pure, so it is tested directly.
+fn label_for(url: &str, named: Option<(&str, &str)>) -> String {
+    let url = url.trim_end_matches('/');
+    if let Some((named_url, name)) = named {
+        if url == named_url {
+            return name.to_string();
+        }
+    }
+    url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).unwrap_or(url).to_string()
 }
 
 #[cfg(test)]
@@ -371,6 +424,7 @@ mod tests {
             base_url: "http://c".into(),
             also_known_as: Vec::new(),
             share_default: String::new(),
+            share_default_name: String::new(),
             practice: false,
             in_app: false,
         }
@@ -412,11 +466,28 @@ mod tests {
         let node = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
         assert!(node.contains("Your node") && node.contains("You're on"));
         assert!(node.contains(r#"id="hic-servers""#), "the app fills this slot");
-        let in_app = Site { in_app: true, ..site(Role::Commons) };
+        let in_app = Site { in_app: true, instance: "Held in Common Collective Commons".into(), ..site(Role::Commons) };
         let commons = frame(&in_app, &Page::new("t", None, html! {})).into_string();
-        assert!(
-            commons.contains("Your commons") && commons.contains("On this computer") && commons.contains("open now")
-        );
+        assert!(commons.contains("Held in Common Collective Commons") && commons.contains("Shared commons"));
+        assert!(!commons.contains("Your commons"), "a commons belongs to its community, not to whoever visits");
+        assert!(!commons.contains("On this computer"), "visitors reach a commons over the network");
+        let node = frame(&Site { in_app: true, ..site(Role::Node) }, &Page::new("t", None, html! {})).into_string();
+        assert!(node.contains("On this computer") && node.contains("open now"));
+    }
+
+    #[test]
+    fn a_node_offers_its_default_commons_by_name() {
+        let named = Site {
+            share_default: "https://hic.example.ts.net".into(),
+            share_default_name: "Held in Common Collective Commons".into(),
+            ..site(Role::Node)
+        };
+        let page = frame(&named, &Page::new("t", None, html! {})).into_string();
+        assert!(page.contains("Go to the Held in Common Collective Commons"));
+        assert!(!page.contains(">hic.example.ts.net<"), "the address isn't shown as text");
+        let practice = Site { practice: true, base_url: "http://127.0.0.1:8082".into(), ..site(Role::Commons) };
+        let page = frame(&practice, &Page::new("t", None, html! {})).into_string();
+        assert!(page.contains("<code>http://127.0.0.1:8082</code>"), "a practice commons shows its local address");
     }
 
     #[test]
@@ -479,5 +550,13 @@ mod tests {
     fn host_label_strips_scheme_and_slash() {
         assert_eq!(host_label("https://c.example/"), "c.example");
         assert_eq!(host_label("http://localhost:8081"), "localhost:8081");
+    }
+
+    #[test]
+    fn the_default_commons_is_called_by_its_name() {
+        let named = Some(("https://hic.example.ts.net", "Held in Common Collective Commons"));
+        assert_eq!(label_for("https://hic.example.ts.net/", named), "Held in Common Collective Commons");
+        assert_eq!(label_for("http://10.0.0.5:8081", named), "10.0.0.5:8081", "other commons keep their address");
+        assert_eq!(label_for("https://hic.example.ts.net", None), "hic.example.ts.net");
     }
 }

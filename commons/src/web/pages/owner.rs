@@ -118,7 +118,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
                 div class="actions" {
                     form method="post" action="/waiting/check" {
                         input type="hidden" name="csrf" value=(o.csrf);
-                        button class="btn-ink" type="submit" { "Check now" }
+                        button class="btn-action" type="submit" { "Check now" }
                     }
                     a class="link-btn" href=(sharing) { "I have an invite code" }
                 }
@@ -259,10 +259,12 @@ fn sharing_tab(handle: &str, o: &OwnerPanel) -> Markup {
 }
 
 /// The commons this member has shared to, each with its status and Withdraw.
+/// (Headed "Commons you've shared to", not "Your commons": a commons
+/// belongs to its community.)
 fn your_commons(handle: &str, o: &OwnerPanel) -> Markup {
     html! {
         section class="share-panel withdraw-panel" {
-            h2 class="field-label" { "Your commons" }
+            h2 class="field-label" { "Commons you've shared to" }
             p class="hint" { strong { "Withdraw" } " asks that commons to remove your profile, and your stories there, straight away. It keeps only a note that @" (handle) " is yours, so nobody else can take the name there. You can share again whenever you like. Copies other people already downloaded stay with them." }
             ul class="commons-list" {
                 @for c in &o.shared_to {

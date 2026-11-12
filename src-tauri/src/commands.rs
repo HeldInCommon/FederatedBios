@@ -107,7 +107,8 @@ pub fn remove_practice(app: &AppHandle) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("couldn't delete the practice commons' folder: {e}")),
     }
-    let next = Saved { practice: false, ..current.clone() };
+    // Its name goes with it: a new practice commons starts as "Practice commons".
+    let next = Saved { practice: false, practice_name: None, ..current.clone() };
     remember(app, &mut current, next)?;
     let showing_practice = network::local_port(&app.state::<Shown>().0.lock().unwrap()) == Some(port);
     if let (true, Some(home)) = (showing_practice, current.home()) {
@@ -194,6 +195,8 @@ pub struct SetupState {
     /// The node's and commons' names, if this computer runs them.
     node_name: Option<String>,
     commons_name: Option<String>,
+    /// What the practice commons is called, while there is one.
+    practice_name: Option<String>,
     /// True while there is a practice commons.
     practice: bool,
     /// Where nodes in the same room would reach this computer's commons.
@@ -207,6 +210,7 @@ pub fn setup_state(chosen: tauri::State<'_, Chosen>) -> SetupState {
     SetupState {
         node_name: s.name_of(Kind::Node).map(String::from),
         commons_name: s.name_of(Kind::Commons).map(String::from),
+        practice_name: s.name_of(Kind::Practice).map(String::from),
         practice: s.practice,
         lan_url: network::lan_url(s.port_of(Kind::Commons)),
         role: s.role,
@@ -279,6 +283,7 @@ pub fn set_name(app: AppHandle, role: Option<String>, name: String) -> Result<()
     let kind = kind_or_first(role, &current)?;
     let next = match kind {
         k if current.first() == Some(k) => Saved { name: Some(name), ..current.clone() },
+        Kind::Practice if current.practice => Saved { practice_name: Some(name), ..current.clone() },
         k if k != Kind::Practice && current.runs(k) => Saved { other_name: Some(name), ..current.clone() },
         _ => return Err(format!("This computer doesn't run {}.", kind.label().to_lowercase())),
     };

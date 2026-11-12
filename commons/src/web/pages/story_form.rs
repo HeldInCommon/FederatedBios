@@ -49,7 +49,7 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
                 p class="hint" { "As long as you like, up to 12,000 characters." }
             }
             div class="actions" {
-                button class="btn-ink" type="submit" { (button) }
+                button class="btn-action" type="submit" { (button) }
                 @if let Some(s) = editing {
                     a class="link-btn" href={ "/story/" (s.id) } { "Cancel" }
                 }
@@ -76,11 +76,11 @@ pub fn rights_form(s: &Story, csrf: &str, share_to: Option<&str>) -> Markup {
             div class="actions" {
                 @if let Some(c) = share_to {
                     input type="hidden" name="commons_url" value=(c);
-                    button class="btn-ink" type="submit" name="action" value="share" { "Share to the room" }
+                    button class="btn-action" type="submit" name="action" value="share" { "Share to the room" }
                     button class="link-btn" type="submit" name="action" value="keep" { "Keep it on this computer for now" }
                     span class="hint" { "Sharing to " (host_label(c)) }
                 } @else {
-                    button class="btn-ink" type="submit" name="action" value="keep" { "Save" }
+                    button class="btn-action" type="submit" name="action" value="keep" { "Save" }
                     span class="hint" { "To share it, first share your profile to a commons where you'll be listed." }
                 }
             }

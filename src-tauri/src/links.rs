@@ -156,6 +156,7 @@ mod tests {
             name: Some("Laptop".into()),
             other_name: other.map(String::from),
             practice,
+            practice_name: None,
             public_address: None,
         }
     }

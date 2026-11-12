@@ -41,7 +41,7 @@ fn outcome_block(o: &StoryOutcome, s: &OwnStory) -> Markup {
             section class="flash flash-withdrawn" role="status" {
                 p class="flash-label" { "Withdrawn" }
                 p { strong { "Your story is gone from " (at) "." } " That commons deleted its copy and won't take the same one back. Anyone who already read it, or copied it, keeps that. It's still here on your node, and you can share it again." }
-                p { a class="btn-ink" href="/stories/new" { "Write a new story" } }
+                p { a class="btn-action" href="/stories/new" { "Write a new story" } }
             }
         },
         StoryOutcome::Saved => html! {
@@ -126,7 +126,7 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
                             input type="hidden" name="id" value=(id);
                             input type="hidden" name="csrf" value=(o.csrf);
                             input type="hidden" name="commons_url" value=(c);
-                            button class="btn-ink" type="submit" { "Re-share" }
+                            button class="btn-action" type="submit" { "Re-share" }
                         }
                         form method="post" action="/story/withdraw" {
                             input type="hidden" name="id" value=(id);
@@ -157,7 +157,7 @@ fn owner_side(s: &OwnStory, o: &StoryOwner, now: u64) -> Markup {
                             input type="hidden" name="id" value=(id);
                             input type="hidden" name="csrf" value=(o.csrf);
                             input type="hidden" name="commons_url" value=(c);
-                            button class="btn-ink" type="submit" { "Share" }
+                            button class="btn-action" type="submit" { "Share" }
                         }
                     }
                 }

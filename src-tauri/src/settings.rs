@@ -5,7 +5,8 @@
 //!
 //! ```text
 //! app.json        {"role": "node" | "commons", "name": "Studio laptop",
-//!                  "other_name": "Room 4", "practice": true}
+//!                  "other_name": "Room 4", "practice": true,
+//!                  "practice_name": "Tuesday practice"}
 //! node-data/      the node's data folder
 //! commons-data/   the commons' data folder
 //! practice-data/  the practice commons' data folder, while there is one
@@ -39,7 +40,7 @@ pub const SECOND_PORT: u16 = 8081;
 /// The practice commons' port.
 pub const PRACTICE_PORT: u16 = 8082;
 
-/// What the practice commons is called.
+/// What the practice commons is called until it is renamed.
 pub const PRACTICE_NAME: &str = "Practice commons";
 
 /// A server the app can run.
@@ -104,6 +105,10 @@ pub struct Saved {
     /// True while there is a practice commons.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub practice: bool,
+    /// What the practice commons is called, once renamed (Go → Rename
+    /// practice commons…); until then [`PRACTICE_NAME`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_name: Option<String>,
     /// The commons' public address, when it is also reachable from outside
     /// the room (Tailscale Funnel, a reverse proxy), e.g.
     /// `"https://heldincommon.example.ts.net"`. Set by hand in `app.json`;
@@ -126,7 +131,7 @@ impl Saved {
     /// What `kind` is called, if this computer runs it.
     pub fn name_of(&self, kind: Kind) -> Option<&str> {
         match kind {
-            Kind::Practice => self.practice.then_some(PRACTICE_NAME),
+            Kind::Practice => self.practice.then(|| self.practice_name.as_deref().unwrap_or(PRACTICE_NAME)),
             k if self.first() == Some(k) => self.name.as_deref(),
             _ => self.other_name.as_deref().filter(|_| self.ready()),
         }
@@ -278,6 +283,7 @@ pub fn load(base: &Path) -> (Saved, bool) {
         name: file.name.as_deref().and_then(|n| clean_name(n).ok()),
         other_name: file.other_name.as_deref().and_then(|n| clean_name(n).ok()),
         practice: file.practice,
+        practice_name: file.practice_name.as_deref().and_then(|n| clean_name(n).ok()),
         public_address: file.public_address.as_deref().and_then(clean_address),
     };
     let changed = saved != file;
@@ -384,12 +390,17 @@ mod tests {
         assert_eq!(both.running(), vec![Kind::Node, Kind::Commons, Kind::Practice]);
         assert_eq!(both.name_of(Kind::Commons), Some("Room 4"));
         assert_eq!(both.name_of(Kind::Practice), Some(PRACTICE_NAME));
+        let renamed = Saved { practice_name: Some("Tuesday practice".into()), ..both.clone() };
+        assert_eq!(renamed.name_of(Kind::Practice), Some("Tuesday practice"), "a practice commons can be named");
+        let removed = Saved { practice: false, ..renamed };
+        assert_eq!(removed.name_of(Kind::Practice), None, "no name without a practice commons");
 
         let steward = Saved {
             role: Some("commons".into()),
             name: Some("Room 4".into()),
             other_name: Some("Laptop".into()),
             practice: false,
+            practice_name: None,
             public_address: None,
         };
         assert_eq!(steward.running(), vec![Kind::Commons, Kind::Node], "the first-launch role comes first");

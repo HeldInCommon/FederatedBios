@@ -30,10 +30,11 @@ use tauri::Manager;
 
 use commands::{Chosen, Shown};
 use settings::{Kind, Saved};
-use sidecar::{AppConfig, Servers};
+use sidecar::{AppConfig, DefaultCommons, Servers};
 
 /// The Go menu: show each server this computer runs, or set it up; remove
-/// the practice commons; rename the node or commons; and, always, open the
+/// the practice commons; rename the node, commons or practice commons; and,
+/// always, open the
 /// project's site. Rebuilt whenever what the computer runs changes
 /// ([`refresh_menu`]). Before first launch's choice it holds only the site.
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> tauri::Result<tauri::menu::Menu<R>> {
@@ -57,7 +58,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
         go.append(&MenuItem::with_id(app, format!("open:{}", k.key()), text, true, None::<&str>)?)?;
     }
     go.append(&PredefinedMenuItem::separator(app)?)?;
-    for k in [Kind::Node, Kind::Commons].into_iter().filter(|k| saved.runs(*k)) {
+    for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
         let text = format!("Rename {}\u{2026}", k.label().to_lowercase());
         go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
     }
@@ -234,14 +235,20 @@ fn log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 /// system can't give us random bytes for the launch token.
 fn app_config(base: PathBuf) -> Result<AppConfig, rand::Error> {
     let instance_override = std::env::var("HIC_INSTANCE").ok().filter(|s| !s.trim().is_empty());
-    // The default commons to pre-fill: a runtime override, else one baked in
-    // at build time from the HIC_SHARE_DEFAULT CI variable (never committed).
-    let share_default = std::env::var("HIC_SHARE_DEFAULT")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .or_else(|| option_env!("HIC_SHARE_DEFAULT").map(str::to_string))
-        .unwrap_or_default();
+    // The default commons to pre-fill, and its name: a runtime override, else
+    // one baked in at build time from the HIC_SHARE_DEFAULT and
+    // HIC_SHARE_DEFAULT_NAME CI variables (never committed).
+    let share_default = DefaultCommons {
+        url: setting("HIC_SHARE_DEFAULT", option_env!("HIC_SHARE_DEFAULT")),
+        name: setting("HIC_SHARE_DEFAULT_NAME", option_env!("HIC_SHARE_DEFAULT_NAME")),
+    };
     Ok(AppConfig { base, instance_override, share_default, launch_token: network::launch_token()? })
+}
+
+/// A setting from the environment `var` when set, else the value `baked` in
+/// at build time, else blank. Only reads.
+fn setting(var: &str, baked: Option<&str>) -> String {
+    std::env::var(var).ok().filter(|s| !s.trim().is_empty()).or_else(|| baked.map(str::to_string)).unwrap_or_default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

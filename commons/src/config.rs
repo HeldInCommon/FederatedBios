@@ -28,6 +28,9 @@ pub struct Config {
     pub instance: String,
     /// `HIC_SHARE_DEFAULT`: the commons pre-filled in "Share to a commons".
     pub share_default: String,
+    /// `HIC_SHARE_DEFAULT_NAME`: what to call that commons on pages
+    /// ("Held in Common Collective Commons"), instead of its address.
+    pub share_default_name: String,
     /// `HIC_ROLE`, raw. Interpreted by [`crate::role::decide`].
     pub role_env: Option<String>,
     /// `HIC_LAUNCH_TOKEN`: set by the desktop app when it starts this server,
@@ -89,6 +92,7 @@ impl Config {
                 .collect(),
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
+            share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),

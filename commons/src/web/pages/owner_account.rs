@@ -65,7 +65,7 @@ pub(super) fn account_tab(handle: &str, o: &OwnerPanel) -> Markup {
             }
         }
         form method="post" action="/logout" class="account-signout" {
-            button class="btn-ink" type="submit" { "Sign out" }
+            button class="btn-action" type="submit" { "Sign out" }
         }
     }
 }
