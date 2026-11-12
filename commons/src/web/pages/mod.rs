@@ -19,6 +19,7 @@
 //! | `invites.rs` | invite codes made by a member or the steward |
 //! | `federated.rs` | a profile shared in from another node |
 //! | `about.rs` | how this works |
+//! | `schematics.rs` | the diagrams on How this works and Run your own commons |
 //! | `guide.rs` | run your own commons: questions and answers, and a practice commons |
 //! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
 //! | `story.rs` | one story: the author's view with its sharing tools, and a commons' |
@@ -44,6 +45,7 @@ mod parts;
 mod profile;
 mod publish;
 mod rights;
+mod schematics;
 mod sharing;
 mod signin;
 mod stories;

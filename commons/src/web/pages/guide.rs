@@ -9,6 +9,8 @@
 
 use maud::{html, Markup};
 
+use super::schematics::{figure, FEDERATE_SVG, JOIN_SVG, REACH_SVG, SIDE_BY_SIDE_SVG};
+
 /// Asks the app to open (starting it if needed) a practice commons.
 pub const OPEN_PRACTICE: &str = "hic-app://open/practice";
 /// Asks the app to show this computer's commons, setting one up if needed.
@@ -32,18 +34,23 @@ pub fn run_a_commons(in_app: bool) -> Markup {
         section class="prose faq" {
             h2 class="section-h" { "What is a commons?" }
             p { "A directory that people's nodes share to. It lists the profiles they send and the terms they attached. It holds signed copies only: nobody signs up on a commons, and it never holds anyone's keys, so it can't act as them." }
+            (figure(FEDERATE_SVG, html! { "Each person's node sends a " strong { "signed copy" } " to the commons. The originals stay on their own computers; the commons gathers the copies into one directory." }))
 
             h2 class="section-h" { "Who runs one, and what do they do?" }
             p { "Whoever hosts it is its " strong { "steward" } ". The steward decides who gets listed: a newcomer appears once a member vouches for them or the steward approves them. The steward can also make invite codes to send to people. The very first person needs a " strong { "founding invite" } ", which the commons shows its steward until someone uses it. That first person can be you." }
+            (figure(JOIN_SVG, html! { "How someone gets listed: they share, wait on the commons' list, and are listed once a " strong { "member vouches" } " for them or the " strong { "steward approves" } " them." }))
 
             h2 class="section-h" { "Do I give up my node?" }
             p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to your own commons, like anyone else would. Move between them from the " strong { "Go" } " menu or the buttons in the corner of the window." }
+            (figure(SIDE_BY_SIDE_SVG, html! { "One computer, up to three servers, each with its own folder: " strong { "your node" } ", " strong { "a commons" } " your node can share to like anyone else's, and a " strong { "practice" } " commons only you can reach." }))
 
             h2 class="section-h" { "Where can people reach it?" }
             p {
                 strong { "In this room: " } "the desktop app can run a commons on this computer, and people on the same Wi-Fi share to it. It's there while this computer is awake and the app is open, which suits a workshop or a class. "
                 strong { "Online: " } "run it on a server with the Docker image (see " a href=(DOCKER_GUIDE) { "the commons guide" } "). A commons online through a tunnel from this app is coming."
             }
+
+            (figure(REACH_SVG, html! { "How far a commons reaches: a " strong { "practice" } " commons stays on this computer, a " strong { "room" } " commons reaches the same Wi-Fi while the app is open, and an " strong { "online" } " one reaches anyone with its address." }))
 
             h2 class="section-h" { "What does a commons keep?" }
             p { "The copies people share and nothing else. Members-only work is never sent. When someone withdraws a copy, the commons removes it. A copy someone already downloaded stays with them, as with anything shared." }

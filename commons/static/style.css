@@ -867,6 +867,34 @@ a.rail-foot {
   stroke: var(--pink);
 }
 
+.fig-box-blue {
+  stroke: var(--blue);
+}
+
+.fig-box-violet {
+  stroke: var(--violet);
+}
+
+/* The reach rings, widest first (online, room, practice). */
+.fig-ring-jade,
+.fig-ring-blue,
+.fig-ring-violet {
+  fill: none;
+  stroke-width: 5;
+}
+
+.fig-ring-jade {
+  stroke: var(--jade);
+}
+
+.fig-ring-blue {
+  stroke: var(--blue);
+}
+
+.fig-ring-violet {
+  stroke: var(--violet);
+}
+
 .fig-hub {
   stroke: var(--blue);
   stroke-width: 5;
