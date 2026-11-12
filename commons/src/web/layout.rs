@@ -33,6 +33,13 @@ pub struct Site {
 }
 
 impl Site {
+    /// The address to tell people: the public one (`HIC_ALSO_KNOWN_AS`, the
+    /// one people outside the room use) when there is one, else this
+    /// server's own. Shown in the rail and written into invites.
+    pub fn public_url(&self) -> &str {
+        self.also_known_as.first().unwrap_or(&self.base_url)
+    }
+
     /// True when this server is a commons (not a node).
     pub fn is_commons(&self) -> bool {
         self.role == Role::Commons
@@ -46,6 +53,24 @@ pub struct NoticeBar {
     pub csrf: String,
 }
 
+/// Which main-menu link a page belongs to, so the nav can mark it as the
+/// current page (`aria-current`, drawn as a dot above the link).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Section {
+    /// The directory, the front page.
+    Directory,
+    /// The front page as the steward sees it, with their tools.
+    Steward,
+    /// Story lists and story pages.
+    Stories,
+    /// The signed-in member's own profile and its forms.
+    You,
+    /// Signing up (or, on a commons, how to join).
+    Join,
+    /// Signing in.
+    SignIn,
+}
+
 /// One HTML page to send.
 pub struct Page<'a> {
     pub title: &'a str,
@@ -57,12 +82,14 @@ pub struct Page<'a> {
     pub status: StatusCode,
     /// News for the signed-in member, if any.
     pub notices: Option<NoticeBar>,
+    /// The main-menu section this page belongs to, if any.
+    pub section: Option<Section>,
 }
 
 impl<'a> Page<'a> {
     /// A normal, indexable page with status 200.
     pub fn new(title: &'a str, me: Option<&'a str>, body: Markup) -> Page<'a> {
-        Page { title, me, body, noindex: false, status: StatusCode::OK, notices: None }
+        Page { title, me, body, noindex: false, status: StatusCode::OK, notices: None, section: None }
     }
 
     /// Mark this page as not for search engines.
@@ -77,6 +104,12 @@ impl<'a> Page<'a> {
         self
     }
 
+    /// Say which main-menu section this page belongs to.
+    pub fn at(mut self, section: Section) -> Self {
+        self.section = Some(section);
+        self
+    }
+
     /// Use a different status code.
     pub fn status(mut self, status: StatusCode) -> Self {
         self.status = status;
@@ -84,35 +117,81 @@ impl<'a> Page<'a> {
     }
 }
 
-/// The coloured bar at the top of every page, saying whether this is
-/// someone's node, a shared commons or a practice commons, so nobody confuses
-/// them.
-fn role_banner(site: &Site) -> Markup {
-    let (class, label) = match (site.is_commons(), site.practice) {
-        (true, true) => ("role-practice", "Practice commons"),
-        (true, false) => ("role-commons", "Shared commons"),
-        (false, _) => ("role-node", "Your node"),
-    };
+/// Which of the eight quilt backgrounds a page shows (1 to 8), from its
+/// title: the same page always gets the same quilt, different pages usually
+/// differ. FNV-1a, a simple and stable hash (the standard library's hasher
+/// may change between Rust versions, which would reshuffle every page).
+pub fn quilt_for(title: &str) -> usize {
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in title.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    (hash % 8) as usize + 1
+}
+
+/// What kind of server this is, as the rail names it, and the class that
+/// picks its starburst colour: your node, a shared commons or a practice
+/// commons, so nobody confuses them.
+fn server_kind(site: &Site) -> (&'static str, &'static str) {
+    match (site.is_commons(), site.practice) {
+        (true, true) => ("is-practice", "Practice commons"),
+        (true, false) if site.in_app => ("is-commons", "Your commons"),
+        (true, false) => ("is-commons", "Shared commons"),
+        (false, _) => ("is-node", "Your node"),
+    }
+}
+
+/// The side rail: the logo, the server this page belongs to, a slot the
+/// desktop app fills with the other servers on this computer (see
+/// `src-tauri/src/links.rs`), and a line about where this server reaches.
+fn rail(site: &Site) -> Markup {
+    let (kind, label) = server_kind(site);
     html! {
-        div class={ "role-bar " (class) } {
-            span class="role-dot" {}
-            span class="role-label" { (label) }
-            @if !site.instance.is_empty() { span class="role-instance" { "· " (site.instance) } }
-            @if !site.is_commons() && !site.share_default.is_empty() {
-                a class="role-link" href=(site.share_default) { "Visit the commons \u{2197}" }
+        aside class="rail" {
+            a class="wordmark" href="/" {
+                img class="wordmark-logo" src="/logo.png" alt="Held in Common" width="173" height="46";
+                span class="tagline" { "Federated data commons for creative communities" }
             }
-            @if site.is_commons() {
-                span class="role-address" {
-                    "Nodes share to "
-                    @for url in &site.also_known_as { code { (url) } " or " }
-                    code { (site.base_url) }
+            section class="servers" aria-labelledby="hic-servers-label" {
+                p class="rail-label" id="hic-servers-label" {
+                    @if site.in_app { "On this computer" } @else { "You're on" }
                 }
+                div class={ "server-card is-here " (kind) } aria-current="true" {
+                    span class="star" aria-hidden="true" {}
+                    span class="server-text" {
+                        span class="server-name" { (label) }
+                        @if !site.instance.is_empty() {
+                            span class="server-sub" {
+                                (site.instance) @if site.in_app { ", open now" }
+                            }
+                        }
+                    }
+                }
+                div class="server-list" id="hic-servers" hidden {}
+            }
+            @if site.is_commons() && site.practice {
+                p class="rail-foot" { "Only this computer can reach a practice commons. Nothing here is seen by anyone else." }
+            } @else if site.is_commons() {
+                p class="rail-foot" {
+                    "Nodes share to "
+                    code { (site.public_url()) }
+                }
+            } @else if !site.share_default.is_empty() {
+                a class="rail-foot" href=(site.share_default) { "Visit the commons \u{2197}" }
             }
         }
     }
 }
 
-/// The full HTML document around a page body.
+/// `Some("page")` when `page` belongs to `section`, for a nav link's
+/// `aria-current` attribute; `None` leaves the attribute off.
+fn current(page: &Page, section: Section) -> Option<&'static str> {
+    (page.section == Some(section)).then_some("page")
+}
+
+/// The full HTML document around a page body: the quilt behind, the rail on
+/// the left, and the page panel (nav, news, the page, the footer).
 fn frame(site: &Site, page: &Page) -> Markup {
     html! {
         (DOCTYPE)
@@ -127,52 +206,48 @@ fn frame(site: &Site, page: &Page) -> Markup {
                 link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet";
                 link rel="stylesheet" href="/style.css";
             }
-            body {
-                (role_banner(site))
-                main class="page" {
-                    nav class="topbar" {
-                        a class="wordmark" href="/" {
-                            img class="wordmark-logo" src="/logo.png" alt="Held in Common" width="173" height="46";
-                            span class="tagline" { "Federated data commons for creative communities" }
-                        }
-                        span class="topbar-links" {
-                            a href="/" { "Directory" }
-                            a href="/stories" { "Stories" }
+            body class={ "quilt-" (quilt_for(page.title)) } {
+                div class="frame" {
+                    (rail(site))
+                    div class="stage" {
+                        nav class="topbar-links" aria-label="Main" {
+                            a href="/" aria-current=[current(page, Section::Directory)] { "Directory" }
+                            a href="/stories" aria-current=[current(page, Section::Stories)] { "Stories" }
                             @if page.me == Some("@steward") {
-                                a href="/" { "Steward view" }
+                                a href="/" aria-current=[current(page, Section::Steward)] { "Steward view" }
                                 form method="post" action="/logout" class="inline-form" {
                                     button class="linklike" type="submit" { "Sign out" }
                                 }
                             } @else if let Some(h) = page.me {
-                                a href={ "/@" (h) } { "@" (h) }
+                                a href={ "/@" (h) } aria-current=[current(page, Section::You)] { "@" (h) }
                                 form method="post" action="/logout" class="inline-form" {
                                     button class="linklike" type="submit" { "Sign out" }
                                 }
                             } @else if site.is_commons() {
-                                a href="/join" { "Run a node to join" }
+                                a href="/join" aria-current=[current(page, Section::Join)] { "Run a node to join" }
                             } @else {
-                                a href="/join" { "Add your profile" }
-                                a href="/login" { "Sign in" }
+                                a href="/join" aria-current=[current(page, Section::Join)] { "Add your profile" }
+                                a href="/login" aria-current=[current(page, Section::SignIn)] { "Sign in" }
                             }
                             a href=(PROJECT_URL) { "About the project \u{2197}" }
                         }
-                    }
-                    @if let Some(n) = &page.notices {
-                        section class="notice-bar" role="status" {
-                            @for t in &n.texts { p { (t) } }
-                            form method="post" action="/notices/dismiss" {
-                                input type="hidden" name="csrf" value=(n.csrf);
-                                button class="secondary" type="submit" { "Dismiss" }
+                        @if let Some(n) = &page.notices {
+                            section class="notice-bar" role="status" {
+                                @for t in &n.texts { p { (t) } }
+                                form method="post" action="/notices/dismiss" {
+                                    input type="hidden" name="csrf" value=(n.csrf);
+                                    button class="secondary" type="submit" { "Dismiss" }
+                                }
                             }
                         }
-                    }
-                    (page.body)
-                    footer class="site-foot" {
-                        span { "A federated commons for creative data." }
-                        span class="foot-links" {
-                            @if !site.is_commons() { a href="/run-a-commons" { "Run your own commons" } }
-                            a href="/about" { "How this works" }
-                            a href=(PROJECT_URL) { "About the project \u{2197}" }
+                        main class="page" { (page.body) }
+                        footer class="site-foot" {
+                            span { "A federated commons for creative data." }
+                            span class="foot-links" {
+                                @if !site.is_commons() { a href="/run-a-commons" { "Run your own commons" } }
+                                a href="/about" { "How this works" }
+                                a href=(PROJECT_URL) { "About the project \u{2197}" }
+                            }
                         }
                     }
                 }
@@ -190,6 +265,18 @@ pub fn render(site: &Site, page: Page) -> Response {
         resp.headers_mut().insert("x-robots-tag", HeaderValue::from_static("noindex"));
     }
     resp
+}
+
+/// A decorative colour for a card, picked from its key so a member keeps the
+/// same colour everywhere: one of the four palette tones. Decoration only:
+/// where colour means something (reach), the card also says it in words.
+pub fn tone_for_key(key_hex: &str) -> &'static str {
+    /// The four palette tones a card can take (classes in style.css).
+    const TONES: [&str; 4] = ["tone-pink", "tone-blue", "tone-jade", "tone-violet"];
+    // The sum of the first twelve hex digits spreads tones more evenly than
+    // one digit would.
+    let sum: u32 = key_hex.chars().take(12).filter_map(|c| c.to_digit(16)).sum();
+    TONES[sum as usize % TONES.len()]
 }
 
 /// The coloured label for a reach.
@@ -304,10 +391,63 @@ mod tests {
         assert!(m.contains("Shared commons"));
         let public = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
         let m = frame(&public, &Page::new("t", None, html! {})).into_string();
+        assert!(m.contains("Nodes share to <code>https://hic.tail.ts.net</code>"), "only the public address");
+        assert!(!m.contains("<code>http://c</code>"), "not the local one as well");
+    }
+
+    #[test]
+    fn each_page_gets_a_stable_quilt_and_pages_spread_across_them() {
+        assert_eq!(quilt_for("The commons"), quilt_for("The commons"), "the same page, the same quilt");
+        let titles =
+            ["The commons", "Stories", "Sign in", "Join", "Your recovery code", "Publish", "Invite code", "Vouched"];
+        let quilts: std::collections::HashSet<usize> = titles.iter().map(|t| quilt_for(t)).collect();
+        assert!(quilts.iter().all(|q| (1..=8).contains(q)));
+        assert!(quilts.len() >= 4, "eight pages use at least four different quilts: {quilts:?}");
+        let page = frame(&site(Role::Node), &Page::new("Stories", None, html! {})).into_string();
+        assert!(page.contains(&format!("class=\"quilt-{}\"", quilt_for("Stories"))));
+    }
+
+    #[test]
+    fn the_rail_names_this_server_and_leaves_a_slot_for_the_others() {
+        let node = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
+        assert!(node.contains("Your node") && node.contains("You're on"));
+        assert!(node.contains(r#"id="hic-servers""#), "the app fills this slot");
+        let in_app = Site { in_app: true, ..site(Role::Commons) };
+        let commons = frame(&in_app, &Page::new("t", None, html! {})).into_string();
         assert!(
-            m.contains("<code>https://hic.tail.ts.net</code> or <code>http://c</code>"),
-            "the public address comes first"
+            commons.contains("Your commons") && commons.contains("On this computer") && commons.contains("open now")
         );
+    }
+
+    #[test]
+    fn a_card_keeps_its_tone_and_tones_vary_by_key() {
+        assert_eq!(tone_for_key("c74bb4aca6fc"), tone_for_key("c74bb4aca6fc"), "the same key, the same tone");
+        let tones: std::collections::HashSet<&str> = ["0", "1", "2", "3"].iter().map(|k| tone_for_key(k)).collect();
+        assert_eq!(tones.len(), 4);
+        assert_eq!(tone_for_key(""), "tone-pink", "an empty key still gets a tone");
+    }
+
+    #[test]
+    fn the_nav_marks_only_the_section_you_are_in() {
+        let page = frame(&site(Role::Node), &Page::new("t", None, html! {}).at(Section::Stories)).into_string();
+        assert!(page.contains(r#"href="/stories" aria-current="page""#));
+        assert_eq!(page.matches(r#"aria-current="page""#).count(), 1, "one section at a time");
+        let none = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
+        assert!(!none.contains(r#"aria-current="page""#), "a page outside the menu marks nothing");
+        let steward = Page::new("t", Some("@steward"), html! {}).at(Section::Steward);
+        let page = frame(&site(Role::Commons), &steward).into_string();
+        assert!(page.contains(r#"aria-current="page">Steward view"#), "the steward view, not the directory");
+        assert_eq!(page.matches(r#"aria-current="page""#).count(), 1);
+    }
+
+    #[test]
+    fn people_are_told_the_public_address_when_there_is_one() {
+        assert_eq!(site(Role::Commons).public_url(), "http://c", "no public address: this server's own");
+        let public = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
+        assert_eq!(public.public_url(), "https://hic.tail.ts.net");
+        let invite = crate::web::pages::steward_invite(&public, "hic-invite-x").into_string();
+        assert!(invite.contains("hic.tail.ts.net"), "the emailed invite names the public address");
+        assert!(!invite.contains("http%3A%2F%2Fc"), "not the local one");
     }
 
     #[test]

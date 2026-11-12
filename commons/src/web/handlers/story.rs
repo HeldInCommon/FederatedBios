@@ -14,7 +14,7 @@ use crate::model::{HandleRec, Reach};
 use crate::now;
 use crate::sessions::Session;
 use crate::story::{self, OwnStory};
-use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page};
+use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page, Section};
 use crate::web::pages::{self, StoryOwner};
 
 /// May this viewer read a story on this node? Members-only stories are for
@@ -82,7 +82,10 @@ pub async fn own_story(
     let done = owner.as_ref().and_then(|_| outcome(&q));
     let page = pages::own_story(&s, owner.as_ref(), done.as_ref(), now());
     let me = me.map(|m| m.handle);
-    render(&st.site, Page::new(&s.story.title, me.as_deref(), page).noindex(s.story.reach() == Reach::Commons))
+    render(
+        &st.site,
+        Page::new(&s.story.title, me.as_deref(), page).noindex(s.story.reach() == Reach::Commons).at(Section::Stories),
+    )
 }
 
 /// `GET /story/{id}/text` — the story as a plain text file to keep.

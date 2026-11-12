@@ -235,6 +235,19 @@ fn notify_news(app: tauri::AppHandle, port: u16, token: String) {
     });
 }
 
+/// The main window's size, in logical pixels, for a screen of `screen`
+/// logical pixels `(width, height)`: about 80% of the width and 85% of the
+/// height, so everything fits with room around it, but no bigger than
+/// 1440×1000 (a 4K screen would otherwise give a window too wide to read) and
+/// no smaller than 760×560. On a screen smaller than that minimum, the whole
+/// screen. Pages scroll inside the window when they're longer.
+pub fn window_size(screen: (f64, f64)) -> (f64, f64) {
+    let (sw, sh) = screen;
+    let width = (sw * 0.8).clamp(760.0, 1440.0).min(sw);
+    let height = (sh * 0.85).clamp(560.0, 1000.0).min(sh);
+    (width.round(), height.round())
+}
+
 /// The window title while `kind` is shown.
 pub fn title_for(kind: Kind) -> String {
     let name = match kind {
@@ -319,6 +332,14 @@ mod tests {
         assert_eq!(start_page(Kind::Node), "/");
         assert_eq!(open_url(Kind::Practice, 8082, "t0k"), "http://127.0.0.1:8082/steward?launch=t0k");
         assert_eq!(open_url(Kind::Node, 8080, "t0k"), "http://127.0.0.1:8080/", "a node needs no token");
+    }
+
+    #[test]
+    fn the_window_fits_the_screen_with_room_around_it() {
+        assert_eq!(window_size((1440.0, 900.0)), (1152.0, 765.0), "a laptop");
+        assert_eq!(window_size((2865.0, 1611.0)), (1440.0, 1000.0), "a 4K screen at 134%: capped");
+        assert_eq!(window_size((800.0, 600.0)), (760.0, 560.0), "small: the minimum");
+        assert_eq!(window_size((700.0, 500.0)), (700.0, 500.0), "tiny: never bigger than the screen");
     }
 
     #[test]

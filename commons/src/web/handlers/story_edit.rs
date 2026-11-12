@@ -16,7 +16,7 @@ use crate::governance::DEFAULT_LICENSE;
 use crate::now;
 use crate::sessions;
 use crate::story::{self, OwnStory, TEXT_MAX, TITLE_MAX};
-use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page};
+use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page, Section};
 use crate::web::pages;
 
 /// The terms a new story starts with, as on the design: listed in the
@@ -32,7 +32,10 @@ pub async fn story_form(State(st): State<Shared>, headers: HeaderMap) -> Respons
         return not_found(&st.site, None);
     }
     let Some(s) = session(&st, &headers) else { return redirect("/login") };
-    render(&st.site, Page::new("Write a story", Some(&s.handle), pages::write_form(&s.handle, &s.csrf, None)))
+    render(
+        &st.site,
+        Page::new("Write a story", Some(&s.handle), pages::write_form(&s.handle, &s.csrf, None)).at(Section::Stories),
+    )
 }
 
 /// `POST /stories/new` — sign the story with the member's key, keep it on
@@ -95,7 +98,7 @@ pub async fn story_edit_form(State(st): State<Shared>, Path(id): Path<String>, h
         Err(resp) => return *resp,
     };
     let body = pages::write_form(&sess.handle, &sess.csrf, Some(&s.story));
-    render(&st.site, Page::new("Edit story", Some(&sess.handle), body))
+    render(&st.site, Page::new("Edit story", Some(&sess.handle), body).at(Section::Stories))
 }
 
 /// `POST /story/{id}/edit` — save the new words as a new signed version.
@@ -133,7 +136,7 @@ pub async fn rights_form(State(st): State<Shared>, Path(id): Path<String>, heade
     };
     let suggested = known_commons_for(&st, &rec).into_iter().next();
     let body = pages::rights_form(&s.story, &sess.csrf, suggested.as_deref());
-    render(&st.site, Page::new("Who can read it", Some(&sess.handle), body))
+    render(&st.site, Page::new("Who can read it", Some(&sess.handle), body).at(Section::Stories))
 }
 
 /// `POST /story/{id}/rights` — save the terms (a new signed version if they

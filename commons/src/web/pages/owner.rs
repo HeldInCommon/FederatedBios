@@ -75,6 +75,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
         NextStep::Done => html! {},
         NextStep::Publish => html! {
             section class="next-step" {
+                span class="star step-1" aria-hidden="true" { "1" }
                 p class="next-step-label" { "Next step" }
                 h2 { "Publish your profile." }
                 p class="next-step-lede" { "Say who you are, and choose who can see it and how it can be used. It stays on this computer until you share it." }
@@ -83,6 +84,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
         },
         NextStep::Share(Some(c)) => html! {
             section class="next-step" {
+                span class="star step-2" aria-hidden="true" { "2" }
                 p class="next-step-label" { "Next step" }
                 h2 { "Share your profile to " (host_label(&c)) "." }
                 p class="next-step-lede" { "Send a signed copy so people there can find you. The original stays on this computer, and you can withdraw the copy any time." }
@@ -99,6 +101,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
         },
         NextStep::Share(None) => html! {
             section class="next-step" {
+                span class="star step-2" aria-hidden="true" { "2" }
                 p class="next-step-label" { "Next step" }
                 h2 { "Share your profile to a commons." }
                 p class="next-step-lede" { "Ask the person running your commons for its address (it looks like http://192.168.1.5:8081), then share a signed copy there." }
@@ -106,7 +109,8 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
             }
         },
         NextStep::Waiting(on) => html! {
-            section class="status-block" role="status" {
+            section class="next-step status-block" role="status" {
+                span class="star step-3" aria-hidden="true" { "3" }
                 p class="status-label" { "Waiting to be listed" }
                 h2 { @for (i, c) in on.iter().enumerate() { @if i > 0 { ", " } (host_label(c)) } " has your profile" }
                 p { "You'll appear once someone listed there vouches for you, or its steward approves you. Send someone you know there these two things:" }
@@ -122,6 +126,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
         },
         NextStep::Backup => html! {
             section class="next-step" {
+                span class="star step-4" aria-hidden="true" { "4" }
                 p class="next-step-label" { "Next step" }
                 h2 { "Back up your identity." }
                 p class="next-step-lede" { "Your keys live only on this computer. A backup file, locked with your passphrase, brings @" (handle) " back on another one." }

@@ -8,7 +8,7 @@ use super::notices::notices_for;
 use super::session;
 use crate::app::{AppState, Shared};
 use crate::model::Reach;
-use crate::web::layout::{render, Page};
+use crate::web::layout::{render, Page, Section};
 use crate::web::pages::{self, Card};
 
 /// `GET /` — the directory.
@@ -48,7 +48,9 @@ pub async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response
         if st.site.is_commons() { None } else { sess.as_ref().and_then(|s| signed_in(&st, &s.handle, &s.csrf)) };
     let body = pages::directory(&st.site, &cards, &remotes, &pending, &viewer, signed_in.as_ref());
     let notices = notices_for(&st, &headers);
-    render(&st.site, Page::new("Directory", me.as_deref(), body).notices(notices))
+    // For the steward this page is the steward view, so that's the section.
+    let section = if view.is_some() { Section::Steward } else { Section::Directory };
+    render(&st.site, Page::new("Directory", me.as_deref(), body).notices(notices).at(section))
 }
 
 /// What the front page offers a signed-in member (see `pages::your_next`).

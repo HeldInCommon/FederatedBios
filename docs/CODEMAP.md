@@ -65,6 +65,7 @@ Writes happen in clearly named places that say what they change.
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css`, `avatar.js` and `password.js`, compiled into the binary. | — |
+| `../static/quilt/` | The eight quilt backgrounds (`quilt-1.svg` … `quilt-8.svg`), made by `scripts/make-quilts.py`, served at `/quilt/N.svg`; `layout::quilt_for` picks one per page from its title. | — |
 | `../tests/http/` | In-process HTTP tests of the whole router, one file per behaviour (`sharing.rs`, `vouching.rs`, `steward.rs`, …); helpers in `common.rs`. | — |
 | `../tests/spec_vectors.rs` | Checks `docs/spec/vectors/` against this implementation. | — |
 

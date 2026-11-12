@@ -8,7 +8,7 @@ use super::notices::notices_for;
 use super::{readable_profile, session};
 use crate::app::Shared;
 use crate::model::Reach;
-use crate::web::layout::{not_found, render, server_error, Page};
+use crate::web::layout::{not_found, render, server_error, Page, Section};
 use crate::web::pages::{self, OwnerPanel};
 
 /// `?tab=` on a member's own profile.
@@ -57,5 +57,10 @@ pub async fn profile(
     let body = pages::profile(&rec, version.as_ref(), readable.as_ref(), owner.as_ref());
     let title = format!("@{}", rec.handle);
     let notices = notices_for(&st, &headers);
-    render(&st.site, Page::new(&title, me, body).noindex(noindex).notices(notices))
+    let mut page = Page::new(&title, me, body).noindex(noindex).notices(notices);
+    // Your own profile is "you" in the menu; someone else's is no section.
+    if owner.is_some() {
+        page = page.at(Section::You);
+    }
+    render(&st.site, page)
 }

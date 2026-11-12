@@ -7,7 +7,7 @@ use super::origin_host;
 use crate::canonical::short;
 use crate::keys::keyid;
 use crate::model::{display_name_or_handle, HandleRec, PendingShare, Reach, RemoteEntry, Version};
-use crate::web::layout::{host_label, reach_badge, reach_bar_class, Site};
+use crate::web::layout::{host_label, reach_badge, reach_bar_class, tone_for_key, Site};
 
 /// A member's card: the record and the version shown (with its readable
 /// profile, if the viewer may read it).
@@ -117,6 +117,18 @@ pub enum Viewer<'a> {
     Steward(&'a StewardView),
 }
 
+/// The front page's headline: "The commons" on a commons; on a node, the
+/// name its owner picked ("Studio laptop node"), or "Your node" without one.
+pub fn headline(site: &Site) -> String {
+    if site.is_commons() {
+        "The commons".to_string()
+    } else if site.instance.trim().is_empty() {
+        "Your node".to_string()
+    } else {
+        format!("{} node", site.instance.trim())
+    }
+}
+
 /// The directory: shared-in profiles first, then this server's members.
 pub fn directory(
     site: &Site,
@@ -133,7 +145,7 @@ pub fn directory(
     html! {
         @if let Some(v) = steward { (steward_panel(v)) }
         header class="intro" {
-            h1 { "The commons" }
+            h1 { (headline(site)) }
             p class="lede" { "Creators keep their work on their own node. The commons lets it travel — and lets the community set the terms." }
         }
         @if cards.is_empty() && remotes.is_empty() {
@@ -146,7 +158,7 @@ pub fn directory(
         div class="dir-grid" {
             @for r in remotes {
                 a class="dir-card" href={ "/federated/" (keyid(&r.ed_pub)) } {
-                    span class="dir-bar vis-federated" {}
+                    span class={ "dir-bar " (tone_for_key(&r.ed_pub)) } {}
                     span class="dir-body" {
                         @if !r.profile.avatar.is_empty() { img class="dir-avatar" src=(r.profile.avatar) alt=""; }
                         span class="dir-name" { (display_name_or_handle(&r.profile.name, &r.handle)) }
@@ -243,6 +255,22 @@ fn pending_list(pending: &[PendingShare], steward: Option<&StewardView>) -> Mark
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_node_is_headed_by_the_name_its_owner_picked() {
+        let site = |role, instance: &str| Site {
+            role,
+            instance: instance.into(),
+            base_url: "http://n".into(),
+            also_known_as: Vec::new(),
+            share_default: String::new(),
+            practice: false,
+            in_app: true,
+        };
+        assert_eq!(headline(&site(crate::role::Role::Node, "phoenixs_machine")), "phoenixs_machine node");
+        assert_eq!(headline(&site(crate::role::Role::Node, "  ")), "Your node");
+        assert_eq!(headline(&site(crate::role::Role::Commons, "heldincommon")), "The commons");
+    }
 
     #[test]
     fn a_signed_in_member_is_offered_their_own_next_thing() {

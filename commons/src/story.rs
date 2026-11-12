@@ -189,6 +189,14 @@ impl HeldStory {
     }
 }
 
+/// The stories in `held` signed by `author` (a public key), newest version
+/// first: what a member has shared to this commons, for their profile page.
+pub fn by_author<'a>(held: &'a [HeldStory], author: &str) -> Vec<&'a HeldStory> {
+    let mut theirs: Vec<&HeldStory> = held.iter().filter(|h| h.author() == author).collect();
+    theirs.sort_by_key(|h| std::cmp::Reverse(h.created_at()));
+    theirs
+}
+
 /// What remains on a commons after a story is withdrawn.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StoryTombstone {
@@ -554,6 +562,19 @@ mod tests {
         let tomb = [StoryTombstone { author: k.ed_pub.clone(), id: ID.into(), withdrawn_at: 150 }];
         assert_eq!(admit(&s, &v1, &me, &[], &tomb), StoryAdmission::Stale, "a replay after withdrawal");
         assert_eq!(admit(&s, &v2, &me, &[], &tomb), StoryAdmission::Accept, "a newer version after withdrawal");
+    }
+
+    #[test]
+    fn a_profile_lists_only_its_authors_stories_newest_first() {
+        let (ada, bea) = (keys::generate(), keys::generate());
+        let held_by = |k: &keys::NewKeys, handle_: &str, at: u64| {
+            let s = story(handle_);
+            HeldStory { story: s.clone(), signed: sign(&s, &k.ed_pub, &k.ed_priv, at).unwrap(), received_at: 0 }
+        };
+        let held = [held_by(&ada, "ada", 100), held_by(&bea, "bea", 200), held_by(&ada, "ada", 300)];
+        let theirs = by_author(&held, &ada.ed_pub);
+        assert_eq!(theirs.iter().map(|h| h.created_at()).collect::<Vec<_>>(), vec![300, 100]);
+        assert!(by_author(&held, "someone-else").is_empty());
     }
 
     #[test]

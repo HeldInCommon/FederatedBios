@@ -50,6 +50,25 @@ async fn a_listed_member_shares_a_story_and_anyone_can_read_it() {
     assert!(page.text.contains("checked when it arrived"));
 }
 
+/// A member's profile on a commons shows everything they've shared there,
+/// and nobody else's.
+#[tokio::test]
+async fn a_members_profile_lists_their_stories_and_only_theirs() {
+    let (commons, _, ada) = commons_with_ada().await;
+    let bea = person("bea");
+    assert!(send(&commons, post_json("/inbox", &share_of(&bea, None))).await.status.is_success());
+    send(&commons, post_json("/inbox", &story_share(&ada, ID, 100, "Night bus"))).await;
+
+    let kid = |rec: &hic_commons::model::HandleRec| hic_commons::keys::keyid(&rec.ed_pub);
+    let adas = send(&commons, get(&format!("/federated/{}", kid(&ada)), None)).await.text;
+    assert!(adas.contains("Stories by @ada") && adas.contains("Night bus"), "ada's story is on her profile");
+    assert!(adas.contains(&format!("/stories/{}/{ID}", kid(&ada))), "and links to it");
+
+    let beas = send(&commons, get(&format!("/federated/{}", kid(&bea)), None)).await.text;
+    assert!(!beas.contains("Night bus"), "nobody else's stories");
+    assert!(beas.contains("@bea hasn't shared any stories here yet."));
+}
+
 #[tokio::test]
 async fn someone_not_listed_cannot_share_a_story() {
     let (commons, _, _) = commons_with_ada().await;
@@ -160,6 +179,13 @@ async fn writing_a_story_on_a_node() {
     let page = send(&node, get(&format!("/story/{id}"), Some(&sid))).await;
     assert!(page.text.contains("Night bus"));
     assert!(page.text.contains("Share your profile to a commons first"), "not shared anywhere yet");
+
+    // Writing another is always the first card; signed out, it says to sign in.
+    let list = send(&node, get("/stories", Some(&sid))).await.text;
+    assert!(list.contains(r#"class="new-story-card" href="/stories/new""#), "a card to write another");
+    assert!(list.contains(&format!(r#"class="card-edit" href="/story/{id}/edit""#)), "each of yours can be edited");
+    let out = send(&node, get("/stories", None)).await.text;
+    assert!(out.contains("Write a new story") && out.contains("Sign in first"));
 
     let text = send(&node, get(&format!("/story/{id}/text"), None)).await;
     assert_eq!(text.status, StatusCode::OK);

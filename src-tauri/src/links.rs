@@ -60,8 +60,14 @@ pub struct Place {
     /// view goes through the app (`hic-app://open/…`), which adds the launch
     /// token, so the token is never written into a page (ADR 0023).
     pub url: String,
-    /// The colour of the role bar on that server's pages.
+    /// The colour of the role bar on that server's pages (used by the
+    /// corner buttons on pages elsewhere).
     pub tone: &'static str,
+    /// Which kind of server it is (`node`, `commons`, `practice`): the rail's
+    /// card picks its starburst colour from this.
+    pub kind: &'static str,
+    /// What this computer calls it ("Studio laptop"), or empty.
+    pub name: String,
 }
 
 /// The buttons for a page whose own server is `here` (`None` for a page
@@ -90,19 +96,41 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
                 Kind::Commons => "#8b3fd9",
                 Kind::Practice => "#1f5cff",
             },
+            kind: k.key(),
+            name: saved.name_of(k).unwrap_or_default().to_string(),
         })
         .collect()
 }
 
-/// The script the app adds to a server page to show `places` in the
-/// bottom-right corner (or to remove an earlier row, when there are none).
-/// The labels and addresses go in as JSON, so nothing in them can break out.
+/// The script the app adds to a server page to show `places`. Pages served
+/// by Held in Common have an "On this computer" slot in their side rail
+/// (`#hic-servers`): the script fills it with one card per server and shows
+/// it. Pages elsewhere have no slot, so the script adds a row of buttons in
+/// the bottom-right corner instead: the way back. Running it again replaces
+/// what it added before. The labels and addresses go in as JSON and are set
+/// as text, so nothing in them can break out.
 pub fn switcher_js(places: &[Place]) -> String {
     let data = serde_json::to_string(places).unwrap_or_else(|_| "[]".into());
     format!(
         r#"(function(){{
   var id='hic-switch', places={data};
   var old=document.getElementById(id); if(old){{old.remove();}}
+  var slot=document.getElementById('hic-servers');
+  if(slot){{
+    while(slot.firstChild){{slot.removeChild(slot.firstChild);}}
+    places.forEach(function(p){{
+      var a=document.createElement('a'); a.href=p.url; a.className='server-card'; a.setAttribute('data-kind',p.kind);
+      var star=document.createElement('span'); star.className='star'; star.setAttribute('aria-hidden','true');
+      var text=document.createElement('span'); text.className='server-text';
+      var name=document.createElement('span'); name.className='server-name'; name.textContent=p.label;
+      text.appendChild(name);
+      if(p.name){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.name; text.appendChild(sub);}}
+      a.appendChild(star); a.appendChild(text); slot.appendChild(a);
+    }});
+    slot.hidden=!places.length;
+    var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
+    return;
+  }}
   if(!places.length||!document.body){{return;}}
   var bar=document.createElement('nav'); bar.id=id; bar.setAttribute('aria-label','Your servers on this computer');
   bar.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:calc(100vw - 24px);';
@@ -153,6 +181,14 @@ mod tests {
     }
 
     #[test]
+    fn each_rail_card_knows_its_kind_and_name() {
+        let s = saved(Some("Room 4"), false);
+        let from_node = places(&s, Some(Kind::Node));
+        assert_eq!(from_node.len(), 1);
+        assert_eq!((from_node[0].kind, from_node[0].name.as_str()), ("commons", "Room 4"));
+    }
+
+    #[test]
     fn a_node_on_its_own_has_no_switcher_but_elsewhere_has_a_way_back() {
         let s = saved(None, false);
         assert!(places(&s, Some(Kind::Node)).is_empty());
@@ -182,8 +218,17 @@ mod tests {
 
     #[test]
     fn labels_cannot_break_out_of_the_script() {
-        let js = switcher_js(&[Place { label: "'); alert(1); ('".into(), url: "x".into(), tone: "#000" }]);
+        let evil = "'); alert(1); ('";
+        let js = switcher_js(&[Place {
+            label: evil.into(),
+            url: "x".into(),
+            tone: "#000",
+            kind: "node",
+            name: evil.into(),
+        }]);
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
+        assert!(js.contains(r#""name":"'); alert(1); ('""#), "the name too");
+        assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
         assert!(switcher_js(&[]).contains("places=[]"));
     }
 }

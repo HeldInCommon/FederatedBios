@@ -18,6 +18,8 @@ A signed-in member's profile page showed everything at once: update, waiting, sh
 
 **Update (2026-11-11):** the **People** tab is now always shown, so members can find vouching (Phoenix found it "gone" while not yet listed). Until a member is listed somewhere it explains how to get listed (publish, share, or wait for a vouch) instead of showing the invite and vouch forms, which a commons would refuse.
 
+**Update (2026-11-12): a new look.** The heldincommon.org look above is replaced by the design Phoenix approved on 12 November: each page floats on a generated "quilt" of card patterns (one of eight, chosen by the page's title; `scripts/make-quilts.py`), dealt mostly around the edges and dialled right back on phones. The rail (logo, this computer's servers) and the page panel are rounded; everything inside is square and chunky, with no thin lines, and cards rise onto a hard ink shadow only under the pointer. Oxblood is used only for things that need someone to act (the next step, people waiting for a vouch). The ramp's next-step card carries its step number in a starburst, a different colour for each step; hue never carries meaning alone.
+
 ## Why
 The rules from the review: one next step at a time; unlock by what happened, never by a setting; nothing disappears once shown for a reason that still holds; defaults over decisions, but rights explained in full for workshops; rare, risky actions out of the way.
 
