@@ -92,7 +92,7 @@
   --focus: 2px solid var(--blue);
 
   /* A card rising onto a hard ink shadow, as on heldincommon.org's model landscape */
-  --lift: translate(-4px, -4px);
+  --lift-by: -4px; /* how far a card or button rises on hover (top and left) */
   --shadow-lift: 9px 9px 0 var(--ink);
   --measure: 70ch; /* longest comfortable line of text */
   --panel-width: 640px;
@@ -198,9 +198,6 @@ code,
   border-radius: 0;
   font: 700 var(--text-base) / 1.2 var(--font-text);
   text-decoration: none;
-  transition:
-    transform 0.13s ease,
-    box-shadow 0.13s ease;
 }
 
 .primary {
@@ -224,7 +221,8 @@ code,
 .primary:focus-visible,
 .secondary:focus-visible {
   box-shadow: var(--shadow-lift);
-  transform: var(--lift);
+  top: var(--lift-by);
+  left: var(--lift-by);
 }
 
 .secondary-link {
@@ -381,32 +379,27 @@ fieldset {
 
 /* Lift: a card rises onto a hard ink shadow under the pointer or keyboard
    focus, like the model cards on heldincommon.org's landscape page. */
-.dir-card,
-.story-card {
-  transition:
-    transform 0.13s ease,
-    box-shadow 0.13s ease;
-}
-
 .dir-card:hover,
 .dir-card:focus-visible,
 .story-card:not(.is-withdrawn):hover,
 .story-card:not(.is-withdrawn):focus-within {
   box-shadow: var(--shadow-lift);
-  transform: var(--lift);
+  top: var(--lift-by);
+  left: var(--lift-by);
 }
 
-/* Everything that lifts gets its own compositing layer, so the browser
-   redraws it whole as it settles back down. Without this, WebKit (the
-   desktop app's web view) can leave a thin grey trace of the shadow behind
-   on screens with fractional scaling. */
+/* Everything that lifts rises by position (top and left), instantly, never
+   by an animated transform: in WebKit (the desktop app's web view) on
+   fractionally scaled screens, a moving transform leaves grey traces and
+   strokes behind, while a change of position is always repainted whole. */
 .primary,
 .secondary,
 .dir-card,
 .story-card,
 .story-chip,
+.server-card,
 :where(.btn-ink, .btn-line, .btn-solid, .btn-outline) {
-  will-change: transform;
+  position: relative;
 }
 
 /* 4. Site frame ------------------------------------------------------------ */
@@ -534,11 +527,6 @@ fieldset {
   background: var(--surface-sunk);
   color: var(--ink);
   text-decoration: none;
-  transition:
-    transform 0.13s ease,
-    box-shadow 0.13s ease,
-    background-color 0.13s ease;
-  will-change: transform;
 }
 
 /* Each kind's starburst colour, and its place in the fixed order. */
@@ -569,7 +557,8 @@ a.server-card:hover,
 a.server-card:focus-visible {
   background: var(--surface);
   box-shadow: var(--shadow-lift);
-  transform: var(--lift);
+  top: var(--lift-by);
+  left: var(--lift-by);
 }
 
 a.rail-foot:hover {
@@ -1269,9 +1258,6 @@ a.rail-foot {
   font: 700 var(--text-base) / 1.2 var(--font-text);
   text-decoration: none;
   cursor: pointer;
-  transition:
-    transform 0.13s ease,
-    box-shadow 0.13s ease;
 }
 
 :where(.btn-ink, .btn-line, .btn-solid, .btn-outline):is(
@@ -1279,7 +1265,8 @@ a.rail-foot {
     :focus-visible
   ) {
   box-shadow: var(--shadow-lift);
-  transform: var(--lift);
+  top: var(--lift-by);
+  left: var(--lift-by);
 }
 
 .btn-ink {
@@ -1857,9 +1844,6 @@ a.rail-foot {
   white-space: nowrap;
   background: var(--surface-sunk);
   color: var(--ink);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
 }
 
 /* On your own stories the chips open the rights step. */
@@ -1876,7 +1860,8 @@ a.rail-foot {
 .story-chips.is-editable .story-chip:hover,
 .story-chips.is-editable:focus-visible .story-chip {
   box-shadow: 4px 4px 0 var(--ink);
-  transform: translate(-2px, -2px);
+  top: -2px;
+  left: -2px;
 }
 
 .story-chips.is-editable:focus-visible {
