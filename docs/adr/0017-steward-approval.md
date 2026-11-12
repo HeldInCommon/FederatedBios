@@ -1,6 +1,6 @@
 # 0017. The steward can approve people, and invites can be emailed
 
-- **Status:** Accepted
+- **Status:** Accepted; recognising the steward "at this computer" is replaced by [0023](0023-steward-needs-a-key.md)
 - **Date:** 2026-11-10
 
 ## Context

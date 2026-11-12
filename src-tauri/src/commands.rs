@@ -174,10 +174,14 @@ pub fn port_problem(
 
 /// Where the window goes to show `which` kind (default: the first-launch role).
 #[tauri::command]
-pub fn server_url(which: Option<String>, chosen: tauri::State<'_, Chosen>) -> Result<String, String> {
+pub fn server_url(
+    which: Option<String>,
+    cfg: tauri::State<'_, AppConfig>,
+    chosen: tauri::State<'_, Chosen>,
+) -> Result<String, String> {
     let saved = chosen.0.lock().unwrap().clone();
     let kind = kind_or_first(which, &saved)?;
-    Ok(open_url(kind, saved.port_of(kind)))
+    Ok(open_url(kind, saved.port_of(kind), &cfg.launch_token))
 }
 
 /// What the app's screens need.

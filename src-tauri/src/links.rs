@@ -13,8 +13,8 @@
 
 use serde::Serialize;
 
+use crate::network::local_url;
 use crate::settings::{Kind, Saved};
-use crate::sidecar::open_url;
 
 /// The scheme of the app's own links.
 pub const SCHEME: &str = "hic-app";
@@ -56,7 +56,9 @@ pub fn kind_on(saved: &Saved, port: u16) -> Option<Kind> {
 pub struct Place {
     /// What the button says.
     pub label: String,
-    /// Where it goes: that server's page in this window.
+    /// Where it goes: that server's page in this window. A commons' steward
+    /// view goes through the app (`hic-app://open/…`), which adds the launch
+    /// token, so the token is never written into a page (ADR 0023).
     pub url: String,
     /// The colour of the role bar on that server's pages.
     pub tone: &'static str,
@@ -76,7 +78,13 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
             } else {
                 format!("\u{2190} Back to {}", k.label().to_lowercase())
             },
-            url: open_url(k, saved.port_of(k)),
+            url: match (k, here) {
+                (Kind::Node, _) => format!("{}/", local_url(saved.port_of(k))),
+                (_, Some(_)) => format!("{SCHEME}://open/{}", k.key()),
+                // From a page elsewhere the app ignores hic-app links, so go
+                // back to the commons' directory.
+                (_, None) => format!("{}/", local_url(saved.port_of(k))),
+            },
             tone: match k {
                 Kind::Node => "#0a7a54",
                 Kind::Commons => "#8b3fd9",
@@ -138,7 +146,8 @@ mod tests {
     fn the_switcher_lists_the_other_servers() {
         let s = saved(Some("Room 4"), true);
         let here_node: Vec<String> = places(&s, Some(Kind::Node)).into_iter().map(|p| p.url).collect();
-        assert_eq!(here_node, vec!["http://127.0.0.1:8081/steward", "http://127.0.0.1:8082/steward"]);
+        assert_eq!(here_node, vec!["hic-app://open/commons", "hic-app://open/practice"]);
+        assert!(here_node.iter().all(|u| !u.contains("launch")), "the token never goes into a page");
         let labels: Vec<String> = places(&s, Some(Kind::Practice)).into_iter().map(|p| p.label).collect();
         assert_eq!(labels, vec!["Your node", "Your commons"]);
     }
