@@ -2,7 +2,7 @@
 //! the workshop slides (heldincommon.org/workshop-slides): how your work is
 //! held, how nodes share into a commons, and how someone joins.
 //!
-//! The diagrams live in `schematics.rs`, shared with "Run your own commons".
+//! The diagrams live in `schematics.rs`, shared with "Run a commons".
 
 use maud::{html, Markup};
 
@@ -30,7 +30,7 @@ pub fn about(on_node: bool) -> Markup {
             (figure(JOIN_SVG, html! { "Share your profile and you wait on the commons' list. A " strong { "member vouches" } " for you, or the " strong { "steward approves" } " you, and you're listed. An invite code from a member lists you straight away." }))
             @if on_node {
                 h2 class="section-h" { "Hosting a commons" }
-                p { "Anyone can run a commons for their workshop, class or collective, alongside their own node. " a href="/run-a-commons" { "Run your own commons" } " answers the common questions and lets you open a local one for a workshop or a session." }
+                p { "Anyone can run a commons for their workshop, class or collective, alongside their own node. " a href="/run-a-commons" { "Run a commons" } " answers the common questions and lets you open a local one for a workshop or a session." }
             }
         }
     }

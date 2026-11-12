@@ -291,7 +291,7 @@ pub fn add_role(app: AppHandle, role: String, name: String) -> Result<(), String
         return Err("Choose a node or a commons first.".into());
     }
     if current.runs(kind) {
-        return Err(format!("This computer already runs {}.", kind.label().to_lowercase()));
+        return Err(format!("This computer already runs {}.", kind.a_kind()));
     }
     let cfg = app.state::<AppConfig>();
     let next = Saved { other_name: Some(name), ..current.clone() };
@@ -315,7 +315,7 @@ pub fn set_name(app: AppHandle, role: Option<String>, name: String) -> Result<()
         k if current.first() == Some(k) => Saved { name: Some(name), ..current.clone() },
         Kind::Practice if current.practice => Saved { practice_name: Some(name), ..current.clone() },
         k if k != Kind::Practice && current.runs(k) => Saved { other_name: Some(name), ..current.clone() },
-        _ => return Err(format!("This computer doesn't run {}.", kind.label().to_lowercase())),
+        _ => return Err(format!("This computer doesn't run {}.", kind.a_kind())),
     };
     let cfg = app.state::<AppConfig>();
     let port = next.port_of(kind);

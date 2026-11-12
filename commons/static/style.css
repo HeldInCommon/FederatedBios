@@ -1388,7 +1388,7 @@ a.rail-foot {
   margin-top: var(--space-4);
 }
 
-/* Run your own commons: the "try it" panel */
+/* Run a commons: the "try it" panel */
 .try-commons {
   --tone: var(--blue);
 }

@@ -274,7 +274,7 @@ fn frame(site: &Site, page: &Page) -> Markup {
                         footer class="site-foot" {
                             span { "A federated commons for creative data." }
                             span class="foot-links" {
-                                @if !site.is_commons() { a href="/run-a-commons" { "Run your own commons" } }
+                                @if !site.is_commons() { a href="/run-a-commons" { "Run a commons" } }
                                 a href=(PROJECT_URL) { "About the project \u{2197}" }
                             }
                         }

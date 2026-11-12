@@ -1,4 +1,4 @@
-//! The diagrams on "How this works" and "Run your own commons", drawn after
+//! The diagrams on "How this works" and "Run a commons", drawn after
 //! the workshop slides (heldincommon.org/workshop-slides).
 //!
 //! Each is inline SVG with `aria-hidden`: the caption beside it (see

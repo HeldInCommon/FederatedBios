@@ -5,7 +5,7 @@
 //! | Tab | Holds |
 //! |---|---|
 //! | Profile | the profile, and "Update your profile" |
-//! | Sharing | share to a commons, waiting to be listed, your commons and withdrawing |
+//! | Sharing | share to a commons, waiting to be listed, the commons you've shared to, and withdrawing |
 //! | People | who is waiting for a vouch, with Vouch buttons; invite someone (once listed somewhere): `owner_people.rs` |
 //! | Account | back up your identity, your keys: `owner_account.rs` |
 
@@ -109,7 +109,7 @@ pub(super) fn next_step_block(handle: &str, o: &OwnerPanel) -> Markup {
                 span class="star step-2" aria-hidden="true" { "2" }
                 p class="next-step-label" { "Next step" }
                 h2 { "Share your profile to a commons." }
-                p class="next-step-lede" { "Ask the person running your commons for its address (it looks like http://192.168.1.5:8081), then share a signed copy there." }
+                p class="next-step-lede" { "Ask the person running the commons you want to join for its address (it looks like http://192.168.1.5:8081), then share a signed copy there." }
                 div class="next-step-actions" { a class="btn-solid" href=(sharing) { "Choose a commons" } }
             }
         },

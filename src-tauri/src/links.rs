@@ -2,7 +2,7 @@
 //! state.
 //!
 //! - **`hic-app://open/<kind>` links.** A page served by one of the app's
-//!   servers (the node's "Run your own commons" guide, a commons' steward
+//!   servers (the node's "Run a commons" guide, a commons' steward
 //!   view) can't call the app, but it can link somewhere. The main window
 //!   catches navigations to `hic-app://` (as it does `mailto:`) and the app
 //!   opens that kind, setting it up first if needed. Only links followed
@@ -79,10 +79,10 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
         .into_iter()
         .filter(|k| Some(*k) != here)
         .map(|k| Place {
-            label: if here.is_some() {
-                k.label().to_string()
-            } else {
-                format!("\u{2190} Back to {}", k.label().to_lowercase())
+            label: match (here, k) {
+                (Some(_), _) => saved.shown_name(k),
+                (None, Kind::Node) => "\u{2190} Back to your node".to_string(),
+                (None, _) => format!("\u{2190} Back to {}", saved.shown_name(k)),
             },
             url: match (k, here) {
                 (Kind::Node, _) => format!("{}/", local_url(saved.port_of(k))),
@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(here_node, vec!["hic-app://open/commons", "hic-app://open/practice"]);
         assert!(here_node.iter().all(|u| !u.contains("launch")), "the token never goes into a page");
         let labels: Vec<String> = places(&s, Some(Kind::Practice)).into_iter().map(|p| p.label).collect();
-        assert_eq!(labels, vec!["Your node", "Your commons"]);
+        assert_eq!(labels, vec!["Your node", "Room 4"], "a commons is shown by its own name, never \"your commons\"");
     }
 
     #[test]

@@ -11,7 +11,7 @@ This document is for the people building on and operating Held in Common. For
 major choice was made, the [decision records](adr/README.md); for the exact
 bytes that are signed, the [format specification](spec/README.md).
 
-Current version: **0.8.0** (November 2026).
+Current version: **0.8.1** (November 2026).
 
 ---
 
@@ -84,7 +84,7 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
   joining needs a vouch as anywhere else. The first-launch role
   keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
   row of buttons on each page move between them; a node's
-  **Run your own commons** page links into the app with `hic-app://open/…`
+  **Run a commons** page links into the app with `hic-app://open/…`
   ([0019](adr/0019-node-and-commons-side-by-side.md)).
 - **Running the server:** the app starts the bundled `hic-commons` as a
   sidecar with a per-launch token, and opens a page only when `/health`

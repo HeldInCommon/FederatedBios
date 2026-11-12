@@ -52,7 +52,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     }
     for k in Kind::ALL {
         let text = match (k, saved.runs(k)) {
-            (_, true) => k.label().to_string(),
+            (_, true) => saved.shown_name(k),
             (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
             (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
             (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),
@@ -61,7 +61,10 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     }
     go.append(&PredefinedMenuItem::separator(app)?)?;
     for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
-        let text = format!("Rename {}\u{2026}", k.label().to_lowercase());
+        let text = match k {
+            Kind::Node => "Rename your node\u{2026}".to_string(),
+            _ => format!("Rename {}\u{2026}", saved.shown_name(k)),
+        };
         go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
     }
     // ADR 0024: the steward link isn't in the log, so the menu is where a

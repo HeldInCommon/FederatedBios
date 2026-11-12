@@ -113,11 +113,11 @@ Members-only profiles are never shared: they stay encrypted on your computer.
    **Email this invite** button.
 
 **Already have a node?** You don't need a second computer. Choose
-**Go → Set up a commons…** (or the button on **Run your own commons**, linked
+**Go → Set up a commons…** (or the button on **Run a commons**, linked
 at the bottom of every node page). The commons runs beside your node, and the
 buttons in the corner of the window move between them. **Hosting a commons
 and want your own profile in it?** Choose **Go → Add your own node…**, then
-share to your commons like anyone else.
+share to that commons like anyone else.
 
 **Running a workshop?** Members can write a short **story** on their node
 (**Stories → Write a story**; the prompt is "Listen to your street for a
