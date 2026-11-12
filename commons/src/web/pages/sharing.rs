@@ -3,6 +3,7 @@
 use maud::{html, Markup};
 
 use crate::canonical::short;
+use crate::vouch_list::VouchResult;
 use crate::web::layout::host_label;
 
 /// Confirmation after a successful share.
@@ -41,14 +42,24 @@ pub fn shared_pending(handle: &str, commons: &str, key: &str, csrf: &str) -> Mar
     }
 }
 
-/// After vouching for someone.
-pub fn vouched(handle: &str, who: &str, commons_label: &str) -> Markup {
+/// After pressing Vouch for `@who`: listed, or the commons' reason in plain
+/// words (decided by [`crate::vouch_list::vouch_result`]).
+pub fn vouch_outcome(handle: &str, who: &str, commons_label: &str, result: &VouchResult) -> Markup {
+    let people = format!("/@{handle}?tab=people");
     html! {
         header class="intro" {
-            h1 { "Vouched" }
-            p class="lede" { "@" (who) " is now listed on " (commons_label) ", with a record that you vouched for them." }
+            @match result {
+                VouchResult::Listed => {
+                    h1 { "Vouched" }
+                    p class="lede" { "@" (who) " is now listed on " (commons_label) ", with a record that you vouched for them." }
+                }
+                VouchResult::Refused(why) => {
+                    h1 { "Not vouched" }
+                    p class="lede" role="alert" { (why) }
+                }
+            }
         }
-        div class="actions" { a class="primary" href={ "/@" (handle) } { "Back to your profile" } }
+        div class="actions" { a class="primary" href=(people) { "Back to People" } }
     }
 }
 

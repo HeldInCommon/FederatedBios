@@ -13,6 +13,7 @@ mod common;
 mod accounts;
 mod basics;
 mod guide;
+mod one_click_vouching;
 mod publishing;
 mod ramp;
 mod sharing;

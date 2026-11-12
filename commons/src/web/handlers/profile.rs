@@ -8,6 +8,7 @@ use super::notices::notices_for;
 use super::{readable_profile, session};
 use crate::app::Shared;
 use crate::model::Reach;
+use crate::vouch_list;
 use crate::web::layout::{not_found, render, server_error, Page, Section};
 use crate::web::pages::{self, OwnerPanel};
 
@@ -37,7 +38,7 @@ pub async fn profile(
         Err(e) => return server_error(&st.site, &e),
     };
     let readable = version.as_ref().and_then(|v| readable_profile(&st, v, me));
-    let owner = match &sess {
+    let mut owner = match &sess {
         Some(s) if s.handle == rec.handle => Some(OwnerPanel {
             csrf: s.csrf.clone(),
             published: version.is_some(),
@@ -50,9 +51,20 @@ pub async fn profile(
             backup_done: rec.backup_done,
             key: rec.ed_pub.clone(),
             tab: crate::ramp::Tab::parse(q.tab.as_deref()),
+            waiting_lists: Vec::new(),
         }),
         _ => None,
     };
+    // On the People tab, ask each commons this member is listed on who is
+    // waiting for a vouch (decision record 0026). Only now, as the page
+    // loads, and only for this tab: no background polling. Each ask has a
+    // short timeout, so a commons that is down costs a few seconds at most.
+    if let Some(o) = owner.as_mut() {
+        if o.active() == crate::ramp::Tab::People {
+            let listed_on = o.state().listed_on();
+            o.waiting_lists = vouch_list::ask_each(&st, &rec, &listed_on).await;
+        }
+    }
     let noindex = version.as_ref().is_some_and(|v| v.reach() == Reach::Commons);
     let body = pages::profile(&rec, version.as_ref(), readable.as_ref(), owner.as_ref());
     let title = format!("@{}", rec.handle);

@@ -84,7 +84,10 @@ Members-only profiles are never shared: they stay encrypted on your computer.
 
 - **Invite someone:** makes a one-time code; **Email this invite** opens your
   mail app with the invitation written for you.
-- **Vouch for someone:** for people you know who are waiting on that commons.
+- **Waiting for a vouch** (on the People tab): everyone waiting on each
+  commons you're listed on, with their name, handle and key fingerprint.
+  Press **Vouch for @…** for someone you know, after checking the
+  fingerprint with them.
 - **Withdraw:** asks the commons to remove your shared copy.
 
 ### Keep your identity safe

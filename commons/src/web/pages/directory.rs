@@ -226,7 +226,7 @@ fn pending_list(pending: &[PendingShare], steward: Option<&StewardView>) -> Mark
     html! {
         section class="pending" {
             h2 class="section-h" { "Waiting for a vouch" }
-            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from their own node (under " strong { "Vouch for someone" } "), using the handle and key shown here, or the steward can approve them." }
+            p class="hint" { "These people have shared to this commons. A member who knows them can vouch for them from the " strong { "People" } " tab on their own node, or the steward can approve them." }
             ul class="pending-list" {
                 @for p in pending {
                     li class="pending-item" {

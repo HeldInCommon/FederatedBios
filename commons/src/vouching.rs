@@ -15,6 +15,10 @@
 //! steward, `HIC_VOUCH_LIMIT`). Every admission is recorded as an [`Intro`].
 //! People already on a commons, and people whose voucher later leaves, stay.
 //!
+//! Members can also **see who is waiting** from their own node, with a
+//! signed `WaitingListRequest` (decision record 0026): [`make_waiting_request`]
+//! and [`check_waiting_request`].
+//!
 //! The checks are pure; the inbox handler does the storage.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD as B64URL, Engine as _};
@@ -29,6 +33,15 @@ use crate::web::layout::host_label;
 pub const INVITE: &str = "Invite";
 /// The envelope `type` of a member's signed vouch for someone waiting.
 pub const VOUCH: &str = "Vouch";
+/// The envelope `type` a member's node signs to ask a commons who is waiting
+/// for a vouch there (decision record 0026). It reads; it changes nothing.
+pub const WAITING_LIST_REQUEST: &str = "WaitingListRequest";
+
+/// How far a waiting-list request's `created_at` may be from the commons'
+/// clock, either way, in seconds (decision record 0026). Short, so a request
+/// copied off the network soon stops working; not so short that two
+/// computers whose clocks differ by a minute or two can't talk.
+pub const REQUEST_FRESH_FOR: u64 = 5 * 60;
 
 /// How long an invite code stays valid (14 days).
 pub const INVITE_TTL: u64 = 14 * 86_400;
@@ -75,11 +88,6 @@ pub struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    /// True when `key` belongs to a member of this commons.
-    fn is_member(&self, key: &str) -> bool {
-        self.member_keys.iter().any(|k| k == key)
-    }
-
     /// True when `voucher` has brought in fewer than the weekly limit of people
     /// in the last seven days.
     fn under_limit(&self, voucher: &str) -> bool {
@@ -91,23 +99,91 @@ impl Ctx<'_> {
     /// The checks every invite and vouch share: signed, the right type, for
     /// this commons, by a member who hasn't reached the limit.
     fn check_common(&self, s: &Signed, kind: &str) -> Result<String, String> {
-        envelope::verify(s)?;
-        if s.envelope.kind != kind {
-            return Err(format!("expected {kind}"));
-        }
-        let commons = s.envelope.body.get("commons").and_then(|v| v.as_str()).unwrap_or("");
-        if !self.my_hosts.iter().any(|h| h == commons) {
-            return Err(format!("this {} is for a different commons", kind.to_lowercase()));
-        }
-        let voucher = s.envelope.author.clone();
-        if !self.is_member(&voucher) {
-            return Err("whoever made this isn't a member of this commons".into());
-        }
+        let voucher = check_signed_by_member(s, kind, self.my_hosts, self.member_keys)?;
         if !self.under_limit(&voucher) {
             return Err("that member has vouched for as many people as this commons allows this week".into());
         }
         Ok(voucher)
     }
+}
+
+/// The checks shared by everything a member signs for a commons: the
+/// signature holds, the object is of type `kind`, it names one of this
+/// commons' hosts, and its author is listed here. Returns the author's key.
+///
+/// Used by invites and vouches (through [`Ctx`]) and by waiting-list
+/// requests ([`check_waiting_request`]), so all three agree on who counts as
+/// a member. Pure: it reads only what it is given.
+fn check_signed_by_member(
+    s: &Signed,
+    kind: &str,
+    my_hosts: &[String],
+    member_keys: &[String],
+) -> Result<String, String> {
+    // The signature covers the type as well as the content (`envelope.rs`),
+    // so a vouch can't be passed off as a waiting-list request, or the
+    // other way round.
+    envelope::verify(s)?;
+    if s.envelope.kind != kind {
+        return Err(format!("expected {kind}"));
+    }
+    // Naming the commons stops something signed for one commons being
+    // replayed at another where the same person is also a member.
+    let commons = s.envelope.body.get("commons").and_then(|v| v.as_str()).unwrap_or("");
+    if !my_hosts.iter().any(|h| h == commons) {
+        return Err(format!("this {} is for a different commons", kind_in_words(kind)));
+    }
+    let author = s.envelope.author.clone();
+    if !member_keys.contains(&author) {
+        return Err("whoever made this isn't a member of this commons".into());
+    }
+    Ok(author)
+}
+
+/// A signed object's type as words for a refusal: "invite", "vouch" or
+/// "waiting-list request".
+fn kind_in_words(kind: &str) -> String {
+    match kind {
+        WAITING_LIST_REQUEST => "waiting-list request".into(),
+        other => other.to_lowercase(),
+    }
+}
+
+/// A member's signed request to see who is waiting for a vouch on a commons
+/// (decision record 0026). The member's node makes a fresh one each time the
+/// People tab is opened. It proves the request comes from whoever holds a
+/// listed member's key, without any new secret to keep.
+pub fn make_waiting_request(
+    member_pub: &str,
+    member_priv: &str,
+    commons_url: &str,
+    now: u64,
+) -> Result<Signed, String> {
+    let body = json!({ "commons": host_label(commons_url) });
+    envelope::sign(Envelope::new(WAITING_LIST_REQUEST, member_pub, now, None, body), member_priv)
+}
+
+/// Check a waiting-list request (decision record 0026). It must be signed by
+/// a key listed on this commons, name this commons, and be fresh: made within
+/// [`REQUEST_FRESH_FOR`] seconds of `now`, either way. Returns the member's
+/// key.
+///
+/// The weekly vouching limit doesn't apply here: looking is not vouching.
+pub fn check_waiting_request(
+    s: &Signed,
+    my_hosts: &[String],
+    member_keys: &[String],
+    now: u64,
+) -> Result<String, String> {
+    let member = check_signed_by_member(s, WAITING_LIST_REQUEST, my_hosts, member_keys)?;
+    // A request is a one-off proof, not a pass: refusing old ones means a
+    // copy picked up on the network (over plain http, say) soon stops
+    // working. `abs_diff` is the distance between two times, whichever is
+    // later, without the subtraction going below zero.
+    if s.envelope.created_at.abs_diff(now) > REQUEST_FRESH_FOR {
+        return Err("this request is too old, or the two computers' clocks differ by more than five minutes".into());
+    }
+    Ok(member)
 }
 
 /// A member's invite to this commons, made in advance.
@@ -274,6 +350,68 @@ mod tests {
         assert!(check_vouch(&v, "other", &newcomer.ed_pub, &ctx(&members, &[], &[], 100)).is_err());
         let own = make_vouch(&m.ed_pub, &m.ed_priv, URL, "me", &m.ed_pub, 100).unwrap();
         assert!(check_vouch(&own, "me", &m.ed_pub, &ctx(&members, &[], &[], 100)).unwrap_err().contains("yourself"));
+    }
+
+    #[test]
+    fn a_listed_member_may_ask_who_is_waiting() {
+        let m = keys::generate();
+        let members = vec![m.ed_pub.clone()];
+        let hosts = vec![host_label(URL)];
+        let req = make_waiting_request(&m.ed_pub, &m.ed_priv, URL, 1_000).unwrap();
+        assert_eq!(check_waiting_request(&req, &hosts, &members, 1_000).unwrap(), m.ed_pub);
+        // A little clock difference either way is fine.
+        assert!(check_waiting_request(&req, &hosts, &members, 1_000 + REQUEST_FRESH_FOR).is_ok());
+        assert!(check_waiting_request(&req, &hosts, &members, 1_000 - REQUEST_FRESH_FOR).is_ok());
+    }
+
+    #[test]
+    fn someone_not_listed_here_cannot_ask_who_is_waiting() {
+        let (m, stranger) = (keys::generate(), keys::generate());
+        let members = vec![m.ed_pub.clone()];
+        let hosts = vec![host_label(URL)];
+        let req = make_waiting_request(&stranger.ed_pub, &stranger.ed_priv, URL, 1_000).unwrap();
+        assert!(check_waiting_request(&req, &hosts, &members, 1_000).unwrap_err().contains("isn't a member"));
+    }
+
+    #[test]
+    fn a_waiting_list_request_for_another_commons_is_refused() {
+        // A member of both commons: their request to one can't be replayed at the other.
+        let m = keys::generate();
+        let members = vec![m.ed_pub.clone()];
+        let hosts = vec![host_label(URL)];
+        let req = make_waiting_request(&m.ed_pub, &m.ed_priv, "http://other.example", 1_000).unwrap();
+        let why = check_waiting_request(&req, &hosts, &members, 1_000).unwrap_err();
+        assert!(why.contains("different commons"), "{why}");
+    }
+
+    #[test]
+    fn an_old_or_future_dated_waiting_list_request_is_refused() {
+        let m = keys::generate();
+        let members = vec![m.ed_pub.clone()];
+        let hosts = vec![host_label(URL)];
+        let req = make_waiting_request(&m.ed_pub, &m.ed_priv, URL, 10_000).unwrap();
+        let late = 10_000 + REQUEST_FRESH_FOR + 1;
+        assert!(check_waiting_request(&req, &hosts, &members, late).unwrap_err().contains("too old"));
+        assert!(check_waiting_request(&req, &hosts, &members, 10_000 - REQUEST_FRESH_FOR - 1).is_err());
+    }
+
+    #[test]
+    fn a_forged_or_retyped_waiting_list_request_is_refused() {
+        let (m, forger) = (keys::generate(), keys::generate());
+        let members = vec![m.ed_pub.clone()];
+        let hosts = vec![host_label(URL)];
+        // Signed by someone else, but claiming the member as its author.
+        let mut forged = make_waiting_request(&forger.ed_pub, &forger.ed_priv, URL, 1_000).unwrap();
+        forged.envelope.author = m.ed_pub.clone();
+        assert!(check_waiting_request(&forged, &hosts, &members, 1_000).is_err());
+        // A member's vouch relabelled as a request fails its signature,
+        // because the type is part of what was signed.
+        let vouch = make_vouch(&m.ed_pub, &m.ed_priv, URL, "x", &forger.ed_pub, 1_000).unwrap();
+        let mut retyped = vouch.clone();
+        retyped.envelope.kind = WAITING_LIST_REQUEST.into();
+        assert!(check_waiting_request(&retyped, &hosts, &members, 1_000).is_err());
+        // And a vouch as it is is the wrong type.
+        assert!(check_waiting_request(&vouch, &hosts, &members, 1_000).unwrap_err().contains("expected"));
     }
 
     #[test]

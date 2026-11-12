@@ -28,6 +28,7 @@
 //! | [`member`] | pure changes to a member's record (moving to new keys) | none |
 //! | [`publishing`] | signing a profile version | randomness only for members-only encryption |
 //! | [`vouching`] | invites, vouches and the founding invite: who may join a commons | none |
+//! | [`vouch_list`] | who is waiting for a vouch, as a member's node sees it; the result of a one-click vouch | asks commons (reads only) |
 //! | [`waiting`] | following up on shares waiting for a vouch, and recording news | asks commons; writes notices |
 //! | [`federation`] | building and verifying the share sent to a commons | none |
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
@@ -70,6 +71,7 @@ pub mod sessions;
 pub mod store;
 pub mod story;
 pub mod text_links;
+pub mod vouch_list;
 pub mod vouching;
 pub mod waiting;
 pub mod web;

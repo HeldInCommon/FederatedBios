@@ -3,12 +3,13 @@
 //! Both are signed by the member's key; the commons checks them.
 
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use axum::response::Response;
 
 use crate::app::{AppState, Shared};
 use crate::form::Form;
 use crate::model::HandleRec;
+use crate::vouch_list::{self, VouchResult};
 use crate::web::handlers::{authorised_as, post_to_commons};
 use crate::web::layout::{error_page, host_label, render, server_error, Page};
 use crate::web::pages;
@@ -83,6 +84,15 @@ async fn find_waiting(st: &AppState, commons: &str, who: &str, prefix: &str) -> 
 }
 
 /// `POST /vouch` — vouch for someone waiting on a commons' pending list.
+///
+/// Two forms post here, both with the session's CSRF token:
+/// - the **Vouch** button beside each person on the People tab (decision
+///   record 0026), which sends their full key, and
+/// - **Vouch by handle and key**, where the member types the handle and the
+///   start of the key; the node looks up the rest on the commons.
+///
+/// Either way the node signs the same `Vouch` and sends it to the commons'
+/// inbox, which checks it (ADR 0011). **Writes nothing on this node.**
 pub async fn vouch(State(st): State<Shared>, headers: HeaderMap, body: String) -> Response {
     let f = Form::parse(&body);
     let (rec, commons) = match member_and_commons(&st, &headers, &f) {
@@ -90,31 +100,40 @@ pub async fn vouch(State(st): State<Shared>, headers: HeaderMap, body: String) -
         Err(r) => return *r,
     };
     let who = handle::normalise(&f.one("who"));
-    let prefix: String = f.one("key").chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_lowercase();
-    if !handle::is_valid(&who) || prefix.len() < 8 {
+    let typed: String = f.one("key").chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_lowercase();
+    if !handle::is_valid(&who) || typed.len() < 8 {
         return error_page(
             &st.site,
             "Enter their handle and at least the first 8 characters of their key, as shown on the commons.",
         );
     }
-    let key = match find_waiting(&st, &commons, &who, &prefix).await {
-        Ok(k) => k,
-        Err(e) => return error_page(&st.site, &e),
+    // A full key (from the Vouch button) needs no lookup: if that person
+    // isn't waiting, the commons says so. A partial key is looked up.
+    let key = if vouch_list::is_full_key(&typed) {
+        typed
+    } else {
+        match find_waiting(&st, &commons, &who, &typed).await {
+            Ok(k) => k,
+            Err(e) => return error_page(&st.site, &e),
+        }
     };
     let signed = match vouching::make_vouch(&rec.ed_pub, &rec.ed_priv, &commons, &who, &key, now()) {
         Ok(v) => v,
         Err(e) => return server_error(&st.site, &e),
     };
     let msg = serde_json::to_value(&signed).expect("signed objects serialise");
-    match post_to_commons(&st, &commons, &msg).await {
-        Ok(r) if r.status() == StatusCode::ACCEPTED || r.status().is_success() => {
-            let body = pages::vouched(&rec.handle, &who, &host_label(&commons));
-            render(&st.site, Page::new("Vouched", Some(&rec.handle), body))
-        }
+    let result = match post_to_commons(&st, &commons, &msg).await {
         Ok(r) => {
-            let why = r.text().await.unwrap_or_default();
-            error_page(&st.site, &format!("{} didn't accept the vouch: {why}", host_label(&commons)))
+            let status = r.status().as_u16();
+            let text = r.text().await.unwrap_or_default();
+            vouch_list::vouch_result(status, &text, &who, &commons)
         }
-        Err(e) => error_page(&st.site, &e),
-    }
+        Err(e) => VouchResult::Refused(e),
+    };
+    let title = match &result {
+        VouchResult::Listed => "Vouched",
+        VouchResult::Refused(_) => "Not vouched",
+    };
+    let body = pages::vouch_outcome(&rec.handle, &who, &host_label(&commons), &result);
+    render(&st.site, Page::new(title, Some(&rec.handle), body))
 }

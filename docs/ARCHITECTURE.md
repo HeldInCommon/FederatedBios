@@ -160,7 +160,7 @@ A new handle is listed only when someone already there vouches for it
 | Route | How |
 |---|---|
 | **Member's invite code** | a member presses **Invite someone**, sends the code (there's an **Email this invite** button), and the newcomer pastes it when they share |
-| **Member's vouch** | the newcomer waits on the commons' list; a member who knows them vouches from their node |
+| **Member's vouch** | the newcomer waits on the commons' list; a member who knows them presses **Vouch** beside them on the People tab of their own node ([0026](adr/0026-vouch-with-a-click.md)), or types their handle and key |
 | **Steward approval** | the steward opens the **steward view** and presses **Approve** (or **Decline**) |
 | **Steward's invite code** | the steward presses **Make an invite** in the steward view |
 | **Founding invite** | a new commons makes a one-time code for its first person |
@@ -170,6 +170,12 @@ straight there), or with the private **steward link** the commons prints in its
 log (in the desktop app: **Go → Show steward link…**; the app keeps it out of
 its own log, ADR 0024). Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
 `HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
+
+**Seeing who is waiting** ([0026](adr/0026-vouch-with-a-click.md)): when a
+member opens the People tab, their node asks each commons they're listed on
+(`POST /api/waiting`), with a fresh `WaitingListRequest` signed by the
+member's key. The commons answers only a key it lists, and only with each
+person's handle, name and key, not their profile.
 
 **Hearing you were listed** ([0018](adr/0018-hearing-you-were-listed.md)):
 commons can't contact nodes, so a waiting node asks (`GET /api/status`) when it
@@ -221,8 +227,8 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 - **Network exposure:** a node listens only on its own computer
   ([0004](adr/0004-node-listens-only-locally.md)). A node reachable from the
   network won't share to internal addresses ([0012](adr/0012-block-internal-addresses-on-share.md)).
-- **Abuse:** vouching for new handles; at most 120 `/inbox` requests per minute
-  per address.
+- **Abuse:** vouching for new handles; at most 120 `/inbox` and
+  `/api/waiting` requests (counted together) per minute per address.
 - **Crash safety:** atomic writes; clean shutdown on SIGTERM.
 - **Web pages:** strict Content-Security-Policy; `X-Robots-Tag: noindex` for
   the Commons reach; `robots.txt`.
@@ -245,6 +251,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | POST | `/inbox` | Receive shares, withdrawals, vouches, key changes (commons) |
 | GET | `/steward`; POST `/steward/approve`, `/steward/decline`, `/steward/invite` | The steward view (commons) |
 | GET | `/api/directory`, `/api/@{handle}`, `/api/handle/{h}`, `/api/pending`, `/api/status` | JSON |
+| POST | `/api/waiting` | Who is waiting for a vouch, for a listed member's signed request (commons) |
 | POST | `/api/notices/claim` | For the desktop app (needs its launch token) |
 | GET | `/.well-known/webfinger`, `/ap/@{handle}`, `/ap/@{handle}/outbox` | ActivityStreams-shaped discovery (not full ActivityPub) |
 | GET | `/health`, `/robots.txt`, `/style.css`, `/avatar.js`, `/password.js` | Housekeeping |
