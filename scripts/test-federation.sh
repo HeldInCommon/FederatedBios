@@ -13,7 +13,7 @@ no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 HIC_SHARE_DEFAULT_NAME="Test Collective" "$BIN" >"$T/node.log" 2>&1 & NPID=$!
-cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} 2>/dev/null; rm -rf "$T"; }
+cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} ${LPID:-} ${FAKEPID:-} ${PPID2:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
@@ -274,6 +274,67 @@ WCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$WSID" | grep 
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8093/story/withdraw -H "Cookie: hic_session=$WSID" --data-urlencode "id=$HID" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node withdrew the Only while I'm here story" || no "withdrawing the card failed"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8091$HPATH")" = "404" ] && ok "a withdrawn card can't be read, at once" || no "withdrawn card still readable"
 curl -s http://localhost:8091/stories | grep -q "Bus stop hum" && no "withdrawn card still listed" || ok "withdrawn card gone from the list"
+
+# Open to the room (ADR 0027): a node listening on the room's network with the
+# door in front of it. Fetching this computer's own LAN address makes the
+# request arrive from that address, not 127.0.0.1, so it counts as someone in
+# the room; no second device is needed.
+LAN=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$LAN" ] && command -v ipconfig >/dev/null; then LAN=$(ipconfig getifaddr en0 2>/dev/null); fi
+if [ -z "$LAN" ]; then
+  echo "  SKIP  open to the room: this computer has no network address"
+else
+  mkdir -p "$T/room"
+  HIC_DATA="$T/room" PORT=8095 HIC_ROLE=node HIC_BIND="$LAN" HIC_ROOM=1 HIC_ROOM_ADDRESS="http://$LAN:8095" HIC_INSTANCE="Room node" HIC_BASE_URL="http://$LAN:8095" "$BIN" >"$T/room.log" 2>&1 & RPID=$!
+  curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://127.0.0.1:8095/health >/dev/null || no "room node failed to start"
+  curl -s -X POST http://127.0.0.1:8095/join --data-urlencode "handle=ana" --data-urlencode "display_name=Ana" --data-urlencode "passphrase=supersecret7" --data-urlencode "passphrase_again=supersecret7" -o /dev/null
+  code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
+  [ "$(code "http://$LAN:8095/@ana")" = "200" ] && ok "the room reads a profile on an open node" || no "the room can't read a profile"
+  [ "$(code "http://$LAN:8095/login")" = "403" ] && ok "the room can't open the sign-in page" || no "the room reached the sign-in page"
+  [ "$(code -X POST "http://$LAN:8095/login" --data-urlencode "handle=ana" --data-urlencode "passphrase=guess")" = "403" ] && ok "the room can't guess passphrases" || no "the room could post a sign-in"
+  [ "$(code http://127.0.0.1:8095/login)" = "200" ] && ok "the owner still reaches the sign-in page" || no "the owner was refused"
+  [ "$(code -H "X-Forwarded-For: 203.0.113.9" http://127.0.0.1:8095/login)" = "403" ] && ok "a request through a proxy is a room visitor" || no "a proxied request counted as the owner"
+  # Ana hasn't published, so the room couldn't open her profile: the code leads to the front page.
+  curl -s http://127.0.0.1:8095/room | grep -q "<code>http://$LAN:8095/</code>" && ok "the owner's room page shows the address the room uses" || no "room page missing the room address"
+  [ "$(code "http://$LAN:8095/room")" = "403" ] && ok "the room can't see the room page" || no "the room saw the room page"
+  [ "$(code "http://$LAN:8095/room/check")" = "200" ] && ok "the room can check it reached this computer" || no "room check failed"
+  kill $RPID 2>/dev/null; wait $RPID 2>/dev/null
+
+  # A local commons open to the room, joined with the room code (ADR 0027, D4).
+  mkdir -p "$T/local"
+  HIC_DATA="$T/local" PORT=8096 HIC_ROLE=commons HIC_PRACTICE=1 HIC_ROOM=1 HIC_BIND="$LAN" HIC_ROOM_ADDRESS="http://$LAN:8096" HIC_ROOM_CODE=KTRMWX HIC_INSTANCE="Thursday" "$BIN" >"$T/local.log" 2>&1 & LPID=$!
+  curl -sf --retry 40 --retry-delay 1 --retry-connrefused "http://$LAN:8096/health" >/dev/null || no "local commons failed to start"
+  share_local(){ curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://$LAN:8096" --data-urlencode "invite=$1"; }
+  share_local "ABCDEF" | grep -q "room code isn't right" && ok "a wrong room code is refused" || no "a wrong room code wasn't refused"
+  curl -s "http://$LAN:8096/api/handle/tega" | grep -q '"available":true' && ok "and lists nobody" || no "a wrong room code listed someone"
+  share_local "ktr mwx" | grep -qi "federated to" && ok "a node shares to the local commons with the room code" || no "the room code didn't work"
+  curl -s "http://$LAN:8096/api/handle/tega" | grep -q '"available":false' && ok "and is listed straight away" || no "not listed with the room code"
+  grep -q KTRMWX "$T/local.log" && no "the room code appears in the server's log" || ok "the room code never appears in the server's log"
+  kill $LPID 2>/dev/null; wait $LPID 2>/dev/null
+fi
+
+# A commons checks its own public address (ADR 0028): it asks the address
+# for a random probe value only it knows. Here the "public address" is just
+# 127.0.0.1, which does lead to it; the shared commons on 8091 doesn't.
+mkdir -p "$T/pub"
+HIC_DATA="$T/pub" PORT=8097 HIC_ROLE=commons HIC_LAUNCH_TOKEN=t0k "$BIN" >"$T/pub.log" 2>&1 & PPID2=$!
+curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://127.0.0.1:8097/health >/dev/null || no "address-check commons failed to start"
+check_addr(){ curl -s -X POST http://127.0.0.1:8097/api/public-address/check -H "X-HIC-Launch: $1" -H "Content-Type: application/json" -d "{\"url\":\"$2\"}"; }
+check_addr t0k http://127.0.0.1:8097 | grep -q '"here":true' && ok "a commons recognises its own public address" || no "a commons didn't recognise itself"
+check_addr t0k http://localhost:8091 | grep -q 'a different one' && ok "and tells another commons apart" || no "another commons counted as itself"
+check_addr wrong http://127.0.0.1:8097 | grep -q "only the desktop app" && ok "only the app can ask" || no "anyone could ask the commons to fetch addresses"
+# A server that claims to be anything can't pass: it doesn't know the answer.
+python3 -c 'import http.server,json
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(s):
+        b=json.dumps({"service":"hic-commons","probe":True,"probe_answer":"guess"}).encode()
+        s.send_response(200); s.send_header("Content-Type","application/json"); s.end_headers(); s.wfile.write(b)
+    def log_message(s,*a): pass
+http.server.HTTPServer(("127.0.0.1",8098),H).serve_forever()' & FAKEPID=$!
+sleep 1
+check_addr t0k http://127.0.0.1:8098 | grep -q '"here":false' && ok "a server pretending to be the commons fails the check" || no "a fake server passed the address check"
+kill $FAKEPID 2>/dev/null; wait $FAKEPID 2>/dev/null
+kill $PPID2 2>/dev/null; wait $PPID2 2>/dev/null
 
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"
 exit $FAIL

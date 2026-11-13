@@ -36,6 +36,9 @@ pub struct Site {
     pub practice: bool,
     /// Started by the desktop app, so pages may offer its actions.
     pub in_app: bool,
+    /// While open to the room (decision record 0027): the address the room
+    /// reaches it at. `None` while closed.
+    pub room: Option<String>,
 }
 
 impl Site {
@@ -176,13 +179,17 @@ impl Place {
         }
     }
 
-    /// Where it is and who can reach it, in a few words.
-    pub fn reach(self) -> &'static str {
-        match self {
-            Place::Node => "on this computer, only you",
-            Place::Local => "anyone on this Wi-Fi",
-            Place::OnThisWifi => "anyone on this Wi-Fi",
-            Place::Online => "anyone with its address",
+    /// Where it is and who can reach it, in a few words, given whether it's
+    /// `open` to the room (decision record 0027; only a node or a local
+    /// commons has the switch).
+    pub fn reach(self, open: bool) -> &'static str {
+        match (self, open) {
+            (Place::Node, false) => "on this computer, only you",
+            (Place::Node, true) => "open to the room: public pages only",
+            (Place::Local, false) => "closed to the room",
+            (Place::Local, true) => "open to the room",
+            (Place::OnThisWifi, _) => "anyone on this Wi-Fi",
+            (Place::Online, _) => "anyone with its address",
         }
     }
 
@@ -218,11 +225,17 @@ fn is_local_address(url: &str) -> bool {
 /// `src-tauri/src/sidecar.rs`).
 const ADDRESS_CAN_CHANGE: &str = "Your Wi-Fi gives this address and can change it; if it does, the app moves the commons to the new one and tells you.";
 
+/// Said beside the address of a node or local commons open to the room: it
+/// closes by itself (decision record 0027, D3).
+const ROOM_CLOSES: &str =
+    "It closes when you close it under This computer in the sidebar, quit the app, or this computer's network address changes.";
+
 /// The side rail: the logo, the server this page belongs to, a slot the
 /// desktop app fills with the other servers on this computer (see
 /// `src-tauri/src/links.rs`), and a line about where this server reaches.
 fn rail(site: &Site) -> Markup {
     let place = Place::of(site);
+    let reach = place.reach(site.room.is_some());
     html! {
         aside class="rail" {
             a class="wordmark" href="/" {
@@ -243,27 +256,38 @@ fn rail(site: &Site) -> Markup {
                         // reach it; a node with "Your node", then its name.
                         @if site.is_commons() && !site.instance.trim().is_empty() {
                             span class="server-name" { (site.instance) }
-                            span class="server-sub" { (place.kind_name()) ": " (place.reach()) }
+                            span class="server-sub" { (place.kind_name()) ": " (reach) }
                         } @else if site.is_commons() {
                             span class="server-name" { (place.kind_name()) }
-                            span class="server-sub" { (place.reach()) }
+                            span class="server-sub" { (reach) }
                         } @else {
                             span class="server-name" { (place.kind_name()) }
                             span class="server-sub" {
                                 @if !site.instance.trim().is_empty() { (site.instance) ": " }
-                                (place.reach())
+                                (reach)
                             }
                         }
                     }
                 }
+                // Open to the room: the one state here someone may need to
+                // act on (close it), so an oxblood pop, said in words.
+                @if site.room.is_some() {
+                    p class={ "room-pop " (place.class()) } { "Open to the room" }
+                }
                 div class="server-list" id="hic-servers" hidden {}
             }
             @if site.is_commons() && site.practice {
-                p class="rail-foot" {
-                    "Anyone on this Wi-Fi can share to "
-                    code { (site.base_url) }
-                    ". It's here while this computer is awake and the app is open. "
-                    (ADDRESS_CAN_CHANGE)
+                @if site.room.is_some() {
+                    p class="rail-foot" {
+                        "Anyone on this Wi-Fi can share to "
+                        code { (site.base_url) }
+                        ". It's here while this computer is awake and the app is open. "
+                        (ROOM_CLOSES)
+                    }
+                } @else {
+                    p class="rail-foot" {
+                        "Closed to the room: only this computer can reach it. Open it from This computer in the sidebar when the room is ready."
+                    }
                 }
             } @else if site.is_commons() {
                 p class="rail-foot" {
@@ -406,6 +430,17 @@ pub fn error_page(site: &Site, msg: &str) -> Response {
     message_page(site, "Error", "Hmm", msg, StatusCode::BAD_REQUEST)
 }
 
+/// The answer a room visitor gets for a page that stays on its owner's
+/// computer while the server is open to the room (decision record 0027),
+/// with status 403.
+pub fn only_here(site: &Site) -> Response {
+    let msg = format!(
+        "This page of {} stays on its owner's computer. People in the room can see public profiles and stories here.",
+        site.instance
+    );
+    message_page(site, "Only on this computer", "Not from the room", &msg, StatusCode::FORBIDDEN)
+}
+
 /// A page for a failure on our side (status 500). The details go to the log,
 /// not the page.
 pub fn server_error(site: &Site, detail: &dyn std::fmt::Display) -> Response {
@@ -477,8 +512,35 @@ pub fn name_default_commons(url: &str, name: &str) {
 /// computer (`127.0.0.1:8082`) is shown at this computer's network address
 /// (`10.0.0.5:8082`), the one other people use: this node keeps talking to
 /// it through `127.0.0.1`, which never changes.
+///
+/// A commons on this same computer that the desktop app named
+/// ([`name_nearby_commons`]) shows its name and its network address,
+/// "spark (10.0.0.5:8180)", so the address people in the room use is right
+/// there.
 pub fn host_label(url: &str) -> String {
-    label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())), this_computer_ip())
+    let here = this_computer_ip();
+    let label = label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())), here);
+    match nearby_name(url, NEARBY_COMMONS.get().map(Vec::as_slice).unwrap_or(&[])) {
+        Some(name) => format!("{name} ({label})"),
+        None => label,
+    }
+}
+
+/// The commons on this same computer the desktop app told the node about
+/// (address, name), for display only, set once at start-up like
+/// [`DEFAULT_COMMONS`].
+static NEARBY_COMMONS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+/// Record, once at start-up, the commons on this computer (address, name)
+/// so [`host_label`] can name them. Writes only that in-memory note.
+pub fn name_nearby_commons(nearby: &[(String, String)]) {
+    let _ = NEARBY_COMMONS.set(nearby.to_vec());
+}
+
+/// The name of the commons at `url` among `nearby`, if it's one of them. Pure.
+fn nearby_name<'a>(url: &str, nearby: &'a [(String, String)]) -> Option<&'a str> {
+    let url = url.trim_end_matches('/');
+    nearby.iter().find(|(u, _)| u == url).map(|(_, n)| n.as_str())
 }
 
 /// [`host_label`] with what it looks up passed in: `named` is (address,
@@ -543,6 +605,7 @@ mod tests {
             share_default_name: String::new(),
             practice: false,
             in_app: false,
+            room: None,
         }
     }
 
@@ -606,6 +669,13 @@ mod tests {
             frame(&Site { instance: "Studio laptop".into(), ..site(Role::Node) }, &Page::new("t", None, html! {}))
                 .into_string();
         assert!(page.contains("Studio laptop: on this computer, only you"));
+        let open =
+            Site { instance: "Studio laptop".into(), room: Some("http://192.168.1.5:8080".into()), ..site(Role::Node) };
+        let page = frame(&open, &Page::new("t", None, html! {})).into_string();
+        assert!(page.contains("Studio laptop: open to the room: public pages only"), "says so in words");
+        assert!(page.contains(r#"class="room-pop is-node""#), "with the oxblood pop");
+        let closed = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
+        assert!(!closed.contains("room-pop"));
     }
 
     #[test]
@@ -635,9 +705,17 @@ mod tests {
         let page = frame(&named, &Page::new("t", None, html! {})).into_string();
         assert!(page.contains("Go to the Held in Common Collective Commons"));
         assert!(!page.contains(">hic.example.ts.net<"), "the address isn't shown as text");
-        let local = Site { practice: true, base_url: "http://192.168.1.20:8082".into(), ..site(Role::Commons) };
+        let local = Site {
+            practice: true,
+            base_url: "http://192.168.1.20:8082".into(),
+            room: Some("http://192.168.1.20:8082".into()),
+            ..site(Role::Commons)
+        };
         let page = frame(&local, &Page::new("t", None, html! {})).into_string();
-        assert!(page.contains("<code>http://192.168.1.20:8082</code>"), "a local commons shows its Wi-Fi address");
+        assert!(
+            page.contains("<code>http://192.168.1.20:8082</code>"),
+            "an open local commons shows its Wi-Fi address"
+        );
     }
 
     #[test]
@@ -673,11 +751,21 @@ mod tests {
 
     #[test]
     fn a_local_commons_says_so_and_shows_its_wifi_address() {
-        let local = Site { practice: true, base_url: "http://192.168.1.20:8082".into(), ..site(Role::Commons) };
+        let local = Site {
+            practice: true,
+            base_url: "http://192.168.1.20:8082".into(),
+            room: Some("http://192.168.1.20:8082".into()),
+            ..site(Role::Commons)
+        };
         let m = frame(&local, &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Local commons"));
+        assert!(m.contains("Local commons: open to the room") || m.contains("open to the room"));
         assert!(m.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
-        assert!(m.contains("can change it"), "says the address can change");
+        assert!(m.contains("network address changes"), "says it closes when the address changes");
+        let closed = Site { room: None, ..local.clone() };
+        let m = frame(&closed, &Page::new("t", None, html! {})).into_string();
+        assert!(m.contains("Closed to the room: only this computer can reach it."));
+        assert!(!m.contains("Anyone on this Wi-Fi"), "a closed local commons doesn't invite the room");
         assert!(!m.contains("Shared commons") && !m.contains("Online commons"));
         let online = Site { also_known_as: vec!["https://hic.tail.ts.net".into()], ..site(Role::Commons) };
         let m = frame(&online, &Page::new("t", None, html! {})).into_string();
@@ -699,6 +787,13 @@ mod tests {
             assert!(m.contains("src=\"/logo.png\""));
             assert!(m.contains(PROJECT_URL));
         }
+    }
+
+    #[test]
+    fn a_commons_on_this_computer_is_named_with_its_address() {
+        let nearby = vec![("http://127.0.0.1:8180".to_string(), "spark".to_string())];
+        assert_eq!(nearby_name("http://127.0.0.1:8180/", &nearby), Some("spark"));
+        assert_eq!(nearby_name("http://127.0.0.1:8181", &nearby), None);
     }
 
     #[test]

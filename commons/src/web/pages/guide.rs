@@ -42,13 +42,13 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             (figure(JOIN_SVG, html! { "How someone gets listed: they share, wait on the commons' list, and are listed once a " strong { "member vouches" } " for them or the " strong { "steward approves" } " them." }))
 
             h2 class="section-h" { "Do I give up my node?" }
-            p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to the commons you run, like anyone else would. Move between them from the " strong { "Go" } " menu or the buttons in the corner of the window." }
+            p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to the commons you run, like anyone else would. Move between them from " strong { "This computer" } " in the app's sidebar or the buttons in the corner of the window." }
             (figure(SIDE_BY_SIDE_SVG, html! { "One computer, up to three servers, each with its own folder: " strong { "your node" } ", " strong { "a commons" } " your node can share to like anyone else's, and a " strong { "local commons" } " for a workshop or a session, which anyone on this Wi-Fi can reach." }))
 
             h2 class="section-h" { "Where can people reach it?" }
             p {
                 strong { "On this Wi-Fi: " } "the desktop app can run a " strong { "local commons" } " on this computer, and people on the same Wi-Fi share to it. It's there while this computer is awake and the app is open, which suits a workshop, a class or a session. "
-                strong { "Online: " } "an " strong { "online commons" } " runs on a server with the Docker image (see " a href=(DOCKER_GUIDE) { "the commons guide" } "), or from this app through a tunnel such as Tailscale Funnel, once you give it its public address (see the install guide)."
+                strong { "Online: " } "an " strong { "online commons" } " runs on a server with the Docker image (see " a href=(DOCKER_GUIDE) { "the commons guide" } "), or from this app at an address you've set up, such as a Tailscale Funnel address or your own domain: choose it when you set up the commons, or later from " strong { "Go → Public address…" } ", which can check that it works."
             }
 
             (figure(REACH_SVG, html! { "How far each reaches: " strong { "your node" } " stays on this computer; a " strong { "local commons" } " reaches anyone on the same Wi-Fi while the app is open; an " strong { "online commons" } " reaches anyone with its address." }))
@@ -57,7 +57,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             p { "The copies people share and nothing else. Members-only work is never sent. When someone withdraws a copy, the commons removes it. A copy someone already downloaded stays with them, as with anything shared." }
 
             h2 class="section-h" { "What's a local commons?" }
-            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Open it from the " strong { "Go" } " menu, give it a name, and tell the room its address, which the sidebar shows (it looks like http://192.168.1.20:8082). People share to it from their own nodes and, as on any commons, are listed once a member vouches for them, which is one click, or you approve them. When the session's over, remove it from the " strong { "Go" } " menu and it's gone." }
+            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Start it from " strong { "This computer" } " in the app's sidebar and give it a name. It starts closed: only this computer can reach it. When the room is ready, choose " strong { "Open … to the room" } " there, and show the room its QR code and room code. People share to it from their own nodes and, as on any commons, are listed once a member vouches for them, which is one click, or you approve them. When the session's over, remove it from " strong { "This computer" } " and it's gone." }
             p { "An " strong { "online commons" } " is different: it has an address anyone can reach, on a server or through a tunnel such as Tailscale Funnel, and it stays up for a community over time." }
         }
     }
@@ -69,14 +69,14 @@ fn try_it(in_app: bool) -> Markup {
         section class="recovery try-commons" {
             h2 class="field-label" { "Try it" }
             @if in_app {
-                p { "Open a local commons for a workshop or a session: anyone on this Wi-Fi can share to it while the app is open. Your node keeps running." }
+                p { "Start a local commons for a workshop or a session, then open it to the room from This computer in the app's sidebar: anyone on this Wi-Fi can share to it while it's open. Your node keeps running." }
                 div class="commons-actions" {
-                    a class="primary" href=(OPEN_PRACTICE) { "Open a local commons" }
+                    a class="primary" href=(OPEN_PRACTICE) { "Start a local commons" }
                     a class="secondary" href=(OPEN_COMMONS) { "Set up a real commons" }
                 }
                 p class="hint" { "A real commons on this computer can be reached by people on the same Wi-Fi." }
             } @else {
-                p { "The Held in Common desktop app can open a local commons that anyone on the same Wi-Fi can reach, for a workshop or a session. To host a commons online, use the Docker image on a server." }
+                p { "The Held in Common desktop app can open a local commons that anyone on the same Wi-Fi can reach, for a workshop or a session. To host a commons online, run it from the app at an address such as a Tailscale Funnel address, or on a server with the Docker image." }
                 p { a href=(INSTALL_GUIDE) { "Install the desktop app" } " · " a href=(DOCKER_GUIDE) { "Run a commons in Docker" } }
             }
         }

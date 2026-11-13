@@ -30,10 +30,17 @@ async fn in_the_app_the_guide_offers_a_local_commons() {
 
 #[tokio::test]
 async fn a_local_commons_says_so_and_shows_where_to_share() {
-    let (local, _) = server_with(Role::Commons, &[("HIC_PRACTICE", "1"), ("HIC_BASE_URL", "http://192.168.1.20:8082")]);
+    // Open to the room (decision record 0027): its address is for the room.
+    let room = "http://192.168.1.20:8082";
+    let settings = [("HIC_PRACTICE", "1"), ("HIC_BASE_URL", room), ("HIC_ROOM", "1"), ("HIC_ROOM_ADDRESS", room)];
+    let (local, _) = server_with(Role::Commons, &settings);
     let r = send(&local, get("/", None)).await;
     assert!(r.text.contains("Local commons"));
     assert!(r.text.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
+    // Closed (how every launch starts), it says so instead.
+    let (closed, _) = server_with(Role::Commons, &[("HIC_PRACTICE", "1"), ("HIC_BASE_URL", "http://127.0.0.1:8082")]);
+    let r = send(&closed, get("/", None)).await;
+    assert!(r.text.contains("Closed to the room"));
 }
 
 #[tokio::test]

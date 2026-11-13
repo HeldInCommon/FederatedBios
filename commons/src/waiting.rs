@@ -41,10 +41,7 @@ pub fn outcome(status: &str, commons_url: &str, handle: &str) -> Outcome {
 /// Ask one commons about one member. `None` if the commons can't be reached
 /// (try again next time).
 async fn ask(st: &AppState, commons: &str, handle: &str, key: &str) -> Option<String> {
-    let policy = outbound::Policy {
-        personal: st.config.bind_addr(st.site.role).is_loopback(),
-        allow_private: st.config.allow_private_share,
-    };
+    let policy = st.config.share_policy(st.site.role);
     let client = outbound::client_for(commons, policy).await.ok()?;
     let j: serde_json::Value = client
         .get(format!("{commons}/api/status"))

@@ -35,6 +35,9 @@ pub enum AppLink {
     /// Show this kind of server, setting it up (or, for practice, starting
     /// it) if this computer doesn't run it yet.
     Open(Kind),
+    /// Do what this Go-menu item does (`go_menu.rs`), from the sidebar's
+    /// "This computer" panel: `hic-app://menu/<id>`.
+    Menu(String),
 }
 
 /// Read a `hic-app://` link. Anything else, or a link this app doesn't
@@ -42,6 +45,9 @@ pub enum AppLink {
 pub fn parse(url: &str) -> Option<AppLink> {
     let rest = url.strip_prefix(SCHEME)?.strip_prefix("://")?;
     let rest = rest.trim_end_matches('/');
+    if let Some(id) = rest.strip_prefix("menu/") {
+        return crate::go_menu::is_menu_id(id).then(|| AppLink::Menu(id.to_string()));
+    }
     let kind = rest.strip_prefix("open/")?;
     Kind::parse(kind).map(AppLink::Open)
 }
@@ -66,15 +72,21 @@ pub struct Place {
     /// Which kind of server it is (`node`, `commons`, `practice`): the rail's
     /// card picks its starburst colour from this.
     pub kind: &'static str,
+    /// The address other people reach it at (`172.20.10.10:8180`), for a
+    /// commons or a server open to the room: shown under its card, as text
+    /// to copy. `None` for a server only this computer can reach.
+    pub address: Option<String>,
     /// Where it is and who can reach it ("on this computer, only you",
     /// "local commons, anyone on this Wi-Fi"): the card's second line.
     pub place: String,
 }
 
 /// The buttons for a page whose own server is `here` (`None` for a page
-/// somewhere else): every other server this computer runs. Elsewhere, the
-/// labels say "back to".
-pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
+/// somewhere else): every other server this computer runs, each saying
+/// whether it's open to the room (`open` lists those that are) and, where
+/// others can reach it, its address (`addresses`, the address each was
+/// started on). Elsewhere, the labels say "back to".
+pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind], addresses: &[(Kind, String)]) -> Vec<Place> {
     saved
         .running()
         .into_iter()
@@ -98,9 +110,20 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
                 Kind::Practice => "#1f5cff",
             },
             kind: k.key(),
-            place: saved.where_is(k).to_string(),
+            place: crate::room::place_text(saved, k, open.contains(&k)).to_string(),
+            address: addresses.iter().find(|(kind, _)| *kind == k).map(|(_, url)| without_scheme(url)),
         })
         .collect()
+}
+
+/// An address as people type it: `http://172.20.10.10:8180` gives
+/// `172.20.10.10:8180`. Pure.
+fn without_scheme(url: &str) -> String {
+    url.strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url)
+        .trim_end_matches('/')
+        .to_string()
 }
 
 /// The script the app adds to a server page to show `places`. Pages served
@@ -110,11 +133,18 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
 /// the bottom-right corner instead: the way back. Running it again replaces
 /// what it added before. The labels and addresses go in as JSON and are set
 /// as text, so nothing in them can break out.
-pub fn switcher_js(places: &[Place]) -> String {
+pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::Item]) -> String {
     let data = serde_json::to_string(places).unwrap_or_else(|_| "[]".into());
+    // The Go menu's items for the "This computer" panel, as links the app
+    // follows (`hic-app://menu/<id>`).
+    let acts: Vec<serde_json::Value> = actions
+        .iter()
+        .map(|a| serde_json::json!({ "label": a.label, "url": format!("{SCHEME}://menu/{}", a.id) }))
+        .collect();
+    let acts = serde_json::to_string(&acts).unwrap_or_else(|_| "[]".into());
     format!(
         r#"(function(){{
-  var id='hic-switch', places={data};
+  var id='hic-switch', places={data}, actions={acts};
   var old=document.getElementById(id); if(old){{old.remove();}}
   var slot=document.getElementById('hic-servers');
   if(slot){{
@@ -127,8 +157,18 @@ pub fn switcher_js(places: &[Place]) -> String {
       text.appendChild(name);
       if(p.place){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.place; text.appendChild(sub);}}
       a.appendChild(star); a.appendChild(text); slot.appendChild(a);
+      // The address sits under the card, outside the link, so it can be selected and copied.
+      if(p.address){{var ad=document.createElement('p'); ad.className='server-address'; ad.setAttribute('data-kind',p.kind); var c=document.createElement('code'); c.textContent=p.address; ad.appendChild(c); slot.appendChild(ad);}}
     }});
-    slot.hidden=!places.length;
+    // The Go menu, in the page: what you can do with this computer's servers.
+    if(actions.length){{
+      var box=document.createElement('nav'); box.className='app-actions'; box.setAttribute('aria-label','This computer');
+      var h=document.createElement('p'); h.className='rail-label'; h.textContent='This computer'; box.appendChild(h);
+      var ul=document.createElement('ul');
+      actions.forEach(function(x){{var li=document.createElement('li'); var a=document.createElement('a'); a.href=x.url; a.textContent=x.label; li.appendChild(a); ul.appendChild(li);}});
+      box.appendChild(ul); slot.appendChild(box);
+    }}
+    slot.hidden=!places.length&&!actions.length;
     var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
     return;
   }}
@@ -163,29 +203,47 @@ mod tests {
     }
 
     #[test]
+    fn a_commons_card_carries_its_address_without_the_scheme() {
+        let s = saved(Some("Room 4"), true);
+        let addresses = vec![(Kind::Commons, "http://172.20.10.10:8181".to_string())];
+        let from_node = places(&s, Some(Kind::Node), &[], &addresses);
+        let commons = from_node.iter().find(|p| p.kind == "commons").unwrap();
+        assert_eq!(commons.address.as_deref(), Some("172.20.10.10:8181"));
+        assert!(from_node.iter().find(|p| p.kind == "practice").unwrap().address.is_none());
+    }
+
+    #[test]
     fn app_links_are_read() {
         assert_eq!(parse("hic-app://open/practice"), Some(AppLink::Open(Kind::Practice)));
         assert_eq!(parse("hic-app://open/commons/"), Some(AppLink::Open(Kind::Commons)));
         assert_eq!(parse("hic-app://open/node"), Some(AppLink::Open(Kind::Node)));
         assert_eq!(parse("hic-app://open/elsewhere"), None);
         assert_eq!(parse("hic-app://remove/practice"), None, "pages can't remove anything");
+        assert_eq!(parse("hic-app://menu/room-close:node"), Some(AppLink::Menu("room-close:node".into())));
+        assert_eq!(
+            parse("hic-app://menu/remove-practice"),
+            Some(AppLink::Menu("remove-practice".into())),
+            "only opens the confirmation in the setup window"
+        );
+        assert_eq!(parse("hic-app://menu/about-project"), None, "only the Go menu's actions");
+        assert_eq!(parse("hic-app://menu/rm"), None);
         assert_eq!(parse("https://open/node"), None);
     }
 
     #[test]
     fn the_switcher_lists_the_other_servers() {
         let s = saved(Some("Room 4"), true);
-        let here_node: Vec<String> = places(&s, Some(Kind::Node)).into_iter().map(|p| p.url).collect();
+        let here_node: Vec<String> = places(&s, Some(Kind::Node), &[], &[]).into_iter().map(|p| p.url).collect();
         assert_eq!(here_node, vec!["hic-app://open/commons", "hic-app://open/practice"]);
         assert!(here_node.iter().all(|u| !u.contains("launch")), "the token never goes into a page");
-        let labels: Vec<String> = places(&s, Some(Kind::Practice)).into_iter().map(|p| p.label).collect();
+        let labels: Vec<String> = places(&s, Some(Kind::Practice), &[], &[]).into_iter().map(|p| p.label).collect();
         assert_eq!(labels, vec!["Your node", "Room 4"], "a commons is shown by its own name, never \"your commons\"");
     }
 
     #[test]
     fn each_rail_card_says_what_it_is_and_where() {
         let s = saved(Some("Room 4"), false);
-        let from_node = places(&s, Some(Kind::Node));
+        let from_node = places(&s, Some(Kind::Node), &[], &[]);
         assert_eq!(from_node.len(), 1);
         assert_eq!(from_node[0].label, "Room 4");
         assert_eq!(
@@ -197,8 +255,8 @@ mod tests {
     #[test]
     fn a_node_on_its_own_has_no_switcher_but_elsewhere_has_a_way_back() {
         let s = saved(None, false);
-        assert!(places(&s, Some(Kind::Node)).is_empty());
-        let away = places(&s, None);
+        assert!(places(&s, Some(Kind::Node), &[], &[]).is_empty());
+        let away = places(&s, None, &[], &[]);
         assert_eq!(away.len(), 1);
         assert_eq!(away[0].label, "\u{2190} Back to your node");
         assert_eq!(away[0].url, "http://127.0.0.1:8080/");
@@ -225,16 +283,26 @@ mod tests {
     #[test]
     fn labels_cannot_break_out_of_the_script() {
         let evil = "'); alert(1); ('";
-        let js = switcher_js(&[Place {
-            label: evil.into(),
-            url: "x".into(),
-            tone: "#000",
-            kind: "node",
-            place: evil.into(),
-        }]);
+        let js = switcher_js(
+            &[Place {
+                label: evil.into(),
+                url: "x".into(),
+                tone: "#000",
+                kind: "node",
+                place: evil.into(),
+                address: Some(evil.into()),
+            }],
+            &[crate::go_menu::Item {
+                id: "rename:node".into(),
+                label: evil.into(),
+                group: crate::go_menu::Group::Settings,
+            }],
+        );
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
         assert!(js.contains(r#""place":"'); alert(1); ('""#), "the place line too");
+        assert!(js.contains(r#""address":"'); alert(1); ('""#), "and the address");
+        assert!(js.contains(r#""label":"'); alert(1); ('","url":"hic-app://menu/rename:node""#), "and the menu items");
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
-        assert!(switcher_js(&[]).contains("places=[]"));
+        assert!(switcher_js(&[], &[]).contains("places=[]"));
     }
 }

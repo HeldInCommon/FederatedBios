@@ -57,7 +57,7 @@ pub async fn directory(State(st): State<Shared>, headers: HeaderMap) -> Response
 fn signed_in(st: &AppState, handle: &str, csrf: &str) -> Option<pages::SignedIn> {
     let rec = st.store.handle(handle).ok()??;
     let version = st.store.current_version(&rec).ok().flatten();
-    let known = pages::known_commons(&st.site.share_default, &rec.shared_to);
+    let known = pages::known_commons(&st.site.share_default, &st.config.share_nearby, &rec.shared_to);
     let next = pages::your_next(
         version.is_some(),
         version.as_ref().is_some_and(|v| v.reach() != Reach::Members),

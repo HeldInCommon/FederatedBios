@@ -89,15 +89,23 @@ pub async fn inbox(
             if returning || st.config.open_commons {
                 return list_entry(&st, &entry, &activity, existing, None);
             }
-            admit_newcomer(&st, &entry, &activity, &held)
+            admit_newcomer(&st, &entry, &activity, &held, &sender)
         }
     }
 }
 
 /// A new handle on a commons that needs vouching (decision record 0011):
-/// list it with a valid invite or the founding invite, otherwise put it on
-/// the pending list until a member vouches for it.
-fn admit_newcomer(st: &AppState, entry: &RemoteEntry, message: &serde_json::Value, held: &[RemoteEntry]) -> Response {
+/// list it with a valid invite, the founding invite or (on a local commons
+/// open to the room) the room code; otherwise put it on the pending list
+/// until a member vouches for it. `sender` is the address the share came
+/// from, which wrong room codes are counted by.
+fn admit_newcomer(
+    st: &AppState,
+    entry: &RemoteEntry,
+    message: &serde_json::Value,
+    held: &[RemoteEntry],
+    sender: &str,
+) -> Response {
     let code = message.get("invite").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
     if code.is_empty() {
         let pending = PendingShare { entry: entry.clone(), message: message.clone() };
@@ -116,6 +124,37 @@ fn admit_newcomer(st: &AppState, entry: &RemoteEntry, message: &serde_json::Valu
         at: now(),
         proof,
     };
+    // Decision record 0027 (D4): on a local commons open to the room, the
+    // code on the host's screen admits like an invite. Wrong guesses are
+    // limited per address, as passphrases are (decision record 0005): five,
+    // then fifteen minutes' wait.
+    if st.config.room_code.is_some() && vouching::looks_like_room_code(&code) {
+        use std::sync::atomic::Ordering;
+        if st.room_code_wrong.load(Ordering::SeqCst) >= crate::app::ROOM_CODE_MAX_WRONG {
+            return reply(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many wrong room codes have been tried here; ask the host to close the room and open it again",
+            );
+        }
+        // Only a signed hic/v1 share: in the older format some of what the
+        // commons shows isn't signed, and everyone in the room knows the code.
+        if entry.signed.is_none() {
+            return reply(StatusCode::FORBIDDEN, "update the app to join with a room code");
+        }
+        if !st.room_code_attempts.allowed(sender, now()) {
+            return reply(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many wrong room codes from this computer; try again later",
+            );
+        }
+        if !vouching::room_code_matches(&code, st.config.room_code.as_deref()) {
+            st.room_code_attempts.failed(sender, now());
+            st.room_code_wrong.fetch_add(1, Ordering::SeqCst);
+            return reply(StatusCode::FORBIDDEN, "that room code isn't right; check it on the host's screen");
+        }
+        st.room_code_attempts.succeeded(sender);
+        return list_entry(st, entry, message, None, Some(intro("room-code", None, None)));
+    }
     if code.starts_with(vouching::FOUNDING_PREFIX) {
         let stored = match st.store.founding_code() {
             Ok(c) => c,

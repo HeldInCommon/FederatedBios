@@ -13,14 +13,20 @@
 //! | [`network`] | is *our* server answering; this computer's network address |
 //! | [`sidecar`] | starting and stopping the server processes |
 //! | [`steward`] | the commons' steward link: hidden in the log, shown from the Go menu (pure parts) |
+//! | [`firewall`] | a hint about this computer's firewall for the room page (reads only) |
+//! | [`room`] | open to the room: the switch's rules (pure) |
+//! | [`go_menu`] | the Go menu's items, for the menu bar and the sidebar's "This computer" panel (pure) |
 //! | [`links`] | `hic-app://` links and the switcher between servers (pure) |
 //! | [`commands`] | what the app's screens (`ui/app.js`), the menu and links can ask for |
 //!
 //! This file only wires them together.
 
 pub mod commands;
+pub mod firewall;
+pub mod go_menu;
 pub mod links;
 pub mod network;
+pub mod room;
 pub mod settings;
 pub mod sidecar;
 pub mod steward;
@@ -43,42 +49,29 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
     let menu = Menu::default(app)?;
     let go = Submenu::new(app, "Go", true)?;
-    let about =
-        MenuItem::with_id(app, "about-project", "About the Held in Common project \u{2197}", true, None::<&str>)?;
-    if !saved.ready() {
-        go.append(&about)?;
-        menu.append(&go)?;
-        return Ok(menu);
+    // Which servers are open to the room (decision record 0027): in memory
+    // only, so before the servers exist, none.
+    let open = app.try_state::<Servers>().map(|s| s.open_kinds()).unwrap_or_default();
+    // The same items the sidebar's "This computer" panel shows (go_menu.rs),
+    // with a line between each part.
+    let mut last_group = None;
+    for item in go_menu::items(saved, &open) {
+        if last_group.is_some_and(|g| g != item.group) {
+            go.append(&PredefinedMenuItem::separator(app)?)?;
+        }
+        last_group = Some(item.group);
+        go.append(&MenuItem::with_id(app, item.id, item.label, true, None::<&str>)?)?;
     }
-    for k in Kind::ALL {
-        let text = match (k, saved.runs(k)) {
-            // Every server says where it is: "Your node (on this computer,
-            // only you)", "Thursday session (local commons, anyone on this Wi-Fi)".
-            (_, true) => format!("{} ({})", saved.shown_name(k), saved.where_is(k)),
-            (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
-            (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
-            (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),
-        };
-        go.append(&MenuItem::with_id(app, format!("open:{}", k.key()), text, true, None::<&str>)?)?;
+    if last_group.is_some() {
+        go.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    go.append(&PredefinedMenuItem::separator(app)?)?;
-    for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
-        let text = match k {
-            Kind::Node => "Rename your node\u{2026}".to_string(),
-            _ => format!("Rename {}\u{2026}", saved.shown_name(k)),
-        };
-        go.append(&MenuItem::with_id(app, format!("rename:{}", k.key()), text, true, None::<&str>)?)?;
-    }
-    // ADR 0024: the steward link isn't in the log, so the menu is where a
-    // commons' steward finds it.
-    if saved.runs(Kind::Commons) {
-        go.append(&MenuItem::with_id(app, "steward-link", "Show steward link\u{2026}", true, None::<&str>)?)?;
-    }
-    if saved.practice {
-        go.append(&MenuItem::with_id(app, "remove-practice", "Remove local commons\u{2026}", true, None::<&str>)?)?;
-    }
-    go.append(&PredefinedMenuItem::separator(app)?)?;
-    go.append(&about)?;
+    go.append(&MenuItem::with_id(
+        app,
+        "about-project",
+        "About the Held in Common project \u{2197}",
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&go)?;
     Ok(menu)
 }
@@ -87,19 +80,45 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
 /// thread rather than done here: callers may hold the [`Chosen`] lock on
 /// another thread, and waiting for the main thread while it waits for that
 /// lock (to show a page) would freeze the app.
+///
+/// The menu bar is only on macOS, where people expect it at the top of the
+/// screen. On Linux it would sit inside the window, where Phoenix found it
+/// easy to miss and disorienting, so there the page's "This computer" panel
+/// (ADR 0028) is the Go menu. Either way, the panel on the page shown is
+/// redrawn too, so it never offers what's no longer true.
 pub fn refresh_menu(app: &tauri::AppHandle, saved: &Saved) {
     let (app, saved) = (app.clone(), saved.clone());
-    let queued = app.clone().run_on_main_thread(move || match build_menu(&app, &saved) {
-        Ok(menu) => {
-            if let Err(e) = app.set_menu(menu) {
-                log::warn!("couldn't update the menu: {e}");
+    let queued = app.clone().run_on_main_thread(move || {
+        if cfg!(target_os = "macos") {
+            match build_menu(&app, &saved) {
+                Ok(menu) => {
+                    if let Err(e) = app.set_menu(menu) {
+                        log::warn!("couldn't update the menu: {e}");
+                    }
+                }
+                Err(e) => log::warn!("couldn't build the menu: {e}"),
             }
         }
-        Err(e) => log::warn!("couldn't build the menu: {e}"),
+        refresh_panel(&app, &saved);
     });
     if let Err(e) = queued {
         log::warn!("couldn't update the menu: {e}");
     }
+}
+
+/// Redraw the switcher and the "This computer" panel on the page the main
+/// window shows now, if it's one of this computer's servers. Changes only
+/// that page's sidebar.
+fn refresh_panel(app: &tauri::AppHandle, saved: &Saved) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Ok(url) = window.url() else { return };
+    if !is_server_page(url.as_str()) {
+        return;
+    }
+    let here = network::local_port(url.as_str()).and_then(|p| links::kind_on(saved, p));
+    let (open, addresses) = app.try_state::<Servers>().map(|s| (s.open_kinds(), s.addresses())).unwrap_or_default();
+    let actions = if here.is_some() { go_menu::sidebar_items(saved, &open) } else { Vec::new() };
+    let _ = window.eval(links::switcher_js(&links::places(saved, here, &open, &addresses), &actions));
 }
 
 /// A Go menu choice.
@@ -108,6 +127,27 @@ fn on_menu(app: &tauri::AppHandle, id: &str) {
         commands::open(app, k)
     } else if let Some(k) = id.strip_prefix("rename:").and_then(Kind::parse) {
         commands::open_setup(app, &format!("do=rename&role={}", k.key()), "Rename");
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-open:").and_then(Kind::parse) {
+        commands::open_setup(app, &format!("do=open-room&role={}", k.key()), "Open to the room");
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-show:").and_then(Kind::parse) {
+        if let (Some(chosen), Some(cfg)) = (app.try_state::<Chosen>(), app.try_state::<AppConfig>()) {
+            let port = chosen.0.lock().unwrap().port_of(k);
+            sidecar::show_when_up(app.clone(), cfg.launch_token.clone(), port, sidecar::room_page_url(port));
+        }
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-close:").and_then(Kind::parse) {
+        // Restarting the server waits for its port, so not on the menu's thread.
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = commands::set_room(&app, k, false) {
+                log::warn!("closing {} to the room: {e}", k.key());
+            }
+        });
+        Ok(())
+    } else if id == "public-address" {
+        commands::open_setup(app, "do=public-address", "Public address");
         Ok(())
     } else if id == "steward-link" {
         commands::open_setup(app, "do=steward-link", "Steward link");
@@ -146,17 +186,32 @@ fn is_ours(app: &tauri::AppHandle, url: &str) -> bool {
 /// ask the app to do anything. Runs on its own thread, since it may start a
 /// server or open a window.
 fn follow_app_link(app: &tauri::AppHandle, url: &str) {
-    let Some(links::AppLink::Open(kind)) = links::parse(url) else { return };
+    let Some(link) = links::parse(url) else { return };
     let from = app.try_state::<Shown>().map(|s| s.0.lock().unwrap().clone()).unwrap_or_default();
     if !is_ours(app, &from) {
         log::warn!("ignored {url}: followed from {from}, which isn't one of this computer's servers");
         return;
     }
-    let (app, url) = (app.clone(), url.to_string());
-    std::thread::spawn(move || {
-        if let Err(e) = commands::open(&app, kind) {
-            log::warn!("{url}: {e}");
+    // A Go-menu item only if it's on the Go menu right now (not, say, removing
+    // a local commons this computer doesn't have).
+    if let links::AppLink::Menu(id) = &link {
+        let saved = app.try_state::<Chosen>().map(|c| c.0.lock().unwrap().clone()).unwrap_or_default();
+        let open = app.try_state::<Servers>().map(|s| s.open_kinds()).unwrap_or_default();
+        if !go_menu::items(&saved, &open).iter().any(|i| &i.id == id) {
+            log::warn!("ignored {url}: not on the Go menu now");
+            return;
         }
+    }
+    let (app, url) = (app.clone(), url.to_string());
+    std::thread::spawn(move || match link {
+        links::AppLink::Open(kind) => {
+            if let Err(e) = commands::open(&app, kind) {
+                log::warn!("{url}: {e}");
+            }
+        }
+        // The sidebar's "This computer" panel: the same as choosing it in
+        // the Go menu (go_menu.rs).
+        links::AppLink::Menu(id) => on_menu(&app, &id),
     });
 }
 
@@ -226,7 +281,10 @@ fn on_page(window: &tauri::Webview, url: &str) {
     if let (Some(k), Some(w)) = (here, app.get_webview_window("main")) {
         let _ = w.set_title(&sidecar::title_for(k));
     }
-    let _ = window.eval(links::switcher_js(&links::places(&saved, here)));
+    let (open, addresses) = app.try_state::<Servers>().map(|s| (s.open_kinds(), s.addresses())).unwrap_or_default();
+    // On this computer's own pages, the Go menu's items too; never on a page elsewhere.
+    let actions = if here.is_some() { go_menu::sidebar_items(&saved, &open) } else { Vec::new() };
+    let _ = window.eval(links::switcher_js(&links::places(&saved, here, &open, &addresses), &actions));
 }
 
 /// The log file: `~/Library/Logs/org.heldincommon.node/held-in-common.log` on
@@ -285,11 +343,24 @@ pub fn run() {
             commands::close_setup,
             commands::restart_node,
             commands::remove_practice_now,
+            commands::open_room_now,
+            commands::set_public_address,
+            commands::check_address,
             commands::steward_links
         ])
         .on_page_load(|webview, payload| {
-            if payload.event() == tauri::webview::PageLoadEvent::Finished {
-                on_page(webview, payload.url().as_str());
+            match payload.event() {
+                // A new page is starting: until it has finished, the window
+                // isn't showing one of our pages, so no `hic-app://` link is
+                // followed (a page elsewhere could run its script before it
+                // finishes loading).
+                tauri::webview::PageLoadEvent::Started if webview.label() == "main" => {
+                    if let Some(shown) = webview.app_handle().try_state::<Shown>() {
+                        shown.0.lock().unwrap().clear();
+                    }
+                }
+                tauri::webview::PageLoadEvent::Finished => on_page(webview, payload.url().as_str()),
+                _ => {}
             }
         })
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))

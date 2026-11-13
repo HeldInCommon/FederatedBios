@@ -249,9 +249,9 @@ fn sharing_tab(handle: &str, o: &OwnerPanel) -> Markup {
                             button class="secondary" type="submit" { "Share" }
                         }
                         div class="share-row" {
-                            input name="invite" type="text" placeholder="Invite code (if someone there gave you one)" autocomplete="off" aria-label="Invite code";
+                            input name="invite" type="text" placeholder="Invite or room code (if you have one)" autocomplete="off" aria-label="Invite or room code";
                         }
-                        p class="hint" { "A commons lists newcomers once someone there vouches for them. With an invite code you're listed straight away; without one, you wait until a member vouches for you." }
+                        p class="hint" { "A commons lists newcomers once someone there vouches for them. With an invite code you're listed straight away; without one, you wait until a member vouches for you. In a room with a local commons, the room code on the host's screen works like an invite." }
                     }
                 }
             }

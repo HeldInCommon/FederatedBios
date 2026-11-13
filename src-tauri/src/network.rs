@@ -92,6 +92,51 @@ pub fn parse_notices(body: &str) -> Vec<String> {
         .collect()
 }
 
+/// What the commons said about its public address (decision record 0028).
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AddressCheck {
+    /// Something answered at the address.
+    pub reached: bool,
+    /// It was this commons.
+    pub here: bool,
+    /// What to tell the person.
+    pub detail: String,
+}
+
+/// Ask the commons on `port` (proving it's the app with the launch token)
+/// whether `url` reaches it from outside: it fetches `url/health` with a
+/// one-time probe value only it knows. Waits up to twelve seconds. Only
+/// talks to this computer; the commons does the fetching.
+pub fn check_public_address(port: u16, token: &str, url: &str) -> Result<AddressCheck, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(400))
+        .map_err(|_| "The commons isn't running, so it can't check its address.".to_string())?;
+    let _ = s.set_read_timeout(Some(Duration::from_secs(12)));
+    let body = serde_json::json!({ "url": url }).to_string();
+    let req = format!(
+        "POST /api/public-address/check HTTP/1.0\r\nHost: 127.0.0.1\r\nX-HIC-Launch: {token}\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    let mut raw = String::new();
+    let _ = s.take(64 * 1024).read_to_string(&mut raw);
+    match split_http(&raw) {
+        (true, body) => parse_address_check(body).ok_or_else(|| "The commons gave an answer we couldn't read.".into()),
+        _ => Err("The commons couldn't check the address.".into()),
+    }
+}
+
+/// Read the commons' answer to an address check. Pure.
+pub fn parse_address_check(body: &str) -> Option<AddressCheck> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    Some(AddressCheck {
+        reached: v["reached"].as_bool()?,
+        here: v["here"].as_bool()?,
+        detail: v["detail"].as_str()?.to_string(),
+    })
+}
+
 /// Collect the node's news that hasn't been shown as a notification yet (the
 /// node marks it as shown). Proves it's the app with the launch token. Only
 /// talks to this computer.
@@ -126,6 +171,89 @@ pub fn lan_url(port: u16) -> Option<String> {
     Some(format!("http://{ip}:{port}"))
 }
 
+/// Where the Tailscale command-line tool may be: on the `PATH` (Linux,
+/// Windows, Homebrew), or inside the Mac app, which doesn't put it there.
+const TAILSCALE_PROGRAMS: [&str; 2] = ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"];
+
+/// What `tailscale serve status` printed, if Tailscale is installed.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TailscaleStatus {
+    /// Tailscale isn't installed here (or not where we look).
+    NotInstalled,
+    /// What it printed: which ports Tailscale (Serve or Funnel) forwards to.
+    /// Empty when it isn't running or forwards nothing.
+    Answered(String),
+    /// It's installed but didn't answer within three seconds.
+    NoAnswer,
+}
+
+/// A command for `program` that runs without a window: on Windows, a
+/// command-line program started from an app flashes a console window
+/// unless told not to (`CREATE_NO_WINDOW`). Elsewhere, an ordinary command.
+pub fn quiet_command(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW, from the Windows process creation flags.
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
+/// What a finished `tailscale serve status` means: its answer when it
+/// succeeded; "forwards nothing" when it failed because Tailscale isn't
+/// running (then nothing can be forwarded); otherwise no answer, since a
+/// failure we don't recognise could hide a Funnel that's on. Pure.
+pub fn tailscale_outcome(succeeded: bool, out: String, err: &str) -> TailscaleStatus {
+    let err = err.to_lowercase();
+    let not_running = err.contains("tailscaled") && (err.contains("not running") || err.contains("failed to connect"));
+    match (succeeded, not_running) {
+        (true, _) => TailscaleStatus::Answered(out),
+        (false, true) => TailscaleStatus::Answered(String::new()),
+        (false, false) => TailscaleStatus::NoAnswer,
+    }
+}
+
+/// Ask `tailscale serve status` which ports Tailscale (Serve or Funnel)
+/// forwards to on this computer, waiting at most three seconds; a Tailscale
+/// that doesn't answer is stopped. Only reads Tailscale's settings; changes
+/// nothing (decision record 0027, D9; see [`crate::room::forwards_to`]).
+pub fn tailscale_serve_status() -> TailscaleStatus {
+    for program in TAILSCALE_PROGRAMS {
+        let Ok(mut child) = quiet_command(program)
+            .args(["serve", "status"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        else {
+            continue;
+        };
+        // Wait in small steps rather than forever, so a stuck Tailscale
+        // can't freeze the app. Its answer is a few lines, which fit in the
+        // pipe while it finishes.
+        for _ in 0..30 {
+            if let Ok(Some(status)) = child.try_wait() {
+                let (mut out, mut err) = (String::new(), String::new());
+                if let Some(mut stdout) = child.stdout.take() {
+                    let _ = stdout.read_to_string(&mut out);
+                }
+                if let Some(mut stderr) = child.stderr.take() {
+                    let _ = stderr.read_to_string(&mut err);
+                }
+                return tailscale_outcome(status.success(), out, &err);
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        return TailscaleStatus::NoAnswer;
+    }
+    TailscaleStatus::NotInstalled
+}
+
 /// A random token for this launch of the app: 32 bytes from the operating
 /// system, as hex. It is a **secret**: it tells our servers apart from others,
 /// collects the node's notices, and opens a commons' steward view (ADR 0023).
@@ -148,6 +276,21 @@ pub fn launch_token() -> Result<String, rand::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_tailscale_check_counts_as_no_answer_unless_tailscale_is_off() {
+        let off = "failed to connect to local tailscaled; it doesn't appear to be running";
+        assert_eq!(tailscale_outcome(false, String::new(), off), TailscaleStatus::Answered(String::new()));
+        assert_eq!(tailscale_outcome(false, String::new(), "permission denied"), TailscaleStatus::NoAnswer);
+        assert_eq!(tailscale_outcome(true, "x".into(), ""), TailscaleStatus::Answered("x".into()));
+    }
+
+    #[test]
+    fn an_address_check_is_read() {
+        let got = parse_address_check(r#"{"reached":true,"here":true,"detail":"It reaches this commons."}"#);
+        assert_eq!(got, Some(AddressCheck { reached: true, here: true, detail: "It reaches this commons.".into() }));
+        assert_eq!(parse_address_check("not json"), None);
+    }
 
     #[test]
     fn our_server_is_recognised() {

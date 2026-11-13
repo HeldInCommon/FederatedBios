@@ -43,7 +43,7 @@ pub async fn profile(
             csrf: s.csrf.clone(),
             published: version.is_some(),
             shareable: version.as_ref().is_some_and(|v| v.reach() != Reach::Members),
-            known: pages::known_commons(&st.site.share_default, &rec.shared_to),
+            known: pages::known_commons(&st.site.share_default, &st.config.share_nearby, &rec.shared_to),
             shared_to: rec.shared_to.clone(),
             has_recovery: rec.recovery_pub.is_some(),
             rotation_pending: rec.pending_rotation.is_some(),

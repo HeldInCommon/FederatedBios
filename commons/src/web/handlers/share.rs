@@ -21,7 +21,9 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if !authorised_as(&st, &headers, &f, &h) {
         return error_page(&st.site, "Please sign in as this handle to share.");
     }
-    let commons = f.one("commons_url").trim_end_matches('/').to_string();
+    // A room's join link (`…/join/KTRMWX`) carries the room code: one paste
+    // fills in both (decision record 0027). A code typed in the box wins.
+    let (commons, code_from_link) = crate::vouching::split_join_link(&f.one("commons_url"));
     if !(commons.starts_with("http://") || commons.starts_with("https://")) {
         return error_page(&st.site, "Enter the full address of a commons, e.g. https://example.proxy.runpod.net");
     }
@@ -38,7 +40,8 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if v.reach() == Reach::Members {
         return error_page(&st.site, "Members-only profiles stay on your node — they are never shared.");
     }
-    let invite = f.one("invite");
+    let typed = f.one("invite");
+    let invite = if typed.trim().is_empty() { code_from_link.unwrap_or_default() } else { typed };
     let sent = send_share(&st, &commons, &rec, &v, Some(&invite)).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {
@@ -71,6 +74,12 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
         Ok((r, _)) if r.status() == StatusCode::FORBIDDEN => {
             let why = r.text().await.unwrap_or_default();
             error_page(&st.site, &format!("{label} didn't accept the invite code: {why}"))
+        }
+        // A local commons waiting out wrong room codes (decision record 0027)
+        // says how long in its reply; pass it on as it is.
+        Ok((r, _)) if r.status() == StatusCode::TOO_MANY_REQUESTS => {
+            let why = r.text().await.unwrap_or_default();
+            error_page(&st.site, &format!("{label} asked us to wait: {why}"))
         }
         Ok((r, _)) if r.status() == StatusCode::CONFLICT => {
             let reason = r.text().await.unwrap_or_default();
@@ -116,10 +125,7 @@ pub(crate) async fn post_to_commons_at(
     body: &serde_json::Value,
     timeout: std::time::Duration,
 ) -> Result<reqwest::Response, String> {
-    let policy = outbound::Policy {
-        personal: st.config.bind_addr(st.site.role).is_loopback(),
-        allow_private: st.config.allow_private_share,
-    };
+    let policy = st.config.share_policy(st.site.role);
     let client = outbound::client_for(commons, policy).await?;
     client
         .post(format!("{commons}{path}"))

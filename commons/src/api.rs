@@ -4,7 +4,7 @@
 //! The document builders are pure; the handlers only load and wrap them.
 //! These endpoints never expose members-only content.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query, RawQuery, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -22,13 +22,89 @@ use crate::model::{HandleRec, Reach, Version};
 /// carries this server's launch token (`X-HIC-Launch`, sent only by the
 /// desktop app that started it), it also says `"ours": true`. The token itself
 /// is never sent back: it opens the steward view (ADR 0023).
-pub async fn health(State(st): State<Shared>, headers: axum::http::HeaderMap) -> Json<Value> {
+///
+/// With `?probe=…` it also gives `"probe_answer"` when the value is one this
+/// server is checking for right now: the secret answer only it knows, which
+/// is how [`check_public_address`] learns that an address really reaches
+/// this server. The query is read by hand, so a strange one never fails.
+pub async fn health(
+    State(st): State<Shared>,
+    RawQuery(query): RawQuery,
+    headers: axum::http::HeaderMap,
+) -> Json<Value> {
     let mut j = json!({ "status": "ok", "service": "hic-commons", "version": env!("CARGO_PKG_VERSION") });
     let given = headers.get("x-hic-launch").and_then(|v| v.to_str().ok()).unwrap_or("");
     if st.config.launch_token.as_deref().is_some_and(|t| !given.is_empty() && crate::keys::ct_eq(t, given)) {
         j["ours"] = json!(true);
     }
+    let probe = form_urlencoded::parse(query.unwrap_or_default().as_bytes())
+        .find(|(k, _)| k == "probe")
+        .map(|(_, v)| v.into_owned());
+    if let Some(answer) = probe.and_then(|p| st.probes.answer_to(&p)) {
+        j["probe_answer"] = json!(answer);
+    }
     Json(j)
+}
+
+/// What [`check_public_address`] is asked to check.
+#[derive(Deserialize)]
+pub struct CheckAddress {
+    /// The address people outside are meant to use (`https://name.ts.net`).
+    pub url: String,
+}
+
+/// `POST /api/public-address/check` — for the desktop app only (it carries
+/// this server's launch token): does `url` reach this very server? The
+/// server makes a random, single-use probe and a secret answer, asks
+/// `url/health?probe=…` from this computer, and checks the reply carries the
+/// answer. Only this server knows the answer, so a yes proves the address
+/// leads here (through Tailscale, a reverse proxy or port forwarding). It
+/// doesn't prove people elsewhere can reach it: the request starts here.
+/// The launch token is never sent to the address, which could be anyone's.
+///
+/// Answers `{"reached": bool, "here": bool, "detail": "…"}`. Remembers the
+/// probe value in memory for a minute at most.
+pub async fn check_public_address(
+    State(st): State<Shared>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<CheckAddress>,
+) -> Response {
+    let given = headers.get("x-hic-launch").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let ok = st.config.launch_token.as_deref().is_some_and(|t| !given.is_empty() && crate::keys::ct_eq(t, given));
+    if !ok {
+        return json_error(StatusCode::FORBIDDEN, "only the desktop app can check its address");
+    }
+    let url = body.url.trim().trim_end_matches('/');
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Json(
+            json!({ "reached": false, "here": false, "detail": "Start the address with https:// or http://." }),
+        )
+        .into_response();
+    }
+    let (probe, secret) = (crate::sessions::random_hex(16), crate::sessions::random_hex(16));
+    st.probes.start(&probe, &secret, crate::now());
+    let answer = st
+        .http
+        .get(format!("{url}/health"))
+        .query(&[("probe", probe.as_str())])
+        .timeout(std::time::Duration::from_secs(8))
+        .send()
+        .await;
+    st.probes.finish(&probe);
+    let (reached, here, detail) = match answer {
+        Err(e) if e.is_timeout() => (false, false, "Nothing answered there within 8 seconds.".to_string()),
+        Err(_) => (false, false, "Couldn't reach that address from this computer.".to_string()),
+        Ok(r) => match r.json::<Value>().await {
+            Ok(v) if v["probe_answer"].as_str().is_some_and(|a| crate::keys::ct_eq(a, &secret)) => {
+                (true, true, "It leads to this commons.".to_string())
+            }
+            Ok(v) if v["service"] == json!("hic-commons") => {
+                (true, false, "A Held in Common server answered, but a different one.".to_string())
+            }
+            _ => (true, false, "Something answered, but it isn't this commons.".to_string()),
+        },
+    };
+    Json(json!({ "reached": reached, "here": here, "detail": detail })).into_response()
 }
 
 /// One entry in `GET /api/directory`.

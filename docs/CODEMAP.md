@@ -40,6 +40,7 @@ Writes happen in clearly named places that say what they change.
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
 | `member.rs` | Pure changes to a member's record (moving to new keys). | yes |
 | `publishing.rs` | Sign a profile version (used by publish and by key rotation). | yes, except members-only encryption |
+| `room.rs` | Open to the room (ADR 0027): who on the room's network may reach which page (the door). | yes, except the middleware |
 | `outbound.rs` | Which addresses this server may contact for a member (ADR 0012). | yes, except the DNS lookup |
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |
@@ -72,6 +73,8 @@ Writes happen in clearly named places that say what they change.
 | `web/handlers/story.rs` | One story on its author's node: the page, export, share (`share_story_to`), withdraw. | no |
 | `web/handlers/story_edit.rs` | Writing a story in two steps (the words, then its rights), editing it, changing its terms. | no |
 | `web/email.rs` | Ready-written invitation emails as `mailto:` links. | yes |
+| `web/qr.rs` | QR codes for the room page, as SVG (ADR 0027). | yes |
+| `web/handlers/room.rs`, `web/pages/room.rs` | Open to the room: `/room` (the owner's QR code, address and room code), `/room/check`, `/room/help`. | handler no, page yes |
 | `api.rs` | JSON, WebFinger and ActivityStreams-shaped endpoints. | builders yes |
 | `../static/` | `style.css`, `avatar.js` and `password.js`, compiled into the binary. | — |
 | `../static/quilt/` | The eight quilt backgrounds (`quilt-1.svg` … `quilt-8.svg`), made by `scripts/make-quilts.py`, served at `/quilt/N.svg`; `layout::quilt_for` picks one per page from its title. | — |
@@ -142,7 +145,10 @@ interleave) → redirect to the profile.
 | `src/lib.rs` | Wires the modules together; adds the switcher to each server page. |
 | `src/settings.rs` | `app.json` (what this computer runs and the names); each `Kind`'s port, cookie name and data folder. |
 | `src/network.rs` | Is *our* server on a port answering (launch token check)? This computer's LAN address. |
-| `src/sidecar.rs` | Start and stop the servers (one per `Kind`, side by side); restart one after a crash (up to 3 times). |
+| `src/sidecar.rs` | Start and stop the servers (one per `Kind`, side by side); restart one after a crash (up to 3 times); whether each is open to the room (in memory only). |
+| `src/room.rs` | Open to the room (ADR 0027): who may open, the Tailscale check, the room code, wording. Pure. |
+| `src/go_menu.rs` | The Go menu's items, for the menu bar and the sidebar's "This computer" panel. Pure. |
+| `src/firewall.rs` | A hint about this computer's firewall for the room page, read without admin rights. |
 | `src/steward.rs` | The commons' steward link: hidden from the log, read for **Go → Show steward link…** (ADR 0024). |
 | `src/links.rs` | `hic-app://open/<kind>` links and the switcher's buttons (pure). |
 | `src/commands.rs` | What the screens, the Go menu and links can do: `open` a server (setting it up if needed), `remove_practice`; commands `setup_state`, `choose_role`, `add_role`, `set_name`, `close_setup`, `node_up`, `server_url`, `restart_node`, `remove_practice_now`. |

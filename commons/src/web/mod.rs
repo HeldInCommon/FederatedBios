@@ -5,7 +5,8 @@
 //! - [`handlers`]: the request handlers that load data and render pages, one
 //!   file per page or flow (including the steward view, invites and vouches,
 //!   and a member's keys);
-//! - [`email`]: ready-written invitation emails as `mailto:` links (pure).
+//! - [`email`]: ready-written invitation emails as `mailto:` links (pure);
+//! - [`qr`]: QR codes for the room page, as SVG (pure).
 //!
 //! To add a page: write its body in `pages/<name>.rs`, its handler in
 //! `handlers/<name>.rs`, re-export both from their `mod.rs`, and add the route
@@ -15,6 +16,7 @@ pub mod email;
 pub mod handlers;
 pub mod layout;
 pub mod pages;
+pub mod qr;
 
 /// The stylesheet, compiled into the binary.
 pub const STYLE_CSS: &str = include_str!("../../static/style.css");

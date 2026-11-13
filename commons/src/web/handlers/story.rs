@@ -54,7 +54,7 @@ fn outcome(q: &DoneQ) -> Option<pages::StoryOutcome> {
 /// The commons a member can share to in one click: the node's default, then
 /// those their profile is shared to.
 pub(crate) fn known_commons_for(st: &AppState, rec: &HandleRec) -> Vec<String> {
-    pages::known_commons(&st.site.share_default, &rec.shared_to)
+    pages::known_commons(&st.site.share_default, &st.config.share_nearby, &rec.shared_to)
 }
 
 /// `GET /story/{id}` — one story on this node; its author also gets the

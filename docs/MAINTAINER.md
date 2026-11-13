@@ -78,6 +78,24 @@ password; never paste it anywhere else).
 
 ---
 
+### A test build beside the installed app
+
+To try a branch without closing the app you use every day (and the commons it
+may be serving), build a copy with its own ports and its own data folder:
+
+```
+cargo build --release --manifest-path commons/Cargo.toml
+cp commons/target/release/hic-commons src-tauri/binaries/hic-commons-$(rustc -vV | sed -n 's/host: //p')
+cd src-tauri && HIC_PORT_OFFSET=100 HIC_SHARE_DEFAULT="<default commons>" HIC_SHARE_DEFAULT_NAME="<its name>" \
+  cargo tauri build --bundles appimage \
+  --config '{"identifier":"org.heldincommon.test","productName":"Held In Common Test"}'
+```
+
+`HIC_PORT_OFFSET=100` moves its servers to 8180–8182. The other identifier
+gives it a separate data folder, log and `app.json`, so it starts at the
+chooser and never touches the installed app's data. Never release a build
+made this way.
+
 ## 3. macOS signing secrets
 
 GitHub signs with a **Developer ID Application** certificate. The six secrets

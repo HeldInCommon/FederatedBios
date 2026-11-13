@@ -164,12 +164,13 @@ impl Saved {
 
     /// Where `kind` is and who can reach it, in a few words, so the app's
     /// buttons and menu never leave anyone guessing: "on this computer, only
-    /// you", "local commons, anyone on this Wi-Fi", "online commons, hosted
-    /// on this computer".
+    /// you", "local commons, closed to the room", "online commons, hosted
+    /// on this computer". This is how each starts; a node or local commons
+    /// open to the room says so instead (see `room::place_text`).
     pub fn where_is(&self, kind: Kind) -> &'static str {
         match kind {
             Kind::Node => "on this computer, only you",
-            Kind::Practice => "local commons, anyone on this Wi-Fi",
+            Kind::Practice => "local commons, closed to the room",
             Kind::Commons if self.public_address.is_some() => "online commons, hosted on this computer",
             Kind::Commons => "commons on this computer, anyone on this Wi-Fi",
         }
@@ -202,15 +203,33 @@ impl Saved {
     }
 }
 
+/// How far this copy of the app moves its ports up from 8080–8082, so a
+/// second copy (a test build) can run beside the installed one: with 100,
+/// it uses 8180–8182. Baked in at build time from `HIC_PORT_OFFSET` (as the
+/// default commons is); 0, and so the usual ports, for every normal build.
+/// A test build also needs its own identifier, so it keeps its own data
+/// folder (see `docs/MAINTAINER.md`).
+pub fn port_offset() -> u16 {
+    parse_offset(option_env!("HIC_PORT_OFFSET"))
+}
+
+/// A port offset as written, or 0 if it's missing, not a number, or would
+/// push the ports past the top of the range. Pure.
+pub fn parse_offset(written: Option<&str>) -> u16 {
+    written.and_then(|v| v.trim().parse::<u16>().ok()).filter(|o| *o <= 50_000).unwrap_or(0)
+}
+
 /// The port for `kind` when `first` is the first-launch role: the
 /// first-launch role keeps 8080 (so existing nodes and room commons keep
-/// their addresses), the other role gets 8081, and practice 8082.
+/// their addresses), the other role gets 8081, and practice 8082, each
+/// moved up by [`port_offset`] (0 in a normal build).
 pub fn port_for(first: Option<&str>, kind: Kind) -> u16 {
-    match kind {
+    let base = match kind {
         Kind::Practice => PRACTICE_PORT,
         k if first.is_none_or(|r| r == k.role()) => FIRST_PORT,
         _ => SECOND_PORT,
-    }
+    };
+    base + port_offset()
 }
 
 /// The sign-in cookie name for a server on `port` (`HIC_SESSION_COOKIE`).
@@ -300,7 +319,7 @@ pub fn instance_label(override_: Option<&str>, name: Option<&str>, role: &str) -
 
 /// A public address as typed into `app.json`: trimmed, without a trailing
 /// slash, and only if it is an `http(s)://` URL.
-fn clean_address(a: &str) -> Option<String> {
+pub fn clean_address(a: &str) -> Option<String> {
     let a = a.trim().trim_end_matches('/');
     (a.starts_with("https://") || a.starts_with("http://")).then(|| a.to_string())
 }
@@ -338,6 +357,18 @@ pub fn save(base: &Path, s: &Saved) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn whether_a_server_is_open_to_the_room_is_never_saved() {
+        // Decision record 0027, D2: the room lives in memory only, so every
+        // launch starts closed. app.json has no field for it.
+        let s = Saved { role: Some("node".into()), name: Some("Laptop".into()), practice: true, ..Default::default() };
+        let json = serde_json::to_string(&s).unwrap();
+        let lower = json.to_lowercase();
+        assert!(!lower.contains("open") && !lower.contains("room"), "{json}");
+        let back: Saved = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
+    }
 
     #[cfg(unix)]
     #[test]
@@ -398,6 +429,15 @@ mod tests {
         assert_eq!(data_dir_for(b, Kind::Node), Path::new("/x/node-data"));
         assert_eq!(data_dir_for(b, Kind::Commons), Path::new("/x/commons-data"));
         assert_eq!(data_dir_for(b, Kind::Practice), Path::new("/x/practice-data"));
+    }
+
+    #[test]
+    fn a_port_offset_is_read_carefully() {
+        assert_eq!(parse_offset(None), 0);
+        assert_eq!(parse_offset(Some("100")), 100);
+        assert_eq!(parse_offset(Some(" 100 ")), 100);
+        assert_eq!(parse_offset(Some("lots")), 0);
+        assert_eq!(parse_offset(Some("60000")), 0, "would run past the last port");
     }
 
     #[test]
@@ -488,7 +528,7 @@ mod tests {
         assert_eq!(s.shown_name(Kind::Node), "Your node", "the node is the person's own");
         assert_eq!(s.shown_name(Kind::Practice), PRACTICE_NAME);
         assert_eq!(s.where_is(Kind::Node), "on this computer, only you");
-        assert_eq!(s.where_is(Kind::Practice), "local commons, anyone on this Wi-Fi");
+        assert_eq!(s.where_is(Kind::Practice), "local commons, closed to the room", "every launch starts closed");
         assert_eq!(s.where_is(Kind::Commons), "commons on this computer, anyone on this Wi-Fi");
         let online = Saved { public_address: Some("https://hic.tail.ts.net".into()), ..s.clone() };
         assert_eq!(online.where_is(Kind::Commons), "online commons, hosted on this computer");

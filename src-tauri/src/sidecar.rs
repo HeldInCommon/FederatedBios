@@ -5,7 +5,7 @@
 //! (see [`crate::settings`]). [`Servers`] holds one [`Sidecar`] per kind.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use tauri::Manager;
@@ -54,6 +54,17 @@ pub struct Sidecar {
     /// a commons or local commons: the router can hand this computer a new
     /// one, and [`watch_addresses`] moves the server when it does.
     address: Mutex<Option<String>>,
+    /// Open to the room (decision record 0027)? Only ever in memory, never in
+    /// `app.json`, so every launch starts closed. Only a node or a local
+    /// commons can be open (see [`crate::room::has_switch`]).
+    open: AtomicBool,
+    /// Held while the server in this slot is stopped and started again
+    /// (opening or closing the room, a crash restart, a new address), so two
+    /// of those can't interleave and leave a server the app has lost track of.
+    changing: Mutex<()>,
+    /// The room code and firewall hint made when it was last opened to the
+    /// room (decision record 0027); used only while it's open.
+    extras: Mutex<crate::room::RoomExtras>,
 }
 
 /// One [`Sidecar`] per kind of server.
@@ -75,6 +86,18 @@ impl Servers {
             Kind::Commons => &self.commons,
             Kind::Practice => &self.practice,
         }
+    }
+
+    /// The address each running server can be reached at by other people,
+    /// for the switcher: a commons always, a node or local commons while
+    /// open to the room. Only reads.
+    pub fn addresses(&self) -> Vec<(Kind, String)> {
+        Kind::ALL.into_iter().filter_map(|k| self.get(k).address().map(|a| (k, a))).collect()
+    }
+
+    /// The kinds open to the room right now. Only reads.
+    pub fn open_kinds(&self) -> Vec<Kind> {
+        Kind::ALL.into_iter().filter(|k| self.get(*k).is_open()).collect()
     }
 
     /// Stop every server (when the app quits).
@@ -110,9 +133,19 @@ impl Sidecar {
 
     /// Remember the running process and the network address it was started
     /// on.
+    /// If one was already recorded (two starts raced), that one is killed
+    /// first, so no server keeps running that the app can't stop.
     fn set(&self, child: CommandChild, address: Option<String>) {
-        *self.child.lock().unwrap() = Some(child);
+        if let Some(old) = self.child.lock().unwrap().replace(child) {
+            let _ = old.kill();
+        }
         *self.address.lock().unwrap() = address;
+    }
+
+    /// Hold this while stopping and starting the server again, so nothing
+    /// else does the same at the same time (see `changing`).
+    pub fn changing(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.changing.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Is a server running in this slot?
@@ -125,9 +158,34 @@ impl Sidecar {
         self.address.lock().unwrap().clone()
     }
 
-    /// Stop the server if it is running. It won't be restarted automatically.
+    /// Is it open to the room? Only reads.
+    pub fn is_open(&self) -> bool {
+        self.open.load(Ordering::SeqCst)
+    }
+
+    /// The room code and firewall hint it gets while open. Only reads.
+    pub fn extras(&self) -> crate::room::RoomExtras {
+        self.extras.lock().unwrap().clone()
+    }
+
+    /// Remember the room code and firewall hint for the next time it starts
+    /// open to the room. Changes only this, in memory.
+    pub fn set_extras(&self, extras: crate::room::RoomExtras) {
+        *self.extras.lock().unwrap() = extras;
+    }
+
+    /// Record whether it should be open to the room the next time it starts.
+    /// Changes only this flag, in memory; the caller restarts the server.
+    pub fn set_open(&self, open: bool) {
+        self.open.store(open, Ordering::SeqCst);
+    }
+
+    /// Stop the server if it is running. It won't be restarted automatically,
+    /// and it's closed to the room: whatever starts it next decides again
+    /// (decision record 0027, so nothing reopens it without being asked).
     pub fn stop(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
+        self.open.store(false, Ordering::SeqCst);
         if let Some(child) = self.child.lock().unwrap().take() {
             let _ = child.kill();
         }
@@ -136,8 +194,11 @@ impl Sidecar {
 
 /// The environment a server of `kind` starts with, apart from the data
 /// folder and launch token. Pure, so the per-kind differences are testable.
-/// `lan` is this computer's network address for the commons, if known, and
-/// `public` its address outside the room, if set in `app.json`.
+/// `lan` is this computer's network address for the server, if known;
+/// `public` a commons' address outside the room, if set in `app.json`; and
+/// `open` whether a node or local commons is open to the room (decision
+/// record 0027), which only counts when there is a `lan` address.
+#[allow(clippy::too_many_arguments)]
 pub fn server_env(
     kind: Kind,
     port: u16,
@@ -146,32 +207,63 @@ pub fn server_env(
     share_default: &DefaultCommons,
     lan: Option<String>,
     public: Option<String>,
+    open: bool,
 ) -> Vec<(&'static str, String)> {
+    // The address the room reaches it at, only while it's open, and the IP
+    // to listen on: that network only, not every one (a VPN, Tailscale).
+    let room = lan.clone().filter(|_| open && crate::room::has_switch(kind));
+    let room_ip = room.as_deref().and_then(crate::room::ip_of).unwrap_or_else(|| "0.0.0.0".to_string());
     let mut env = vec![
         ("PORT", port.to_string()),
         ("HIC_ROLE", kind.role().to_string()),
         ("HIC_INSTANCE", instance_label(cfg_override, Some(name), kind.role())),
         ("HIC_SESSION_COOKIE", cookie_name(port)),
+        // Stop when this app does, even after a crash or a force-quit (decision
+        // record 0027): the server watches its stdin, whose writing end the
+        // app holds in `CommandChild` for as long as it runs.
+        ("HIC_EXIT_WITH_APP", "1".to_string()),
     ];
     match kind {
-        Kind::Node => env.extend([
-            ("HIC_SHARE_DEFAULT", share_default.url.clone()),
-            ("HIC_SHARE_DEFAULT_NAME", share_default.name.clone()),
-        ]),
+        Kind::Node => {
+            env.extend([
+                ("HIC_SHARE_DEFAULT", share_default.url.clone()),
+                ("HIC_SHARE_DEFAULT_NAME", share_default.name.clone()),
+            ]);
+            // Open to the room: listen on the network with the door in front
+            // (`HIC_ROOM`), and know the address the room uses, for the QR
+            // code. The node's own address (`HIC_BASE_URL`) stays as it was,
+            // so nothing it shares names an address that stops working
+            // when the room closes.
+            if let Some(url) = room.clone() {
+                env.extend([("HIC_ROOM", "1".to_string()), ("HIC_BIND", room_ip.clone()), ("HIC_ROOM_ADDRESS", url)]);
+            }
+        }
         // A room commons: nodes on the same network reach it at this address,
         // and people outside the room at its public one, if it has one.
         Kind::Commons => {
             env.extend(lan.map(|url| ("HIC_BASE_URL", url)));
             env.extend(public.map(|url| ("HIC_ALSO_KNOWN_AS", url)));
+            // Open to the room: it already listens on the network, so this
+            // adds the door (the room never reaches the steward view) and
+            // the room page with its join link (decision record 0027).
+            if let Some(url) = room.clone() {
+                env.extend([("HIC_ROOM", "1".to_string()), ("HIC_ROOM_ADDRESS", url)]);
+            }
         }
         // A local commons: for a workshop, a class or a session between
-        // friends. Anyone on the same Wi-Fi reaches it at this computer's
-        // network address, and its pages show that address. Joining still
-        // needs a vouch (ADR 0011). With no network, only this computer can
-        // reach it, so it listens only here.
+        // friends. Closed, only this computer reaches it. Open to the room,
+        // anyone on the same Wi-Fi reaches it at this computer's network
+        // address, which its pages show, with the door in front of the
+        // host's own pages (decision record 0027). Joining still needs a
+        // vouch (ADR 0011) or the room code.
         Kind::Practice => {
-            match lan {
-                Some(url) => env.push(("HIC_BASE_URL", url)),
+            match room.clone() {
+                Some(url) => env.extend([
+                    ("HIC_BASE_URL", url.clone()),
+                    ("HIC_ROOM", "1".to_string()),
+                    ("HIC_BIND", room_ip.clone()),
+                    ("HIC_ROOM_ADDRESS", url),
+                ]),
                 None => env.extend([("HIC_BIND", "127.0.0.1".to_string()), ("HIC_BASE_URL", local_url(port))]),
             }
             env.push(("HIC_PRACTICE", "1".to_string()));
@@ -180,9 +272,29 @@ pub fn server_env(
     env
 }
 
-/// Start the server of `kind` on `port`, logging its output. Returns the
-/// process and, for a commons or local commons, the network address it was
-/// given (`None` when this computer has no network).
+/// For a node: the commons the app runs on this computer, as
+/// `HIC_SHARE_NEARBY` (`http://127.0.0.1:8180=spark,…`), so the node offers
+/// each as a one-click share. Their `127.0.0.1` addresses never change, so
+/// sharing keeps working when the Wi-Fi does; pages show them at this
+/// computer's network address. Commas and `=` in names are made spaces.
+/// Pure.
+pub fn nearby_commons(saved: &Saved) -> String {
+    [Kind::Commons, Kind::Practice]
+        .into_iter()
+        .filter(|k| saved.runs(*k))
+        .map(|k| {
+            let name = saved.shown_name(k).replace([',', '='], " ");
+            format!("{}={name}", local_url(saved.port_of(k)))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Start the server of `kind` on `port`, logging its output, open to the
+/// room if `open` (and there is a network). Returns the process and the
+/// network address people reach it at: always for a commons, and for a node
+/// or local commons only while it's open to the room (`None` when closed or
+/// when this computer has no network).
 fn spawn(
     app: &tauri::AppHandle,
     cfg: &AppConfig,
@@ -190,11 +302,15 @@ fn spawn(
     port: u16,
     name: &str,
     generation: u64,
+    room: Option<&crate::room::RoomExtras>,
 ) -> Result<(CommandChild, Option<String>), String> {
+    let open = room.is_some();
     let data_dir = data_dir_for(&cfg.base, kind);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
-    // A commons or a local commons is reached over the Wi-Fi; a node isn't.
-    let lan = if kind == Kind::Node { None } else { network::lan_url(port) };
+    // A commons is always reached over the Wi-Fi; a node or a local commons
+    // only while it's open to the room.
+    let lan = network::lan_url(port);
+    let reached_at = if kind == Kind::Commons || open { lan.clone() } else { None };
     let public = if kind == Kind::Commons { crate::settings::load(&cfg.base).0.public_address } else { None };
     let mut cmd = app
         .shell()
@@ -202,10 +318,19 @@ fn spawn(
         .map_err(|e| format!("could not locate the server binary: {e}"))?
         .env("HIC_DATA", data_dir.to_string_lossy().to_string())
         .env("HIC_LAUNCH_TOKEN", &cfg.launch_token);
-    for (k, v) in
-        server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan.clone(), public)
+    for (k, v) in server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan, public, open)
     {
         cmd = cmd.env(k, v);
+    }
+    // A node offers the commons on this computer as one-click shares.
+    if kind == Kind::Node {
+        cmd = cmd.env("HIC_SHARE_NEARBY", nearby_commons(&crate::settings::load(&cfg.base).0));
+    }
+    // Open to the room, with somewhere to open: its room code and hint.
+    if let (Some(extras), Some(_)) = (room, reached_at.as_ref()) {
+        for (k, v) in crate::room::room_env(kind, extras) {
+            cmd = cmd.env(k, v);
+        }
     }
 
     let what = kind.label().to_lowercase();
@@ -236,7 +361,7 @@ fn spawn(
             }
         }
     });
-    Ok((child, lan))
+    Ok((child, reached_at))
 }
 
 /// If the server that just stopped should come back (see [`should_restart`]),
@@ -245,6 +370,17 @@ fn restart_after_crash(app: &tauri::AppHandle, kind: Kind, port: u16, name: &str
     let Some(servers) = app.try_state::<Servers>() else { return };
     let sc = servers.get(kind);
     let current = sc.generation.load(Ordering::SeqCst);
+    // The current server ended without being asked to: a crash closes the
+    // room (decision record 0027, D3), whether or not it's restarted, so
+    // nothing brings it back open without the person choosing again.
+    if generation == current && sc.is_open() {
+        sc.set_open(false);
+        log::warn!("{} was open to the room and stopped unexpectedly; it is now closed", kind.key());
+        if let Some(chosen) = app.try_state::<crate::commands::Chosen>() {
+            let saved = chosen.0.lock().unwrap().clone();
+            crate::refresh_menu(app, &saved);
+        }
+    }
     let restarts = sc.restarts.load(Ordering::SeqCst);
     if !should_restart(generation, current, restarts, code) {
         return;
@@ -256,8 +392,14 @@ fn restart_after_crash(app: &tauri::AppHandle, kind: Kind, port: u16, name: &str
         std::thread::sleep(std::time::Duration::from_secs(2));
         let (Some(servers), Some(cfg)) = (app.try_state::<Servers>(), app.try_state::<AppConfig>()) else { return };
         let sc = servers.get(kind);
+        let _changing = sc.changing();
+        // Someone started or stopped it while we waited (opened it to the
+        // room, say): theirs is the server to keep.
+        if sc.generation.load(Ordering::SeqCst) != current {
+            return;
+        }
         let generation = sc.begin(false);
-        match spawn(&app, &cfg, kind, port, &name, generation) {
+        match spawn(&app, &cfg, kind, port, &name, generation, None) {
             Ok((child, address)) => sc.set(child, address),
             Err(e) => log::error!("couldn't restart the server: {e}"),
         }
@@ -282,11 +424,15 @@ pub fn moved_to(started_on: Option<&str>, now: Option<&str>) -> Option<String> {
 /// How often [`watch_addresses`] looks.
 const ADDRESS_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Every minute, check the network address of each commons and local commons
-/// this computer runs. When the router has given the computer a new one,
-/// restart that server on it (its data stays), and tell the person with a
-/// notification and in the log, so they can give the room the new address.
-/// Runs for as long as the app does.
+/// Every minute, check this computer's network address for each server
+/// that's reachable on the network. Runs for as long as the app does.
+///
+/// - A **commons** moves: when the router has given the computer a new
+///   address, restart it there (its data stays), and tell the person with a
+///   notification and in the log, so they can give the room the new address.
+/// - A **node or local commons open to the room** closes instead (decision
+///   record 0027, D3): a new address means the laptop has probably left the
+///   room, so it restarts closed, with a notification saying so.
 pub fn watch_addresses(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
         std::thread::sleep(ADDRESS_CHECK);
@@ -299,26 +445,38 @@ pub fn watch_addresses(app: tauri::AppHandle) {
             continue;
         };
         let saved = chosen.0.lock().unwrap().clone();
-        for kind in [Kind::Commons, Kind::Practice] {
+        for kind in Kind::ALL {
             let sc = servers.get(kind);
             if !saved.runs(kind) || !sc.is_running() {
                 continue;
             }
             let port = saved.port_of(kind);
-            let Some(new) = moved_to(sc.address().as_deref(), network::lan_url(port).as_deref()) else { continue };
-            log::info!("{} moved to {new}: this computer has a new network address", kind.key());
-            // Restart on the new address, and keep showing it if the window was.
+            let now = network::lan_url(port);
+            let _changing = sc.changing();
+            let text = if kind == Kind::Commons {
+                let Some(new) = moved_to(sc.address().as_deref(), now.as_deref()) else { continue };
+                log::info!("{} moved to {new}: this computer has a new network address", kind.key());
+                format!(
+                    "{} has a new address: {new}. Your Wi-Fi gave this computer a new one. Tell people who share to it.",
+                    saved.shown_name(kind)
+                )
+            } else if sc.is_open() && crate::room::should_close(sc.address().as_deref(), now.as_deref()) {
+                // `stop` below closes it to the room.
+                log::info!("{} closed to the room: this computer changed network", kind.key());
+                crate::room::closed_notice(&saved.shown_name(kind))
+            } else {
+                continue;
+            };
+            // Restart it (moved, or closed), and keep showing it if the window was.
             let show = network::local_port(&shown.0.lock().unwrap()).is_some_and(|p| p == port);
             sc.stop();
             crate::commands::wait_until_free(port, &cfg.launch_token);
-            if let Err(e) = start(&app, &cfg, &servers, &saved, kind, show) {
-                log::error!("couldn't restart {} on its new address: {e}", kind.key());
+            let started = start(&app, &cfg, &servers, &saved, kind, show);
+            crate::refresh_menu(&app, &saved);
+            if let Err(e) = started {
+                log::error!("couldn't restart {}: {e}", kind.key());
                 continue;
             }
-            let text = format!(
-                "{} has a new address: {new}. Your Wi-Fi gave this computer a new one. Tell people who share to it.",
-                saved.shown_name(kind)
-            );
             use tauri_plugin_notification::NotificationExt;
             if let Err(e) = app.notification().builder().title("Held in Common").body(&text).show() {
                 log::warn!("couldn't show a notification: {e}");
@@ -393,18 +551,34 @@ pub fn open_url(kind: Kind, port: u16, token: &str) -> String {
 /// In the background, show the server on `port` in the main window as soon
 /// as it answers (as *our* server). Gives up after about four minutes.
 pub fn open_when_up(app: tauri::AppHandle, token: String, kind: Kind, port: u16) {
+    let url = open_url(kind, port, &token);
+    show_when_up(app, token, port, url);
+}
+
+/// In the background, show `url` (a page of the server on `port`) in the
+/// main window as soon as that server answers as *our* server. Gives up
+/// after about four minutes.
+pub fn show_when_up(app: tauri::AppHandle, token: String, port: u16, url: String) {
     std::thread::spawn(move || {
         for _ in 0..600 {
             if network::probe(port, &token) == Probe::Ours {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.eval(format!("location.replace('{}')", open_url(kind, port, &token)));
+                    // The address is ours (127.0.0.1, a port and a fixed path),
+                    // so it can go into the script as it is.
+                    let _ = win.eval(format!("location.replace('{url}')"));
                 }
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(400));
         }
     });
+}
+
+/// The room page of the server on `port`: its QR code and the address the
+/// room uses (decision record 0027).
+pub fn room_page_url(port: u16) -> String {
+    format!("{}/room", local_url(port))
 }
 
 /// Start the server of `kind` as `saved` describes it (a deliberate start:
@@ -422,7 +596,13 @@ pub fn start(
     let port = saved.port_of(kind);
     let sc = servers.get(kind);
     let generation = sc.begin(true);
-    let (child, address) = spawn(app, cfg, kind, port, name, generation)?;
+    let open = sc.is_open();
+    let extras = sc.extras();
+    let (child, address) = spawn(app, cfg, kind, port, name, generation, open.then_some(&extras))?;
+    // Asked to open, but there was no network to open it on: it's closed.
+    if open && address.is_none() {
+        sc.set_open(false);
+    }
     sc.set(child, address);
     if show {
         open_when_up(app.clone(), cfg.launch_token.clone(), kind, port);
@@ -473,8 +653,15 @@ mod tests {
         assert!(!should_restart(5, 5, 0, Some(2)), "refused its settings: restarting won't help");
     }
 
-    /// The settings a server of `kind` on `port` starts with, as a lookup table.
+    /// The settings a server of `kind` on `port` starts with, closed to the
+    /// room, as a lookup table.
     fn env_of(kind: Kind, port: u16) -> std::collections::HashMap<&'static str, String> {
+        env_with(kind, port, false)
+    }
+
+    /// The settings a server of `kind` on `port` starts with, open to the
+    /// room if `open`, as a lookup table.
+    fn env_with(kind: Kind, port: u16, open: bool) -> std::collections::HashMap<&'static str, String> {
         server_env(
             kind,
             port,
@@ -483,6 +670,7 @@ mod tests {
             &DefaultCommons { url: "https://c.example".into(), name: "The Collective".into() },
             Some("http://192.168.1.5:8081".into()),
             Some("https://hic.tail.ts.net".into()),
+            open,
         )
         .into_iter()
         .collect()
@@ -507,11 +695,68 @@ mod tests {
 
         let local = env_of(Kind::Practice, 8082);
         assert_eq!(local["HIC_ROLE"], "commons");
-        assert!(!local.contains_key("HIC_BIND"), "anyone on the same Wi-Fi can reach a local commons");
-        assert_eq!(local["HIC_BASE_URL"], "http://192.168.1.5:8081", "at this computer's network address");
+        assert_eq!(local["HIC_BIND"], "127.0.0.1", "a local commons starts closed to the room");
+        assert_eq!(local["HIC_BASE_URL"], "http://127.0.0.1:8082");
+        assert!(!local.contains_key("HIC_ROOM"));
         assert_eq!(local["HIC_PRACTICE"], "1");
         assert_eq!(local["HIC_INSTANCE"], "Name");
         assert!(!local.contains_key("HIC_ALSO_KNOWN_AS"), "a local commons is not online");
+    }
+
+    #[test]
+    fn a_node_open_to_the_room_listens_on_the_network_behind_the_door() {
+        let node = env_with(Kind::Node, 8080, true);
+        assert_eq!(node["HIC_ROOM"], "1");
+        assert_eq!(node["HIC_BIND"], "192.168.1.5", "the room's network only, not a VPN or Tailscale");
+        assert_eq!(node["HIC_ROOM_ADDRESS"], "http://192.168.1.5:8081");
+        assert!(!node.contains_key("HIC_BASE_URL"), "what it shares keeps its own address");
+        let closed = env_of(Kind::Node, 8080);
+        assert!(!closed.contains_key("HIC_ROOM") && !closed.contains_key("HIC_BIND"), "closed: as before");
+    }
+
+    #[test]
+    fn a_local_commons_open_to_the_room_is_reached_at_its_network_address() {
+        let local = env_with(Kind::Practice, 8082, true);
+        assert_eq!(local["HIC_ROOM"], "1");
+        assert_eq!(local["HIC_BIND"], "192.168.1.5");
+        assert_eq!(local["HIC_BASE_URL"], "http://192.168.1.5:8081");
+        assert_eq!(local["HIC_ROOM_ADDRESS"], "http://192.168.1.5:8081");
+    }
+
+    #[test]
+    fn a_full_commons_open_to_the_room_keeps_its_address_and_adds_the_door() {
+        let open = env_with(Kind::Commons, 8081, true);
+        let closed = env_of(Kind::Commons, 8081);
+        assert_eq!(open["HIC_ROOM"], "1");
+        assert_eq!(open["HIC_ROOM_ADDRESS"], "http://192.168.1.5:8081");
+        assert_eq!(open["HIC_BASE_URL"], closed["HIC_BASE_URL"], "same address");
+        assert!(!open.contains_key("HIC_BIND"), "it listens as it always does");
+        assert!(!closed.contains_key("HIC_ROOM"));
+    }
+
+    #[test]
+    fn a_node_is_told_the_commons_on_this_computer() {
+        let saved = Saved {
+            role: Some("commons".into()),
+            name: Some("spark".into()),
+            other_name: Some("potato".into()),
+            practice: true,
+            practice_name: Some("Thurs, day=1".into()),
+            ..Default::default()
+        };
+        let base = crate::settings::port_offset();
+        assert_eq!(
+            nearby_commons(&saved),
+            format!("http://127.0.0.1:{}=spark,http://127.0.0.1:{}=Thurs  day 1", 8080 + base, 8082 + base)
+        );
+        assert_eq!(nearby_commons(&Saved { role: Some("node".into()), ..Default::default() }), "");
+    }
+
+    #[test]
+    fn every_server_stops_with_the_app() {
+        for (kind, port) in [(Kind::Node, 8080), (Kind::Commons, 8081), (Kind::Practice, 8082)] {
+            assert_eq!(env_of(kind, port)["HIC_EXIT_WITH_APP"], "1", "{kind:?}");
+        }
     }
 
     #[test]
@@ -524,10 +769,12 @@ mod tests {
             &DefaultCommons::default(),
             None,
             Some("https://hic.tail.ts.net".into()),
+            true,
         )
         .into_iter()
         .collect();
-        assert_eq!(env["HIC_BIND"], "127.0.0.1");
+        assert_eq!(env["HIC_BIND"], "127.0.0.1", "asked to open, but there is no network to open on");
+        assert!(!env.contains_key("HIC_ROOM"));
         assert_eq!(env["HIC_BASE_URL"], "http://127.0.0.1:8082");
     }
 }

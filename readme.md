@@ -15,9 +15,9 @@ node.
   vouches for them or the steward approves them.
 - **Same program, two roles:** one binary runs as either. The desktop app asks
   which when it first starts, and can run both side by side, plus a practice
-  commons to learn on (**Go** menu).
+  commons to learn on (**This computer**, in the sidebar).
 
-Current version: **0.8.2**, signed and notarized for macOS.
+Current version: **0.9.0**, signed and notarized for macOS.
 
 | I want to… | Read |
 |---|---|

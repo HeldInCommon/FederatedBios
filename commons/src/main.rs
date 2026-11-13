@@ -32,6 +32,7 @@ async fn run(config: Config) -> Result<(), String> {
     // Pages call the node's default commons by its name, not its address
     // (see `web::layout::host_label`).
     hic_commons::web::layout::name_default_commons(&config.share_default, &config.share_default_name);
+    hic_commons::web::layout::name_nearby_commons(&config.share_nearby);
     let store = Store::open(&config.data_dir)
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;
     // Decide the folder's role: read what's there, apply the rule, then save
@@ -76,7 +77,11 @@ async fn run(config: Config) -> Result<(), String> {
         }
     }
 
-    let addr = SocketAddr::new(config.bind_addr(role), config.port);
+    if config.exit_with_app {
+        stop_when_the_app_is_gone();
+    }
+    let addrs: Vec<SocketAddr> =
+        config.listen_addrs(role).into_iter().map(|ip| SocketAddr::new(ip, config.port)).collect();
     let state = Arc::new(app::AppState::new(config, role, store));
     if role == role::Role::Node {
         // Once at start-up: ask each commons we're waiting on whether we've been
@@ -91,17 +96,72 @@ async fn run(config: Config) -> Result<(), String> {
         // opens these itself; it still accepts nothing (decision record 0004).
         tokio::spawn(hic_commons::relay_node::run(state.clone()));
     }
-    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
-    println!("hic-commons listening on {addr}");
-    // With connection info, so handlers can see the sender's address (rate limits).
-    axum::serve(listener, app::router(state).into_make_service_with_connect_info::<SocketAddr>())
+    // Usually one address. A server open to the room on the room's address
+    // also listens on 127.0.0.1 for its owner (`Config::listen_addrs`):
+    // every listener but the first runs on its own task, and the process
+    // ends when the first one stops.
+    let mut listeners = Vec::new();
+    for addr in &addrs {
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
+        println!("hic-commons listening on {addr}");
+        listeners.push(listener);
+    }
+    let router = app::router(state);
+    for listener in listeners.split_off(1) {
+        let service = router.clone().into_make_service_with_connect_info::<SocketAddr>();
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, service).await {
+                eprintln!("hic-commons: a listener stopped: {e}");
+            }
+        });
+    }
+    let first = listeners.pop().ok_or("no address to listen on")?;
+    // With connection info, so handlers can see the sender's address (rate
+    // limits, and the door when open to the room).
+    axum::serve(first, router.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))
 }
 
-/// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` and the desktop app
-/// send), so in-flight requests finish before the process exits.
+/// Stop this process as soon as stdin ends (decision record 0027).
+///
+/// The desktop app holds the writing end of our stdin for as long as it
+/// runs. When the app ends for any reason, including a crash or a
+/// force-quit that skips its own clean-up, the operating system closes that
+/// end, so reading stdin returns "end of file", and we exit at once. That
+/// stops a server open to the room from outliving the app. A plain `exit`
+/// rather than a graceful shutdown: nobody is left to answer, and a long
+/// poll could otherwise hold the port open for half a minute.
+///
+/// Nothing is printed on the way out: the app's end of our stdout has
+/// closed too, and `println!` would panic on the broken pipe, stopping only
+/// this thread and leaving the server running.
+///
+/// Runs on its own thread, because reading stdin blocks. Anything the app
+/// writes to stdin is read and ignored.
+fn stop_when_the_app_is_gone() {
+    std::thread::spawn(|| {
+        use std::io::{ErrorKind, Read};
+        let mut stdin = std::io::stdin();
+        let mut buffer = [0u8; 256];
+        loop {
+            match stdin.read(&mut buffer) {
+                // End of file: the app's end of the pipe has closed.
+                Ok(0) => break,
+                Ok(_) => continue,
+                // A signal arrived mid-read; that's not the app going away.
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                // Any other error means stdin is gone too.
+                Err(_) => break,
+            }
+        }
+        std::process::exit(0);
+    });
+}
+
+/// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` sends; the desktop
+/// app stops its servers with SIGKILL, or by closing their stdin), so in-flight requests finish before the process exits.
 async fn shutdown_signal() {
     let ctrl_c = async {
         let _ = tokio::signal::ctrl_c().await;

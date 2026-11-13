@@ -26,6 +26,7 @@
 //! | `here.rs` | a story shared "Only while I'm here": its text fetched just now, or "Not here right now" |
 //! | `story_form.rs` | writing a story (new or editing), then its rights step |
 //! | `rights.rs` | Sharing and rights: who can see it, licence, signals, Held in Common Signals, how a story travels |
+//! | `room.rs` | open to the room: the owner's room page with its QR code, the check page and "Can't reach someone?" |
 //! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
 
 use crate::model::RemoteEntry;
@@ -44,6 +45,7 @@ mod parts;
 mod profile;
 mod publish;
 mod rights;
+mod room;
 mod schematics;
 mod sharing;
 mod signin;
@@ -62,6 +64,7 @@ pub use owner::OwnerPanel;
 pub use parts::Chosen;
 pub use profile::profile;
 pub use publish::publish_form;
+pub use room::{join_room, room, room_check, room_help, RoomView};
 pub use sharing::{shared, shared_pending, vouch_outcome, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
 pub use stories::{author_stories, commons_stories, node_stories};
@@ -112,10 +115,12 @@ fn is_loopback_host(host: &str) -> bool {
 }
 
 /// The commons a member can share to in one click: the default first, then
-/// every commons already shared to, without duplicates.
-pub fn known_commons(default: &str, shared_to: &[String]) -> Vec<String> {
+/// the commons the desktop app runs on this computer (`nearby`, address and
+/// name), then every commons already shared to, without duplicates. Pure.
+pub fn known_commons(default: &str, nearby: &[(String, String)], shared_to: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for u in std::iter::once(default).chain(shared_to.iter().map(String::as_str)) {
+    let nearby = nearby.iter().map(|(url, _)| url.as_str());
+    for u in std::iter::once(default).chain(nearby).chain(shared_to.iter().map(String::as_str)) {
         let u = u.trim().trim_end_matches('/');
         if !u.is_empty() && !out.iter().any(|x| x == u) {
             out.push(u.to_string());
@@ -130,9 +135,16 @@ mod tests {
 
     #[test]
     fn known_commons_dedups_and_keeps_default_first() {
-        let got = known_commons("http://a/", &["http://b".into(), "http://a".into()]);
+        let got = known_commons("http://a/", &[], &["http://b".into(), "http://a".into()]);
         assert_eq!(got, vec!["http://a".to_string(), "http://b".to_string()]);
-        assert!(known_commons("", &[]).is_empty());
+        assert!(known_commons("", &[], &[]).is_empty());
+        let near = vec![("http://127.0.0.1:8180".to_string(), "spark".to_string())];
+        let got = known_commons("http://a", &near, &["http://127.0.0.1:8180".into()]);
+        assert_eq!(
+            got,
+            vec!["http://a".to_string(), "http://127.0.0.1:8180".to_string()],
+            "this computer's commons next"
+        );
     }
 
     #[test]

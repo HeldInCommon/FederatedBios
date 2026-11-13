@@ -11,7 +11,7 @@ This document is for the people building on and operating Held in Common. For
 major choice was made, the [decision records](adr/README.md); for the exact
 bytes that are signed, the [format specification](spec/README.md).
 
-Current version: **0.8.2** (November 2026).
+Current version: **0.9.0** (November 2026).
 
 ---
 
@@ -76,14 +76,14 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
 - **First launch:** choose **a node** or **a commons**, then **name it**
   ("Studio laptop"). The name shows in the coloured bar and travels, signed,
   with every share; it is never the computer's account name. Rename any time
-  from the **Go** menu. Roles and names are saved in `<app data>/app.json`;
+  from **This computer** in the sidebar. Roles and names are saved in `<app data>/app.json`;
   each has its own data folder (`node-data/`, `commons-data/`, `practice-data/`).
 - **Side by side:** the other role can be added later, and a **local commons**
   (`practice` in code and folders, its first name) opened for a workshop or a
   session: anyone on the same Wi-Fi reaches it at this computer's address, and
   joining needs a vouch as anywhere else. The first-launch role
-  keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
-  row of buttons on each page move between them; a node's
+  keeps port 8080, the other gets 8081, practice 8082. The sidebar's **This computer** panel
+  (and, on macOS, the **Go** menu in the menu bar) moves between them; a node's
   **Run a commons** page links into the app with `hic-app://open/…`
   ([0019](adr/0019-node-and-commons-side-by-side.md)).
 - **Running the server:** the app starts the bundled `hic-commons` as a
@@ -190,7 +190,7 @@ A new handle is listed only when someone already there vouches for it
 
 The **steward view** opens at the commons' own computer (the desktop app goes
 straight there), or with the private **steward link** the commons prints in its
-log (in the desktop app: **Go → Show steward link…**; the app keeps it out of
+log (in the desktop app: **This computer → Show steward link…**; the app keeps it out of
 its own log, ADR 0024). Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
 `HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
 
@@ -299,6 +299,11 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 | `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
+| `HIC_EXIT_WITH_APP` | *(off)* | `1`: stop when stdin ends; the desktop app sets it so a server never outlives the app (ADR 0027) |
+| `HIC_ROOM_ADDRESS` | *(none)* | the address the room reaches a server at, for its room page and QR code (ADR 0027) |
+| `HIC_ROOM_CODE` | *(none)* | on a local commons open to the room, the code that admits people (ADR 0027) |
+| `HIC_FIREWALL_HINT` | *(none)* | a hint about this computer's firewall, shown on the room page (ADR 0027) |
+| `HIC_ROOM` | *(off)* | `1`: open to the room (ADR 0027): the door lets the room's network reach only public pages on a node, and not the host's pages on a commons |
 | `HIC_PRACTICE` | *(off)* | `1`: a local commons (once "practice"); its pages say so and show its Wi-Fi address |
 | `HIC_RELAY_HOLD`, `HIC_RELAY_WAIT` | `25`, `8` | Seconds a commons holds a node's "Only while I'm here" poll open, and a reader waits for the node (1–60) |
 

@@ -47,8 +47,9 @@ The first time you open the app it asks **what you want to run**. Choose
 
 Then **name it**, for example "Studio laptop". People see this name next to your
 profile on every commons you share to; if you use Held in Common on more than
-one computer, give each its own name. You can rename it later from the menu
-bar: **Go → Rename your node…**.
+one computer, give each its own name. You can rename it later from **This computer**, the panel in the sidebar of
+every page: **This computer → Rename your node…**. (On a Mac the same items are
+also in the **Go** menu in the menu bar.)
 
 ### 4. Create your handle — and keep your recovery code
 
@@ -116,10 +117,10 @@ Members-only profiles are never shared: they stay encrypted on your computer.
    **Email this invite** button.
 
 **Already have a node?** You don't need a second computer. Choose
-**Go → Set up a commons…** (or the button on **Run a commons**, linked
+**This computer → Set up a commons…** (or the button on **Run a commons**, linked
 at the bottom of every node page). The commons runs beside your node, and the
 buttons in the corner of the window move between them. **Hosting a commons
-and want your own profile in it?** Choose **Go → Add your own node…**, then
+and want your own profile in it?** Choose **This computer → Add your own node…**, then
 share to that commons like anyone else.
 
 **Running a workshop?** Members can write a short **story** on their node
@@ -128,30 +129,67 @@ minute. Write a small story from what you hear."). It stays on their computer
 until they press **Share**, and goes to a commons where they're listed. They
 can **Withdraw** it from there at any time, and **Export** it as a text file.
 
-**A local commons, for a workshop or a session.** **Go → Open a local commons
-(this Wi-Fi)** starts a commons on this computer that anyone on the same Wi-Fi
-can reach. Name it (**Go → Rename local commons…**) and tell the room its
-address, which its sidebar shows (it looks like `http://192.168.1.20:8082`).
+**A local commons, for a workshop or a session.** **This computer → Start a
+local commons** starts a commons on this computer. It starts closed: only this
+computer can reach it. Name it (**This computer → Rename local commons…**), and when the
+room is ready choose **This computer → Open … to the room…**: anyone on the same Wi-Fi
+can then reach it at this computer's address (it looks like
+`http://192.168.1.20:8082`). It closes when you choose Close, quit the app, or
+this computer's network address changes. See `docs/ROOM-GUIDE.md` for running a session.
 People share to it from their own nodes and are listed once a member vouches
-(one click on their People tab) or you approve them. **Go → Remove local
-commons…** deletes it when the session's over.
+(one click on their People tab) or you approve them. **This computer → Remove
+local commons…** deletes it when the session's over.
 
-**Also public (Tailscale Funnel, a reverse proxy)?** A commons started by the
-app knows itself only by its room address, so invite codes and vouches made
-for its public address are refused as "for a different commons". Tell it its
-public address: quit the app, add one line to `app.json` in the app's data
-folder (`~/Library/Application Support/org.heldincommon.node/` on a Mac,
-`~/.local/share/org.heldincommon.node/` on Linux), and reopen it:
+### Run a commons online
+
+A commons can reach more than one room. There are two ways, and the app
+walks you through both when you choose **A commons** at first launch
+("Where will people reach this commons?"), or later from
+**This computer → Public address…**.
+
+**1. From this app, at an address you've set up.** The commons runs on this
+computer; something gives it an address people can reach from anywhere:
+
+- **Tailscale Funnel** (simplest). Install Tailscale, allow Funnel for this
+  computer in the Tailscale admin page, then run the command the app shows,
+  for example `tailscale funnel --bg 8080` (the app says which port). Funnel
+  prints an address like `https://your-computer.your-tailnet.ts.net`: paste
+  it into the app.
+- **Your own domain or a fixed IP.** Point it at this computer and forward it
+  to the commons' port (the app says which): a reverse proxy such as Caddy
+  for `https://`, or your router's port forwarding.
+
+In **This computer → Public address…**, **Check it** asks the commons to visit that
+address with a random value, and checks the reply carries a secret answer
+only this commons knows: so a ✓ means the address leads to this commons.
+The visit starts on this computer, so to be sure people elsewhere can reach
+it, also open the address on a phone with Wi-Fi turned off. **Save** restarts the commons with the
+address. From then on it accepts invites and vouches made for either
+address, shows the public one first ("Nodes share to …"), and has a steward
+link for each. People on the same Wi-Fi can keep using the room address.
+
+The computer must stay on and the app open for the commons to be reachable.
+
+**2. On a server of its own, with Docker.** For a commons that's always up:
+a VPS, or a computer with a fixed IP. Choose **A server I host** at first
+launch: the app shows the `docker run` command with your address filled in.
+It looks like this:
 
 ```
-"public_address": "https://your-commons.example.ts.net"
+docker run -d --name hic-commons --restart unless-stopped \
+  -p 8080:8080 -v hic-commons:/data \
+  -e HIC_ROLE=commons -e HIC_INSTANCE="Our commons" \
+  -e HIC_BASE_URL="https://commons.example.org" \
+  ghcr.io/heldincommon/hic-node:latest
 ```
 
-The commons then accepts both addresses, shows the public one first ("Nodes
-share to …"), and has a steward link for each.
+`docker logs hic-commons` then shows its steward link and founding invite
+(keep both private). Make the address lead to port 8080 on the server, then
+run your own node in the app and share to it. More in
+[commons/README.md](../commons/README.md).
 
 **Your steward link** opens the steward view from any computer: in the app,
-choose **Go → Show steward link…** and press **Copy**. Keep it private:
+choose **This computer → Show steward link…** and press **Copy**. Keep it private:
 anyone who has it can approve people and make invite codes.
 
 To host on a server or in Docker instead, see [commons/README.md](../commons/README.md).
