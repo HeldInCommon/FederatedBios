@@ -60,9 +60,15 @@ steward link, the public address, add a node or a commons, remove the local
 commons. One pure list (`src-tauri/src/go_menu.rs`) feeds both. The panel's
 links are `hic-app://menu/<id>`. Like every `hic-app://` link, the app
 follows them only from its own servers' pages (and not while a new page is
-still loading), and only items on the Go menu at that moment. Anything that changes something still asks first in the
-setup window, except closing the room, which only makes a server less
+still loading), and only items on the Go menu at that moment. Anything
+that changes something still asks first in the setup window, except closing
+the room, which only makes a server less reachable.
 
+**On Linux there's no menu bar.** It sat inside the window, where it was
+easy to miss and disorienting, and the page's panel now does its job. On
+macOS the Go menu stays in the menu bar at the top of the screen, where
+people expect it. The panel is redrawn whenever something changes (opening
+or closing the room, a new address), not only when a page loads.
 
 ## Why
 "Make it possible, not hard-coded": an address is an address, whether it's
