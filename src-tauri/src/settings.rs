@@ -203,15 +203,33 @@ impl Saved {
     }
 }
 
+/// How far this copy of the app moves its ports up from 8080–8082, so a
+/// second copy (a test build) can run beside the installed one: with 100,
+/// it uses 8180–8182. Baked in at build time from `HIC_PORT_OFFSET` (as the
+/// default commons is); 0, and so the usual ports, for every normal build.
+/// A test build also needs its own identifier, so it keeps its own data
+/// folder (see `docs/MAINTAINER.md`).
+pub fn port_offset() -> u16 {
+    parse_offset(option_env!("HIC_PORT_OFFSET"))
+}
+
+/// A port offset as written, or 0 if it's missing, not a number, or would
+/// push the ports past the top of the range. Pure.
+pub fn parse_offset(written: Option<&str>) -> u16 {
+    written.and_then(|v| v.trim().parse::<u16>().ok()).filter(|o| *o <= 50_000).unwrap_or(0)
+}
+
 /// The port for `kind` when `first` is the first-launch role: the
 /// first-launch role keeps 8080 (so existing nodes and room commons keep
-/// their addresses), the other role gets 8081, and practice 8082.
+/// their addresses), the other role gets 8081, and practice 8082, each
+/// moved up by [`port_offset`] (0 in a normal build).
 pub fn port_for(first: Option<&str>, kind: Kind) -> u16 {
-    match kind {
+    let base = match kind {
         Kind::Practice => PRACTICE_PORT,
         k if first.is_none_or(|r| r == k.role()) => FIRST_PORT,
         _ => SECOND_PORT,
-    }
+    };
+    base + port_offset()
 }
 
 /// The sign-in cookie name for a server on `port` (`HIC_SESSION_COOKIE`).
@@ -411,6 +429,15 @@ mod tests {
         assert_eq!(data_dir_for(b, Kind::Node), Path::new("/x/node-data"));
         assert_eq!(data_dir_for(b, Kind::Commons), Path::new("/x/commons-data"));
         assert_eq!(data_dir_for(b, Kind::Practice), Path::new("/x/practice-data"));
+    }
+
+    #[test]
+    fn a_port_offset_is_read_carefully() {
+        assert_eq!(parse_offset(None), 0);
+        assert_eq!(parse_offset(Some("100")), 100);
+        assert_eq!(parse_offset(Some(" 100 ")), 100);
+        assert_eq!(parse_offset(Some("lots")), 0);
+        assert_eq!(parse_offset(Some("60000")), 0, "would run past the last port");
     }
 
     #[test]
