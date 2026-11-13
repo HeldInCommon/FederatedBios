@@ -111,7 +111,7 @@
   --logo-height: 2.875rem; /* 46px, as on heldincommon.org */
   --radius-panel: 28px; /* the big outer shapes are round; everything inside is square */
   --frame-gap: 22px; /* how much quilt shows around and between the panels */
-  --rail-width: 284px;
+  --rail-width: 330px; /* fits a card's chip and its Options button on one line */
 
   /* Icons */
   --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23111111' stroke-width='1.8'/%3E%3C/svg%3E");
@@ -474,7 +474,12 @@ fieldset {
   gap: var(--space-6);
   width: var(--rail-width);
   min-height: calc(100vh - 2 * var(--frame-gap));
-  padding: 30px 26px 30px 28px;
+
+  /* Never taller than the window: with several servers and their actions
+     it scrolls inside itself, so its foot is never out of reach. */
+  max-height: calc(100vh - 2 * var(--frame-gap));
+  overflow-y: auto;
+  padding: 30px 22px 30px 28px;
 }
 
 .wordmark {
@@ -504,138 +509,89 @@ fieldset {
 }
 
 /* This computer's servers, always in the same order (node, commons,
-   practice) whichever you're on: the page draws its own card and the
-   desktop app adds the others into .server-list (src-tauri/src/links.rs);
-   display: contents lets them all sort together by `order`. */
+   local commons, then the ones you could add) whichever you're on: the page
+   draws the card you're on and the desktop app adds the others into
+   .server-list (src-tauri/src/links.rs); display: contents lets them all
+   sort together by `order`. */
 .servers {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .server-list {
   display: contents;
 }
 
-.server-card.is-node,
-.server-card[data-kind="node"],
-.room-pop.is-node,
-.server-address[data-kind="node"] {
-  order: 1;
-}
-
-/* What follows a card (its address, "Open to the room") sorts with it;
-   the Go menu's panel comes last. */
-.room-pop.is-commons,
-.server-address[data-kind="commons"] {
-  order: 2;
-}
-
-.room-pop.is-practice,
-.server-address[data-kind="practice"] {
-  order: 3;
-}
-
-/* The Go menu, in the page (filled in by the desktop app): plain links,
-   one per line, under a label, after this computer's servers. */
-.app-actions {
-  order: 4;
-  display: grid;
-  gap: var(--space-2);
-}
-
-.app-actions ul {
-  display: grid;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.app-actions a {
-  font-size: var(--text-sm);
-  color: var(--ink);
-}
-
-.rail-label {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.server-card {
+/* One server: its card (a link, unless you're on it), a chip saying who can
+   reach it, and its actions. Each kind has its starburst colour (--tone)
+   and its place in the fixed order. */
+.server {
   --tone: var(--pink);
 
+  order: 1;
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-4);
   background: var(--surface-sunk);
   color: var(--ink);
-  text-decoration: none;
 }
 
-/* Each kind's starburst colour, and its place in the fixed order. */
-.server-card.is-commons,
-.server-card[data-kind="commons"] {
+.server.is-commons,
+.server[data-kind="commons"] {
   --tone: var(--violet);
 
   order: 2;
 }
 
-.server-card.is-practice,
-.server-card[data-kind="practice"] {
+.server.is-practice,
+.server[data-kind="practice"] {
   --tone: var(--blue);
 
   order: 3;
 }
 
-/* The server you're on: filled ink. Fill, not colour, marks it, so it
-   reads the same to colour-blind people. */
-.server-card.is-here {
-  background: var(--ink);
-  color: var(--white);
-}
-
-/* Rollover: the other servers are links, so they rise onto the hard ink
-   shadow like every other card. */
-a.server-card:hover,
-a.server-card:focus-visible {
+/* The server you're on: white, framed in its own colour. Never filled ink,
+   so nothing sits black on black. The frame and the "You're here" words,
+   not the colour, mark it, so it reads the same to colour-blind people. */
+.server.is-here {
   background: var(--surface);
-  box-shadow: var(--shadow-lift);
-  top: var(--lift-by);
-  left: var(--lift-by);
+  box-shadow: inset 0 0 0 3px var(--tone);
 }
 
-a.rail-foot:hover {
-  color: var(--accent);
+.server-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--ink);
+  text-decoration: none;
 }
 
-/* "Go to the Held in Common Collective Commons": the node's default commons
-   as a button at the foot of the rail, rather than its long address. */
-.rail-go-wrap {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: auto;
-}
-
-.rail-go {
-  position: relative;
-  justify-self: start;
-  font-size: var(--text-sm);
-}
-
-/* Says the button leaves this computer: the commons is somewhere else. */
-.rail-go-note {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+/* The other servers' cards are links: the name underlines under the
+   pointer, like any link. */
+a.server-card:hover .server-name,
+a.server-card:focus-visible .server-name {
+  text-decoration: underline;
 }
 
 .server-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+
+/* "You're here", above the name of the card you're on. */
+.server-here {
+  font: 700 var(--text-2xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+.server-here::before {
+  content: "\25CF  ";
+  color: var(--tone);
 }
 
 .server-name {
@@ -648,8 +604,215 @@ a.rail-foot:hover {
   color: var(--text-muted);
 }
 
-.is-here .server-sub {
-  color: rgb(255 255 255 / 85%);
+/* The chip and the Options button share a row under the card. */
+.server-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Who can reach it: an ink outline, or oxblood once it's open to the room,
+   because whoever opened it may need to close it. The words carry the
+   meaning; colour only adds. */
+.server-chip {
+  padding: 4px 6px;
+  border: var(--rule);
+  font: 700 var(--text-2xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+.server-chip.is-open {
+  border-color: var(--oxblood);
+  background: var(--oxblood);
+  color: var(--white);
+}
+
+/* The address of a server open to the room: plain text to select and copy,
+   not part of the link. */
+.server-address {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.server-address code {
+  color: var(--ink);
+  user-select: all;
+}
+
+/* Show QR code and Close to the room: on the card while it's open. */
+.server-room {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.server-room a {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Options: the rest of the Go menu for this server, opened by its button. */
+
+/* margin-left: auto keeps it on the right, even when a long chip pushes it
+   onto a line of its own. */
+.server-options-toggle {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 700 var(--text-2xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.server-options-toggle::after {
+  content: " \25BE";
+}
+
+.server-options-toggle[aria-expanded="true"]::after {
+  content: " \25B4";
+}
+
+.server-options {
+  display: grid;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  list-style: none;
+}
+
+/* Closed until its Options button opens it (display: grid above would
+   otherwise beat the hidden attribute). */
+.server-options[hidden] {
+  display: none;
+}
+
+.server-options a {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.server-options a:hover,
+.server-options a:focus-visible {
+  text-decoration: underline;
+}
+
+/* Removing something: set apart at the bottom, in oxblood. */
+.server-options .is-danger {
+  margin-top: var(--space-3);
+}
+
+.server-options .is-danger a {
+  color: var(--oxblood);
+  font-weight: 600;
+}
+
+/* A server this computer could add: a dashed card, its + in the colour of
+   the server it would become, after the servers it runs. */
+.server-add {
+  --tone: var(--pink);
+
+  order: 4;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 2px dashed var(--faint);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.server-add[data-kind="commons"] {
+  --tone: var(--violet);
+}
+
+.server-add[data-kind="practice"] {
+  --tone: var(--blue);
+}
+
+.server-add:hover,
+.server-add:focus-visible {
+  border-color: var(--ink);
+}
+
+.server-add-mark {
+  font-size: var(--text-xl);
+  line-height: 1;
+  color: var(--tone);
+}
+
+.rail-label {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+a.rail-foot:hover {
+  color: var(--accent);
+}
+
+/* The node's default online commons, at the foot of the rail. It stays in
+   view at the bottom of the rail while the rail scrolls. */
+.rail-go-wrap {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-4) 0 var(--space-6);
+  background: var(--stage);
+}
+
+.rail-go {
+  position: relative;
+  justify-self: start;
+  font-size: var(--text-sm);
+}
+
+/* Coming soon: the online commons is offline for now, so it is named but
+   not a link: a dashed outline, and a tag that says so in words. */
+.rail-go.is-soon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 2px dashed var(--faint);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rail-go-tag {
+  padding: 2px var(--space-2);
+  background: var(--ink);
+  color: var(--white);
+  font: 700 var(--text-2xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+/* Says the commons is somewhere else, not on this computer. */
+.rail-go-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 /* The starburst token, the shape heldincommon.org uses for numbers. */
@@ -678,26 +841,6 @@ a.rail-foot:hover {
     18% 10%,
     39% 18%
   );
-}
-
-/* The address under another server's card in the rail (filled in by the
-   desktop app): plain text to select and copy, not part of the link. */
-.server-address {
-  margin: calc(var(--space-1) * -1) 0 var(--space-3);
-  font-size: var(--text-xs);
-  overflow-wrap: anywhere;
-}
-
-/* "Open to the room" under the server card: oxblood, because whoever opened
-   it may need to close it. The words carry the meaning; colour only adds. */
-.room-pop {
-  margin: var(--space-3) 0 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--oxblood);
-  color: var(--white);
-  font: 700 var(--text-xs) var(--font-mono);
-  letter-spacing: var(--track);
-  text-transform: uppercase;
 }
 
 .rail-foot {
@@ -1029,10 +1172,16 @@ a.rail-foot {
   background: var(--tone);
 }
 
+/* White on pink is about 3:1, under the 4.5:1 small text needs: ink. */
+.vis-badge.vis-public {
+  color: var(--ink);
+}
+
 /* Directory */
 .dir-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-items: start; /* each card keeps its own height */
   gap: var(--space-4);
   margin-top: var(--space-7);
 }
@@ -2500,6 +2649,8 @@ a.rail-foot {
     gap: var(--space-3);
     width: auto;
     min-height: 0;
+    max-height: none;
+    overflow-y: visible;
     padding: var(--space-4);
   }
 
@@ -2520,13 +2671,19 @@ a.rail-foot {
     overflow-x: auto;
   }
 
-  .server-card {
+  .server,
+  .server-add {
     flex: none;
     gap: var(--space-2);
     padding: 9px 12px;
   }
 
-  .server-sub {
+  .server-card {
+    gap: var(--space-2);
+  }
+
+  .server-sub,
+  .server-here {
     display: none;
   }
 

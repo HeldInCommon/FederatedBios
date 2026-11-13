@@ -179,17 +179,18 @@ impl Place {
         }
     }
 
-    /// Where it is and who can reach it, in a few words, given whether it's
-    /// `open` to the room (decision record 0027; only a node or a local
-    /// commons has the switch).
-    pub fn reach(self, open: bool) -> &'static str {
+    /// Who can reach it, in a few words, given whether it's `open` to the
+    /// room (decision record 0027): the chip on its card in the rail. The
+    /// card's name already says what it is, so the chip doesn't repeat it.
+    /// Matches `room::chip_text` in the desktop app, which draws the other
+    /// servers' cards.
+    pub fn chip(self, open: bool) -> &'static str {
         match (self, open) {
-            (Place::Node, false) => "on this computer, only you",
-            (Place::Node, true) => "open to the room: public pages only",
-            (Place::Local, false) => "closed to the room",
-            (Place::Local, true) => "open to the room",
-            (Place::OnThisWifi, _) => "anyone on this Wi-Fi",
-            (Place::Online, _) => "anyone with its address",
+            (Place::Node | Place::Local, true) => "Open to the room",
+            (Place::Node, false) => "Only you",
+            (Place::Local, false) => "Closed to the room",
+            (Place::OnThisWifi, _) => "Anyone on this Wi-Fi",
+            (Place::Online, _) => "Anyone with its address",
         }
     }
 
@@ -199,6 +200,17 @@ impl Place {
             Place::Node => "is-node",
             Place::Local => "is-practice",
             Place::OnThisWifi | Place::Online => "is-commons",
+        }
+    }
+
+    /// The kind of server, as the desktop app names it (`node`, `practice`,
+    /// `commons`): the card's `data-kind`, so the app's script can find the
+    /// card you're on and put its actions on it (`src-tauri/src/links.rs`).
+    fn kind_key(self) -> &'static str {
+        match self {
+            Place::Node => "node",
+            Place::Local => "practice",
+            Place::OnThisWifi | Place::Online => "commons",
         }
     }
 }
@@ -231,11 +243,12 @@ const ROOM_CLOSES: &str =
     "It closes when you close it under This computer in the sidebar, quit the app, or this computer's network address changes.";
 
 /// The side rail: the logo, the server this page belongs to, a slot the
-/// desktop app fills with the other servers on this computer (see
-/// `src-tauri/src/links.rs`), and a line about where this server reaches.
+/// desktop app fills with the other servers on this computer and each
+/// server's actions (see `src-tauri/src/links.rs`), and a line about where
+/// this server reaches.
 fn rail(site: &Site) -> Markup {
     let place = Place::of(site);
-    let reach = place.reach(site.room.is_some());
+    let open = site.room.is_some();
     html! {
         aside class="rail" {
             a class="wordmark" href="/" {
@@ -244,68 +257,89 @@ fn rail(site: &Site) -> Markup {
             }
             section class="servers" aria-labelledby="hic-servers-label" {
                 // Visitors to a commons reach it over the network, so only
-                // a node says "On this computer".
+                // a node in the app says "This computer".
                 p class="rail-label" id="hic-servers-label" {
-                    @if site.in_app && !site.is_commons() { "On this computer" } @else { "You're on" }
+                    @if site.in_app && !site.is_commons() { "This computer" } @else { "You're on" }
                 }
-                div class={ "server-card is-here " (place.class()) } aria-current="true" {
-                    span class="star" aria-hidden="true" {}
-                    span class="server-text" {
-                        // A commons leads with its own name ("Held in Common
-                        // Collective Commons"), then what it is and who can
-                        // reach it; a node with "Your node", then its name.
-                        @if site.is_commons() && !site.instance.trim().is_empty() {
-                            span class="server-name" { (site.instance) }
-                            span class="server-sub" { (place.kind_name()) ": " (reach) }
-                        } @else if site.is_commons() {
-                            span class="server-name" { (place.kind_name()) }
-                            span class="server-sub" { (reach) }
-                        } @else {
-                            span class="server-name" { (place.kind_name()) }
-                            span class="server-sub" {
-                                @if !site.instance.trim().is_empty() { (site.instance) ": " }
-                                (reach)
-                            }
-                        }
-                    }
-                }
-                // Open to the room: the one state here someone may need to
-                // act on (close it), so an oxblood pop, said in words.
-                @if site.room.is_some() {
-                    p class={ "room-pop " (place.class()) } { "Open to the room" }
-                }
+                (here_card(site, place, open))
                 div class="server-list" id="hic-servers" hidden {}
             }
-            @if site.is_commons() && site.practice {
-                @if site.room.is_some() {
-                    p class="rail-foot" {
-                        "Anyone on this Wi-Fi can share to "
-                        code { (site.base_url) }
-                        ". It's here while this computer is awake and the app is open. "
-                        (ROOM_CLOSES)
-                    }
-                } @else {
-                    p class="rail-foot" {
-                        "Closed to the room: only this computer can reach it. Open it from This computer in the sidebar when the room is ready."
-                    }
+            (rail_foot(site, place))
+        }
+    }
+}
+
+/// The card for the server this page belongs to: framed in its colour, with
+/// a chip saying who can reach it. In the app it also says "You're here",
+/// beside the other servers' cards; the app's script adds its actions.
+fn here_card(site: &Site, place: Place, open: bool) -> Markup {
+    let instance = site.instance.trim();
+    // A commons leads with its own name ("Thursday session") and says what
+    // it is underneath; a node leads with "Your node" and gives its name
+    // underneath. Nothing is said twice.
+    let (name, sub) = match (site.is_commons(), instance.is_empty()) {
+        (true, false) => (instance, Some(place.kind_name())),
+        (true, true) => (place.kind_name(), None),
+        (false, false) => (place.kind_name(), Some(instance)),
+        (false, true) => (place.kind_name(), None),
+    };
+    html! {
+        div class={ "server is-here " (place.class()) } data-kind=(place.kind_key()) {
+            div class="server-card" aria-current="true" {
+                span class="star" aria-hidden="true" {}
+                span class="server-text" {
+                    @if site.in_app { span class="server-here" { "You're here" } }
+                    span class="server-name" { (name) }
+                    @if let Some(sub) = sub { span class="server-sub" { (sub) } }
                 }
-            } @else if site.is_commons() {
+            }
+            div class="server-foot" {
+                // Open to the room is the one state someone may need to act
+                // on (close it), so its chip is oxblood; the words carry the
+                // meaning and the colour only adds to it.
+                span class={ "server-chip" @if open { " is-open" } } { (place.chip(open)) }
+            }
+        }
+    }
+}
+
+/// The foot of the rail: who can share to this commons, or on a node, the
+/// online commons it shares to by default.
+fn rail_foot(site: &Site, place: Place) -> Markup {
+    html! {
+        @if site.is_commons() && site.practice {
+            @if site.room.is_some() {
                 p class="rail-foot" {
-                    "Nodes share to "
-                    code { (site.public_url()) }
-                    ". It holds signed copies; the originals stay on each person's node."
-                    @if place == Place::OnThisWifi { " " (ADDRESS_CAN_CHANGE) }
+                    "Anyone on this Wi-Fi can share to "
+                    code { (site.base_url) }
+                    ". It's here while this computer is awake and the app is open. "
+                    (ROOM_CLOSES)
                 }
-            } @else if !site.share_default.is_empty() {
-                // The address can be a long Tailscale name: the button says
-                // where it goes instead (HIC_SHARE_DEFAULT_NAME).
-                div class="rail-go-wrap" {
-                    a class="btn-solid rail-go" href=(site.share_default) {
-                        @if site.share_default_name.is_empty() { "Go to the commons" } @else { "Go to the " (site.share_default_name) }
-                        " \u{2197}"
+            } @else {
+                p class="rail-foot" {
+                    "Closed to the room: only this computer can reach it. Open it from This computer in the sidebar when the room is ready."
+                }
+            }
+        } @else if site.is_commons() {
+            p class="rail-foot" {
+                "Nodes share to "
+                code { (site.public_url()) }
+                ". It holds signed copies; the originals stay on each person's node."
+                @if place == Place::OnThisWifi { " " (ADDRESS_CAN_CHANGE) }
+            }
+        } @else if !site.share_default.is_empty() {
+            // Coming soon: the online commons is offline for now, so this
+            // isn't a link. To bring the link back, make this an
+            // `a class="btn-solid rail-go" href=(site.share_default)` saying
+            // "Go to the …" with " \u{2197}", and drop the "Coming soon" tag.
+            div class="rail-go-wrap" {
+                p class="rail-go is-soon" {
+                    span class="rail-go-name" {
+                        @if site.share_default_name.is_empty() { "The online commons" } @else { "The " (site.share_default_name) }
                     }
-                    p class="rail-go-note" { "An online commons, hosted elsewhere. Your node and your originals stay on this computer." }
+                    span class="rail-go-tag" { "Coming soon" }
                 }
+                p class="rail-go-note" { "An online commons, hosted elsewhere. Your node and your originals stay on this computer." }
             }
         }
     }
@@ -357,7 +391,8 @@ fn frame(site: &Site, page: &Page) -> Markup {
                                 a href="/login" aria-current=[current(page, Section::SignIn)] { "Sign in" }
                             }
                             a href="/about" aria-current=[current(page, Section::About)] { "How this works" }
-                            a href=(PROJECT_URL) { "About the project \u{2197}" }
+                            // "About the project ↗" is in the footer, so the
+                            // main links fit on one line.
                         }
                         @if let Some(n) = &page.notices {
                             section class="notice-bar" role="status" {
@@ -649,9 +684,21 @@ mod tests {
         let commons = frame(&in_app, &Page::new("t", None, html! {})).into_string();
         assert!(commons.contains("Held in Common Collective Commons") && commons.contains("Commons on this Wi-Fi"));
         assert!(!commons.contains("Your commons"), "a commons belongs to its community, not to whoever visits");
-        assert!(!commons.contains("On this computer"), "visitors reach a commons over the network");
+        assert!(!commons.contains(">This computer<"), "visitors reach a commons over the network");
         let node = frame(&Site { in_app: true, ..site(Role::Node) }, &Page::new("t", None, html! {})).into_string();
-        assert!(node.contains("On this computer") && node.contains("on this computer, only you"));
+        assert!(node.contains(">This computer<"), "one heading for this computer's servers");
+        assert!(node.contains("You're here") && node.contains(">Only you<"));
+        assert!(node.contains(r#"data-kind="node""#), "so the app can put its actions on this card");
+    }
+
+    #[test]
+    fn the_card_you_are_on_never_says_its_name_twice() {
+        // An unnamed local commons is just "Local commons", with nothing
+        // under it repeating that.
+        let local = Site { practice: true, ..site(Role::Commons) };
+        let page = frame(&local, &Page::new("t", None, html! {})).into_string();
+        assert_eq!(page.matches("Local commons").count(), 1, "named once");
+        assert!(page.contains(">Closed to the room<"));
     }
 
     #[test]
@@ -668,14 +715,17 @@ mod tests {
         let page =
             frame(&Site { instance: "Studio laptop".into(), ..site(Role::Node) }, &Page::new("t", None, html! {}))
                 .into_string();
-        assert!(page.contains("Studio laptop: on this computer, only you"));
+        assert!(page.contains(r#"<span class="server-sub">Studio laptop</span>"#));
+        assert!(page.contains(r#"<span class="server-chip">Only you</span>"#));
         let open =
             Site { instance: "Studio laptop".into(), room: Some("http://192.168.1.5:8080".into()), ..site(Role::Node) };
         let page = frame(&open, &Page::new("t", None, html! {})).into_string();
-        assert!(page.contains("Studio laptop: open to the room: public pages only"), "says so in words");
-        assert!(page.contains(r#"class="room-pop is-node""#), "with the oxblood pop");
+        assert!(
+            page.contains(r#"<span class="server-chip is-open">Open to the room</span>"#),
+            "says so in words, with the oxblood chip"
+        );
         let closed = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
-        assert!(!closed.contains("room-pop"));
+        assert!(!closed.contains("is-open"));
     }
 
     #[test]
@@ -703,7 +753,9 @@ mod tests {
             ..site(Role::Node)
         };
         let page = frame(&named, &Page::new("t", None, html! {})).into_string();
-        assert!(page.contains("Go to the Held in Common Collective Commons"));
+        // Coming soon: named, but not a link while it's offline.
+        assert!(page.contains("The Held in Common Collective Commons") && page.contains("Coming soon"));
+        assert!(!page.contains(r#"href="https://hic.example.ts.net""#), "no link to it for now");
         assert!(!page.contains(">hic.example.ts.net<"), "the address isn't shown as text");
         let local = Site {
             practice: true,
@@ -759,7 +811,7 @@ mod tests {
         };
         let m = frame(&local, &Page::new("t", None, html! {})).into_string();
         assert!(m.contains("Local commons"));
-        assert!(m.contains("Local commons: open to the room") || m.contains("open to the room"));
+        assert!(m.contains(r#"<span class="server-chip is-open">Open to the room</span>"#));
         assert!(m.contains("Anyone on this Wi-Fi can share to <code>http://192.168.1.20:8082</code>"));
         assert!(m.contains("network address changes"), "says it closes when the address changes");
         let closed = Site { room: None, ..local.clone() };
