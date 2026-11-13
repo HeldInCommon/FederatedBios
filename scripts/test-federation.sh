@@ -108,8 +108,12 @@ HIC_DATA="$T/commons2" PORT=8094 HIC_ROLE=commons HIC_INSTANCE="Second commons" 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8094/health >/dev/null || no "second commons failed to start"
 FOUND2=$(grep -oE 'hic-founding-[0-9a-f]+' "$T/commons2/founding-invite.json" 2>/dev/null)
 curl -s -X POST http://localhost:8092/share -H "Cookie: hic_session=$ISID" --data-urlencode "handle=tega" --data-urlencode "csrf=$ICSRF" --data-urlencode "commons_url=http://localhost:8094" --data-urlencode "invite=$FOUND2" | grep -qi "federated to" && ok "other @tega accepted on a different commons" || no "per-commons uniqueness wrongly global"
-# The origin is shown with the card: node address + key fingerprint.
-curl -s http://localhost:8091/ | grep -qE 'from [^<]*:8090' && ok "commons card shows origin address" || no "card missing origin address"
+# The origin is shown with the card: where it came from + key fingerprint.
+# This node says it lives at localhost, which means "its own computer", so
+# the card shows the node's name instead, never this computer's address.
+HOME_PAGE=$(curl -s http://localhost:8091/)
+echo "$HOME_PAGE" | grep -q 'from Tega node' && ok "commons card names a node on its own computer" || no "card missing origin name"
+echo "$HOME_PAGE" | grep -qE 'from [^<]*:8090' && no "card shows a localhost origin as an address" || ok "card shows no address for a node on its own computer"
 curl -s http://localhost:8091/ | grep -q 'class="dir-key"' && ok "commons card shows key fingerprint" || no "card missing key fingerprint"
 
 # A stand-in "commons" on 8099 that keeps the last thing posted to its inbox.
