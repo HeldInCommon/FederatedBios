@@ -55,6 +55,14 @@ pub struct Config {
     /// `HIC_BASE_URL`, so nothing it shares names an address that stops
     /// working when the room closes.
     pub room_address: Option<String>,
+    /// `HIC_ROOM_CODE`: on a local commons open to the room, the code people
+    /// type to join (decision record 0027, D4), tidied to six capitals. The
+    /// desktop app makes a new one each time the room opens. Ignored unless
+    /// this is a local commons (`HIC_PRACTICE`) open to the room.
+    pub room_code: Option<String>,
+    /// `HIC_FIREWALL_HINT`: what to do about this computer's firewall, read by
+    /// the desktop app without admin rights and shown on the room page (D5).
+    pub firewall_hint: Option<String>,
     /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
     pub open_commons: bool,
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
@@ -119,6 +127,7 @@ impl Config {
     pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Config {
         let port = get("PORT").and_then(|p| p.parse().ok()).unwrap_or(8080);
         let room = get("HIC_ROOM").is_some_and(|v| v.trim() == "1");
+        let practice = get("HIC_PRACTICE").is_some_and(|v| v.trim() == "1");
         Config {
             data_dir: PathBuf::from(get("HIC_DATA").unwrap_or_else(|| "./data".into())),
             port,
@@ -141,6 +150,13 @@ impl Config {
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
             room,
             exit_with_app: get("HIC_EXIT_WITH_APP").is_some_and(|v| v.trim() == "1"),
+            room_code: get("HIC_ROOM_CODE")
+                .filter(|c| room && practice && crate::vouching::looks_like_room_code(c))
+                .map(|c| crate::vouching::tidy_room_code(&c)),
+            // Plain text, shown escaped; capped so a stray value can't fill the page.
+            firewall_hint: get("HIC_FIREWALL_HINT")
+                .map(|h| h.trim().chars().take(600).collect::<String>())
+                .filter(|h| !h.is_empty()),
             room_address: get("HIC_ROOM_ADDRESS")
                 .map(|u| u.trim().trim_end_matches('/').to_string())
                 .filter(|u| u.starts_with("http://") || u.starts_with("https://")),
@@ -152,7 +168,7 @@ impl Config {
                 .map(|c| c.trim().to_string())
                 .filter(|c| valid_cookie_name(c))
                 .unwrap_or_else(|| DEFAULT_SESSION_COOKIE.into()),
-            practice: get("HIC_PRACTICE").is_some_and(|v| v.trim() == "1"),
+            practice,
             relay: crate::relay::Timing {
                 hold: seconds(get("HIC_RELAY_HOLD"), crate::relay::DEFAULT_TIMING.hold),
                 wait: seconds(get("HIC_RELAY_WAIT"), crate::relay::DEFAULT_TIMING.wait),
@@ -336,6 +352,15 @@ mod tests {
         );
         assert_eq!(cfg(&[("HIC_ROOM_ADDRESS", "192.168.1.23")]).room_address, None);
         assert_eq!(cfg(&[]).room_address, None);
+    }
+
+    #[test]
+    fn only_a_local_commons_open_to_the_room_takes_a_room_code() {
+        let local = [("HIC_ROOM", "1"), ("HIC_PRACTICE", "1"), ("HIC_ROOM_CODE", "ktr mwx")];
+        assert_eq!(cfg(&local).room_code.as_deref(), Some("KTRMWX"));
+        assert_eq!(cfg(&local[1..]).room_code, None, "closed to the room");
+        assert_eq!(cfg(&[local[0], local[2]]).room_code, None, "not a local commons");
+        assert_eq!(cfg(&[local[0], local[1], ("HIC_ROOM_CODE", "hic-invite-x")]).room_code, None, "not a room code");
     }
 
     #[test]

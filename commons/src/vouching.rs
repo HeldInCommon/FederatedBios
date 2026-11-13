@@ -10,6 +10,7 @@
 //! | **Founding invite** | the one-time code the commons made when it started | the stored code (for the first person, when there are no members) |
 //! | **Steward invite** | a code the commons' steward made (`hic-invite-…`) | the stored, unused code |
 //! | **Steward approval** | nothing: the steward approves them from the waiting list | the steward's session |
+//! | **Room code** | the code on the host's screen, on a local commons open to the room (decision record 0027) | the code the app gave the commons when the room opened |
 //!
 //! Each member can bring in at most `limit` people per week (set by the
 //! steward, `HIC_VOUCH_LIMIT`). Every admission is recorded as an [`Intro`].
@@ -278,6 +279,34 @@ pub fn new_founding_code() -> String {
     format!("{FOUNDING_PREFIX}{}", crate::sessions::random_hex(12))
 }
 
+/// The letters a room code is made of: capitals without the look-alikes
+/// I, L and O (so nobody mistakes them for 1 or 0 when reading it off a
+/// projector). The desktop app makes the code; this is what it may contain.
+pub const ROOM_CODE_LETTERS: &str = "ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/// How many letters a room code has.
+pub const ROOM_CODE_LENGTH: usize = 6;
+
+/// A room code as someone typed it, made comparable: spaces and dashes
+/// removed (the room page shows it as `KTR MWX`), capital letters. Pure.
+pub fn tidy_room_code(typed: &str) -> String {
+    typed.chars().filter(|c| !c.is_whitespace() && *c != '-').collect::<String>().to_uppercase()
+}
+
+/// Does what was typed look like a room code at all (six letters from
+/// [`ROOM_CODE_LETTERS`] once tidied), rather than an invite code? Pure.
+pub fn looks_like_room_code(typed: &str) -> bool {
+    let code = tidy_room_code(typed);
+    code.chars().count() == ROOM_CODE_LENGTH && code.chars().all(|c| ROOM_CODE_LETTERS.contains(c))
+}
+
+/// Does the typed code match this commons' room code? Compared in time that
+/// doesn't depend on where they differ. `false` when the commons has no room
+/// code (it isn't open to the room). Pure.
+pub fn room_code_matches(typed: &str, expected: Option<&str>) -> bool {
+    expected.is_some_and(|code| ct_eq(&tidy_room_code(typed), &tidy_room_code(code)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,6 +314,25 @@ mod tests {
 
     /// The commons these tests run as.
     const URL: &str = "http://commons.example";
+
+    #[test]
+    fn a_room_code_matches_however_it_was_typed() {
+        assert!(room_code_matches("KTR MWX", Some("KTRMWX")));
+        assert!(room_code_matches(" ktrmwx ", Some("KTRMWX")));
+        assert!(room_code_matches("KTR-MWX", Some("KTRMWX")));
+        assert!(!room_code_matches("KTRMWY", Some("KTRMWX")));
+        assert!(!room_code_matches("KTRMWX", None), "no room code when the room is closed");
+        assert!(!room_code_matches("", Some("KTRMWX")));
+    }
+
+    #[test]
+    fn a_room_code_is_six_letters_without_look_alikes() {
+        assert!(looks_like_room_code("KTR MWX"));
+        assert!(!looks_like_room_code("KTRMW0"), "no digits");
+        assert!(!looks_like_room_code("KILMWX"), "no I or L");
+        assert!(!looks_like_room_code("hic-invite-abc"));
+        assert!(!looks_like_room_code("KTRMWXY"));
+    }
 
     /// The commons' view for a test: its members, used invite codes and intros,
     /// at time `now`, with a limit of two a week.

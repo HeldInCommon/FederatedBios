@@ -62,6 +62,9 @@ pub struct Sidecar {
     /// (opening or closing the room, a crash restart, a new address), so two
     /// of those can't interleave and leave a server the app has lost track of.
     changing: Mutex<()>,
+    /// The room code and firewall hint made when it was last opened to the
+    /// room (decision record 0027); used only while it's open.
+    extras: Mutex<crate::room::RoomExtras>,
 }
 
 /// One [`Sidecar`] per kind of server.
@@ -151,6 +154,17 @@ impl Sidecar {
     /// Is it open to the room? Only reads.
     pub fn is_open(&self) -> bool {
         self.open.load(Ordering::SeqCst)
+    }
+
+    /// The room code and firewall hint it gets while open. Only reads.
+    pub fn extras(&self) -> crate::room::RoomExtras {
+        self.extras.lock().unwrap().clone()
+    }
+
+    /// Remember the room code and firewall hint for the next time it starts
+    /// open to the room. Changes only this, in memory.
+    pub fn set_extras(&self, extras: crate::room::RoomExtras) {
+        *self.extras.lock().unwrap() = extras;
     }
 
     /// Record whether it should be open to the room the next time it starts.
@@ -257,8 +271,9 @@ fn spawn(
     port: u16,
     name: &str,
     generation: u64,
-    open: bool,
+    room: Option<&crate::room::RoomExtras>,
 ) -> Result<(CommandChild, Option<String>), String> {
+    let open = room.is_some();
     let data_dir = data_dir_for(&cfg.base, kind);
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("could not create the data folder: {e}"))?;
     // A commons is always reached over the Wi-Fi; a node or a local commons
@@ -275,6 +290,12 @@ fn spawn(
     for (k, v) in server_env(kind, port, name, cfg.instance_override.as_deref(), &cfg.share_default, lan, public, open)
     {
         cmd = cmd.env(k, v);
+    }
+    // Open to the room, with somewhere to open: its room code and hint.
+    if let (Some(extras), Some(_)) = (room, reached_at.as_ref().filter(|_| kind != Kind::Commons)) {
+        for (k, v) in crate::room::room_env(kind, extras) {
+            cmd = cmd.env(k, v);
+        }
     }
 
     let what = kind.label().to_lowercase();
@@ -343,7 +364,7 @@ fn restart_after_crash(app: &tauri::AppHandle, kind: Kind, port: u16, name: &str
             return;
         }
         let generation = sc.begin(false);
-        match spawn(&app, &cfg, kind, port, &name, generation, false) {
+        match spawn(&app, &cfg, kind, port, &name, generation, None) {
             Ok((child, address)) => sc.set(child, address),
             Err(e) => log::error!("couldn't restart the server: {e}"),
         }
@@ -541,7 +562,8 @@ pub fn start(
     let sc = servers.get(kind);
     let generation = sc.begin(true);
     let open = sc.is_open();
-    let (child, address) = spawn(app, cfg, kind, port, name, generation, open)?;
+    let extras = sc.extras();
+    let (child, address) = spawn(app, cfg, kind, port, name, generation, open.then_some(&extras))?;
     // Asked to open, but there was no network to open it on: it's closed.
     if open && address.is_none() {
         sc.set_open(false);

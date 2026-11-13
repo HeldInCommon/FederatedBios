@@ -45,13 +45,13 @@ pub fn shared_pending(handle: &str, commons: &str, key: &str, csrf: &str, held_s
         p { "Ask someone you know there to vouch for you from their node. They'll need your handle and key:" }
         p class="recovery-code mono" { "@" (handle) " · " (short(key)) }
         section class="share-panel" {
-            h2 class="field-label" { "Got an invite code?" }
+            h2 class="field-label" id="code-label" { "Got an invite code or a room code?" }
             form method="post" action="/share" class="share-form" {
                 input type="hidden" name="handle" value=(handle);
                 input type="hidden" name="csrf" value=(csrf);
                 input type="hidden" name="commons_url" value=(commons);
                 div class="share-row" {
-                    input name="invite" type="text" placeholder="Paste the invite code" required autocomplete="off";
+                    input name="invite" type="text" placeholder="Paste the invite code, or type the room code" required autocomplete="off" aria-labelledby="code-label";
                     button class="secondary" type="submit" { "Share with the code" }
                 }
             }

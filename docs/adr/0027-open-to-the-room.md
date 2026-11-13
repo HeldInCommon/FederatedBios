@@ -35,7 +35,7 @@ the story list and one story (`/story/<id>`), How this works and Run a
 commons, the stylesheet, scripts and pictures those pages load, `/health`,
 `/room/check` and `/room/help`. Everything else,
 including `/login`, `/join`, `/restore`, `/steward`, `/api/…`, story tools
-and every `POST`, answers 403: "This page is only on Ana's own computer."
+and every `POST`, answers 403: "This page of Ana's laptop stays on its owner's computer."
 Anything not on the list is refused, so a page added later stays closed to
 the room until someone adds it on purpose.
 
@@ -52,9 +52,21 @@ admits someone the way a vouch does, without waiting for steward approval
 (0017). Closing the room retires the code. Vouching still works. Real commons
 are unchanged.
 
+How it's built: six capitals without I, L and O (about 148 million codes),
+from the operating system's random source, passed to the server as
+`HIC_ROOM_CODE`. It travels in the share's existing `invite` field, which is
+outside the signed bytes, so the signed format doesn't change; the plan's
+`X-HIC-Room-Code` header turned out unnecessary. The commons compares it in
+constant time and allows five wrong codes per sender address, then a
+fifteen-minute wait (as for passphrases, 0005). It's recorded as an admission
+with route `room-code`. It never appears in the server's output.
+
 **D5. Firewalls: one port, private networks only.** The guide never tells
 people to switch a firewall off; one left off stays off at the next café.
-The app never changes the firewall.
+The app never changes the firewall. When a server opens, the app reads what
+it can without admin rights (macOS's `socketfilterfw`, Windows' network
+profile; nothing on Linux) and the room page shows a hint
+(`HIC_FIREWALL_HINT`).
 
 **D6. QR codes with the `qrcode` crate** (decided by Phoenix), SVG output
 only, default features off.
@@ -93,6 +105,13 @@ The room can't reach anything on a node that isn't already public on a
 commons; it can't sign in, guess a passphrase or post. The door is open only
 while its owner chooses, on the network where they chose it, and only while
 the app runs.
+
+**Where an open server listens.** Only on the room's address (the
+computer's private LAN address, which must be in `10/8`, `172.16/12`,
+`192.168/16` or `fc00::/7`), plus `127.0.0.1` for its owner, not on every
+network: `0.0.0.0` would also include a VPN's or Tailscale's interface. The
+app refuses to open on a `100.64/10` (Tailscale) or public address, which is
+what a VPN or exit node makes the computer use.
 
 ## Consequences
 - Plain `http://` on a shared Wi-Fi can be read by others on that network.

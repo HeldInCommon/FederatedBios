@@ -13,6 +13,7 @@
 //! | [`network`] | is *our* server answering; this computer's network address |
 //! | [`sidecar`] | starting and stopping the server processes |
 //! | [`steward`] | the commons' steward link: hidden in the log, shown from the Go menu (pure parts) |
+//! | [`firewall`] | a hint about this computer's firewall for the room page (reads only) |
 //! | [`room`] | open to the room: the switch's rules (pure) |
 //! | [`links`] | `hic-app://` links and the switcher between servers (pure) |
 //! | [`commands`] | what the app's screens (`ui/app.js`), the menu and links can ask for |
@@ -20,6 +21,7 @@
 //! This file only wires them together.
 
 pub mod commands;
+pub mod firewall;
 pub mod links;
 pub mod network;
 pub mod room;

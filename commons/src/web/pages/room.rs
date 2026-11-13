@@ -57,7 +57,12 @@ pub fn room(view: &RoomView) -> Markup {
                     p class="room-address" { code { (address) } }
                     @if let Some(code) = view.room_code {
                         p class="field-label" { "Room code, to join this commons" }
-                        p class="room-code" { code aria-label=(code) { (spaced(code)) } }
+                        // Shown in two groups of three for reading aloud;
+                        // screen readers get the letters one by one instead.
+                        p class="room-code" {
+                            span aria-hidden="true" { (spaced(code)) }
+                            span class="visually-hidden" { (code.chars().map(String::from).collect::<Vec<_>>().join(" ")) }
+                        }
                         p class="hint" { "A new code each time the room opens. Closing the room retires it." }
                     }
                     @if view.is_commons {
@@ -164,7 +169,7 @@ mod tests {
     fn a_local_commons_shows_its_room_code_spaced_for_reading_aloud() {
         let page = room(&RoomView { is_commons: true, room_code: Some("KTRMWX"), ..open_node() }).into_string();
         assert!(page.contains("KTR MWX"));
-        assert!(page.contains(r#"aria-label="KTRMWX""#), "screen readers get the code without the space");
+        assert!(page.contains("K T R M W X"), "screen readers get the letters one by one");
     }
 
     #[test]

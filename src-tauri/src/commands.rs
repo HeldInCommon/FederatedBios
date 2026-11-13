@@ -153,6 +153,18 @@ pub fn set_room(app: &AppHandle, kind: Kind, open: bool) -> Result<(), String> {
         crate::refresh_menu(app, &saved);
         return Ok(());
     }
+    if open {
+        // A fresh room code each time the room opens (D4; the last one is
+        // retired with the server that knew it), and the firewall hint (D5).
+        // Made before stopping anything, so a failure leaves it as it was.
+        let code = match kind {
+            Kind::Practice => {
+                Some(crate::room::new_room_code().map_err(|e| format!("couldn't make a room code: {e}"))?)
+            }
+            _ => None,
+        };
+        sc.set_extras(crate::room::RoomExtras { code, firewall_hint: crate::firewall::read_hint() });
+    }
     sc.stop(); // also closes it to the room
     wait_until_free(port, &cfg.launch_token);
     sc.set_open(open);

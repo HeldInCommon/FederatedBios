@@ -72,6 +72,12 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
             let why = r.text().await.unwrap_or_default();
             error_page(&st.site, &format!("{label} didn't accept the invite code: {why}"))
         }
+        // A local commons waiting out wrong room codes (decision record 0027)
+        // says how long in its reply; pass it on as it is.
+        Ok((r, _)) if r.status() == StatusCode::TOO_MANY_REQUESTS => {
+            let why = r.text().await.unwrap_or_default();
+            error_page(&st.site, &format!("{label} asked us to wait: {why}"))
+        }
         Ok((r, _)) if r.status() == StatusCode::CONFLICT => {
             let reason = r.text().await.unwrap_or_default();
             if reason.contains("newer") {

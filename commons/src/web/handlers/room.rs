@@ -71,8 +71,8 @@ pub async fn room(State(st): State<Shared>, headers: HeaderMap) -> Response {
         is_commons: st.site.is_commons(),
         address: address.as_deref(),
         qr_svg: svg.as_deref(),
-        room_code: None,
-        firewall_hint: None,
+        room_code: st.config.room_code.as_deref(),
+        firewall_hint: st.config.firewall_hint.as_deref(),
     };
     render(&st.site, Page::new("Open to the room", me.as_deref(), pages::room(&view)))
 }

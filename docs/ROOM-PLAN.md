@@ -530,11 +530,11 @@ progress**, **Done**, **Blocked** (reason in the Run log), **Deferred**,
 | Preflight | Done | (no commit) |
 | 1 The door | Done | `a450fa5` |
 | 2 Stop with the app | Done | `60213dd`, fix in the next commit |
-| 3 The switch | Done | (see Run log) |
-| 4 Address and QR | Done | (see Run log) |
-| 5 Firewall and network help | In progress | |
-| 6 Room code | Not started | |
-| 7 Who's in the room | Not started | |
+| 3 The switch | Done | `ae33c42` |
+| 4 Address and QR | Done | `ae33c42` |
+| 5 Firewall and network help | Done | (see Run log) |
+| 6 Room code | Done | (see Run log) |
+| 7 Who's in the room | Deferred | (see Run log) |
 | 8 Rehearsal | Needs Phoenix | |
 
 **The plan is done** when Phases 1 to 6 are Done, Phase 7 is Done or Deferred
@@ -559,6 +559,12 @@ and never ticks these boxes itself.
 - [ ] On a phone hotspot and, if possible, a school or guest network: see
       client isolation happen.
 - [ ] Scan the QR codes with an iPhone and an Android phone.
+- [ ] On a Mac with the firewall on, and on Windows on a Public network: open
+      to the room and check the room page shows the firewall hint, and that
+      following it works. Then remove "(not yet tried …)" from the guide.
+- [ ] On Windows: no console window flashes when opening to the room.
+- [ ] Join a local commons with the room code from a second computer, typing
+      it with a space as shown on screen.
 - [ ] Force-quit the app (`kill -9`) with the room open, and check nothing
       still listens: `ss -ltnp | grep 808` (Linux) or
       `lsof -iTCP -sTCP:LISTEN | grep 808` (Mac).
@@ -730,3 +736,58 @@ found, and the commit.
   would use the installed app's data and ports); see Needs Phoenix.
 - **Checks:** all green: 286 unit, 102 HTTP, 4 spec, 2 exit tests (`commons`);
   60 (`src-tauri`); 101 end-to-end; docs, spec vectors, CSS lint.
+
+### 2026-11-13, Phase 7 (who's in the room): deferred
+
+The plan said to carry each open node's room address in its existing `here`
+long-poll (ADR 0021), or defer. It doesn't work:
+
+- Only a node with an "Only while I'm here" story keeps that poll open, so
+  most nodes in the room would never appear.
+- Putting the address in the poll's signed body would change a signed type
+  (`StoryRelay`), which the plan says not to do without asking; putting it
+  outside the signature would let anyone in the room claim to be anyone, and
+  the commons would show their link and QR code under someone else's name.
+
+Doing it properly needs a small new signed type (say `RoomHere`: handle, key,
+room address, time, signed by the member's key, sent by a node when it opens
+to the room) with a spec vector (ADR 0009). That's a decision for Phoenix.
+Until then, people scan each other's QR codes directly.
+
+### 2026-11-13, Phases 5 (firewall and help) and 6 (room code): done, one commit
+
+- **Why one commit:** both pass their extras (firewall hint, room code)
+  through the same new path in `sidecar.rs` and `config.rs`.
+- **Phase 5 built:** `docs/ROOM-GUIDE.md` (drafted by a subagent, then
+  proofread against the code by another, 12 fixes applied: menu names, the
+  check page's wording, the share form's box, Close being in the Go menu,
+  local commons vs node in "what stays private", Linux marked not yet tried,
+  `10.`/`172.` networks, firewalld zones, macOS "Block all"); the help page
+  `/room/help` (built in Phase 4); `src-tauri/src/firewall.rs`, which reads
+  macOS's `socketfilterfw` and Windows' network profile without admin rights
+  and gives the room page a hint (`HIC_FIREWALL_HINT`), tested on sample
+  outputs. Nothing changes a firewall.
+- **Phase 6 built:** the app makes a fresh six-letter code (no I, L or O;
+  `OsRng`, no bias) each time a local commons opens, passed as
+  `HIC_ROOM_CODE`; `/room` shows it in two groups of three (screen readers get
+  it letter by letter); the share form's box is now "Invite or room code"; the
+  commons admits with it (route `room-code`), compared in constant time.
+- **Deviations from the plan, recorded in ADR 0027:** the code travels in the
+  share's existing unsigned `invite` field, not an `X-HIC-Room-Code` header,
+  so no new plumbing and no signed bytes change; the commons doesn't advertise
+  that it takes a code (the form's box always accepts one); the code isn't
+  added to `redact_for_log`, because nothing prints it (the end-to-end test
+  checks the server's log never contains it).
+- **Reviewer (fresh subagent):** no way to be admitted without the code.
+  Fixed from its report: after five wrong codes the person was told the
+  commons "may not accept federation" (the wait is now passed on); guessing
+  spread across many addresses wasn't capped (now 200 wrong codes in all stop
+  the code until the room reopens); the room code accepted older-format shares,
+  where some of what's shown isn't signed (now only signed `hic/v1`); a console
+  window could flash on Windows (now `CREATE_NO_WINDOW`). Noted in the guide:
+  anyone with the code can join as often as they like, so keep it on the
+  screen, not in a chat.
+- **Not changed (reviewer, by design or low):** everyone behind one NAT shares
+  a wrong-code counter; opening on a Mac can take a few seconds while the
+  firewall is read (it runs off the main thread).
+- **Checks:** all green (see the commit).

@@ -32,6 +32,15 @@ pub struct AppState {
     pub sessions: Sessions,
     /// Counts wrong passphrases per handle.
     pub attempts: AttemptLimiter,
+    /// Counts wrong room codes per sender address, on a local commons open
+    /// to the room (decision record 0027): five, then a wait, as for
+    /// passphrases (decision record 0005).
+    pub room_code_attempts: AttemptLimiter,
+    /// Wrong room codes from everyone, since this commons started (each
+    /// opening of the room starts it afresh). Past
+    /// [`ROOM_CODE_MAX_WRONG`], the code stops working until the host
+    /// reopens the room, so many addresses can't share out the guessing.
+    pub room_code_wrong: std::sync::atomic::AtomicU32,
     /// Held while reading, changing and saving a record, so two requests
     /// can't interleave their changes.
     pub write: Mutex<()>,
@@ -74,6 +83,8 @@ impl AppState {
             store,
             sessions: Sessions::default(),
             attempts: AttemptLimiter::default(),
+            room_code_attempts: AttemptLimiter::default(),
+            room_code_wrong: std::sync::atomic::AtomicU32::new(0),
             write: Mutex::new(()),
             http: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::limited(3))
@@ -92,6 +103,12 @@ impl AppState {
 const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; \
      font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; \
      base-uri 'none'; frame-ancestors 'none'";
+
+/// Wrong room codes a local commons takes from everyone together before the
+/// code stops working (decision record 0027). A room types a few wrong by
+/// accident; two hundred, against about 148 million possible codes, is
+/// someone guessing.
+pub const ROOM_CODE_MAX_WRONG: u32 = 200;
 
 /// How many `/inbox` requests one address may send per minute.
 pub const INBOX_PER_MINUTE: u32 = 120;

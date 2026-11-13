@@ -15,6 +15,57 @@
 
 use crate::settings::Kind;
 
+/// What a server open to the room is told besides its address: the room
+/// code people type to join a local commons (D4), and a hint about this
+/// computer's firewall for its room page (D5). Made fresh each time the room
+/// opens; kept in memory only.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RoomExtras {
+    /// On a local commons: six letters from `ROOM_CODE_LETTERS`.
+    pub code: Option<String>,
+    /// What to do about the firewall, if there's anything (`crate::firewall`).
+    pub firewall_hint: Option<String>,
+}
+
+/// The letters a room code is made of: capitals without I, L and O, which
+/// are easy to misread off a projector. The server accepts the same set
+/// (`ROOM_CODE_LETTERS` in `commons/src/vouching.rs`).
+pub const ROOM_CODE_LETTERS: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/// A fresh room code: six letters from [`ROOM_CODE_LETTERS`], from the
+/// operating system's random source (as the launch token is). Each letter
+/// comes from one random byte; bytes that would make some letters likelier
+/// than others are thrown away and drawn again. Fails only if the system
+/// can't give random bytes.
+pub fn new_room_code() -> Result<String, rand::Error> {
+    use rand::RngCore;
+    let n = ROOM_CODE_LETTERS.len();
+    // The largest multiple of `n` that fits in a byte: bytes below it map
+    // evenly onto the letters.
+    let fair = (256 / n * n) as u8;
+    let mut code = String::new();
+    let mut byte = [0u8; 1];
+    while code.len() < 6 {
+        rand::rngs::OsRng.try_fill_bytes(&mut byte)?;
+        if byte[0] < fair {
+            code.push(ROOM_CODE_LETTERS[byte[0] as usize % n] as char);
+        }
+    }
+    Ok(code)
+}
+
+/// The settings a server open to the room gets from its `extras`: the room
+/// code (a local commons only; a node has nobody to admit) and the firewall
+/// hint. Pure.
+pub fn room_env(kind: Kind, extras: &RoomExtras) -> Vec<(&'static str, String)> {
+    let mut env = Vec::new();
+    if kind == Kind::Practice {
+        env.extend(extras.code.clone().map(|code| ("HIC_ROOM_CODE", code)));
+    }
+    env.extend(extras.firewall_hint.clone().map(|hint| ("HIC_FIREWALL_HINT", hint)));
+    env
+}
+
 /// Can this kind of server be opened to the room? A node and a local commons
 /// can. A full commons is reachable on the network already: that is what
 /// it's for, and it has no switch.
@@ -259,6 +310,27 @@ mod tests {
         assert_eq!(ip_of("http://192.168.1.23:8080").as_deref(), Some("192.168.1.23"));
         assert_eq!(ip_of("http://[fd00::5]:8080").as_deref(), Some("fd00::5"));
         assert_eq!(ip_of("not an address"), None);
+    }
+
+    #[test]
+    fn a_room_code_is_six_fair_letters_without_look_alikes() {
+        for _ in 0..200 {
+            let code = new_room_code().unwrap();
+            assert_eq!(code.len(), 6);
+            assert!(code.bytes().all(|b| ROOM_CODE_LETTERS.contains(&b)), "{code}");
+        }
+        assert!(!ROOM_CODE_LETTERS.iter().any(|b| b"ILO".contains(b)));
+    }
+
+    #[test]
+    fn only_a_local_commons_is_given_a_room_code() {
+        let extras = RoomExtras { code: Some("KTRMWX".into()), firewall_hint: Some("Allow it".into()) };
+        let local: Vec<_> = room_env(Kind::Practice, &extras);
+        assert!(local.contains(&("HIC_ROOM_CODE", "KTRMWX".to_string())));
+        assert!(local.contains(&("HIC_FIREWALL_HINT", "Allow it".to_string())));
+        let node = room_env(Kind::Node, &extras);
+        assert!(!node.iter().any(|(k, _)| *k == "HIC_ROOM_CODE"), "a node admits nobody");
+        assert!(room_env(Kind::Practice, &RoomExtras::default()).is_empty());
     }
 
     #[test]

@@ -70,7 +70,7 @@ async fn a_room_visitor_sees_a_public_profile_but_not_the_sign_in_page() {
     for path in ["/login", "/join", "/restore", "/new", "/steward", "/api/pending", "/@ana/x"] {
         let r = send(&node, from(ROOM, get(path, None))).await;
         assert_eq!(r.status, StatusCode::FORBIDDEN, "{path}");
-        assert!(r.text.contains("only on Test's own computer"), "{path} says why");
+        assert!(r.text.contains("This page of Test stays on its owner's computer"), "{path} says why");
     }
     // The owner, at their own computer, still has everything.
     assert_eq!(send(&node, from(OWNER, get("/login", None))).await.status, StatusCode::OK);
@@ -201,4 +201,109 @@ async fn a_full_commons_has_no_room_pages() {
     for path in ["/room", "/room/check", "/room/help"] {
         assert_eq!(send(&commons, get(path, None)).await.status, StatusCode::NOT_FOUND, "{path}");
     }
+}
+
+/// A local commons open to the room that needs vouching, with room code
+/// `code`, and its store. Without `practice` it's a full commons given the
+/// same settings, which must ignore the code.
+fn room_commons(code: &str, practice: bool) -> (Router, hic_commons::store::Store) {
+    let dir = std::env::temp_dir().join(format!("hic-http-roomcode-{}", hic_commons::sessions::random_hex(6)));
+    let store = hic_commons::store::Store::open(&dir).unwrap();
+    let code = code.to_string();
+    let config = hic_commons::config::Config::from_lookup(move |k| match k {
+        "HIC_ROOM" => Some("1".into()),
+        "HIC_PRACTICE" if practice => Some("1".into()),
+        "HIC_ROOM_CODE" => Some(code.clone()),
+        "HIC_ROOM_ADDRESS" => Some("http://192.168.1.23:8082".into()),
+        _ => None,
+    });
+    let state = std::sync::Arc::new(hic_commons::app::AppState::new(config, Role::Commons, store.clone()));
+    (hic_commons::app::router(state), store)
+}
+
+/// Share `handle`'s profile to `commons` from `addr` with `code` in the
+/// invite box, as a node does; returns the status.
+async fn share_with_code(commons: &Router, handle: &str, code: &str, addr: &str) -> StatusCode {
+    let message = share_of(&person(handle), Some(code));
+    send(commons, from(addr, post_json("/inbox", &message))).await.status
+}
+
+/// Is `handle` listed on the commons?
+fn is_listed(store: &hic_commons::store::Store, handle: &str) -> bool {
+    store.remotes().iter().any(|r| r.handle == handle)
+}
+
+#[tokio::test]
+async fn the_room_code_lists_you_straight_away() {
+    let (commons, store) = room_commons("KTRMWX", true);
+    assert_eq!(
+        share_with_code(&commons, "ana", "ktr mwx", ROOM).await,
+        StatusCode::ACCEPTED,
+        "typed as people type it"
+    );
+    assert!(is_listed(&store, "ana"));
+    assert_eq!(store.intros()[0].route, "room-code", "recorded as coming in with the room code");
+    let page = send(&commons, from(OWNER, get("/room", None))).await.text;
+    assert!(page.contains("KTR MWX"), "the host's room page shows the code");
+}
+
+#[tokio::test]
+async fn a_wrong_room_code_lists_nobody_and_guessing_is_limited() {
+    let (commons, store) = room_commons("KTRMWX", true);
+    for _ in 0..5 {
+        assert_eq!(share_with_code(&commons, "mal", "ABCDEF", ROOM).await, StatusCode::FORBIDDEN);
+    }
+    assert_eq!(share_with_code(&commons, "mal", "ABCDEF", ROOM).await, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        share_with_code(&commons, "mal", "KTRMWX", ROOM).await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "even the right code waits once the limit is reached"
+    );
+    assert!(!is_listed(&store, "mal"));
+    assert_eq!(
+        share_with_code(&commons, "ben", "KTRMWX", "192.168.1.51:50000").await,
+        StatusCode::ACCEPTED,
+        "others aren't held up"
+    );
+}
+
+#[tokio::test]
+async fn an_old_room_code_fails_once_the_room_reopens() {
+    // Closing and reopening restarts the commons with a new code.
+    let (reopened, store) = room_commons("PQRSTU", true);
+    assert_eq!(share_with_code(&reopened, "ana", "KTRMWX", ROOM).await, StatusCode::FORBIDDEN);
+    assert!(!is_listed(&store, "ana"));
+}
+
+#[tokio::test]
+async fn a_full_commons_ignores_a_room_code() {
+    let (commons, store) = room_commons("KTRMWX", false);
+    let status = share_with_code(&commons, "ana", "KTRMWX", ROOM).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(!is_listed(&store, "ana"), "only a local commons open to the room takes one");
+}
+
+#[tokio::test]
+async fn guessing_from_many_addresses_stops_the_code_until_the_room_reopens() {
+    let (commons, store) = room_commons("KTRMWX", true);
+    let max = hic_commons::app::ROOM_CODE_MAX_WRONG;
+    // Spread across addresses, so no one address reaches its own limit.
+    for n in 0..max {
+        let addr = format!("10.0.{}.{}:50000", n / 200, n % 200 + 1);
+        assert_eq!(share_with_code(&commons, "mal", "ABCDEF", &addr).await, StatusCode::FORBIDDEN);
+    }
+    let r = send(&commons, from(ROOM, post_json("/inbox", &share_of(&person("ana"), Some("KTRMWX"))))).await;
+    assert_eq!(r.status, StatusCode::TOO_MANY_REQUESTS, "even the right code, until the host reopens the room");
+    assert!(r.text.contains("ask the host"));
+    assert!(!is_listed(&store, "ana"));
+}
+
+#[tokio::test]
+async fn the_room_code_needs_a_signed_hic_v1_share() {
+    let (commons, store) = room_commons("KTRMWX", true);
+    let mut older = share_from_node("ana", "hello").await;
+    older["invite"] = serde_json::json!("KTRMWX");
+    let r = send(&commons, from(ROOM, post_json("/inbox", &older))).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    assert!(!is_listed(&store, "ana"), "the older format leaves some of what's shown unsigned");
 }

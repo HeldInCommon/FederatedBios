@@ -142,6 +142,21 @@ pub enum TailscaleStatus {
     NoAnswer,
 }
 
+/// A command for `program` that runs without a window: on Windows, a
+/// command-line program started from an app flashes a console window
+/// unless told not to (`CREATE_NO_WINDOW`). Elsewhere, an ordinary command.
+pub fn quiet_command(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW, from the Windows process creation flags.
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
 /// What a finished `tailscale serve status` means: its answer when it
 /// succeeded; "forwards nothing" when it failed because Tailscale isn't
 /// running (then nothing can be forwarded); otherwise no answer, since a
@@ -162,7 +177,7 @@ pub fn tailscale_outcome(succeeded: bool, out: String, err: &str) -> TailscaleSt
 /// nothing (decision record 0027, D9; see [`crate::room::forwards_to`]).
 pub fn tailscale_serve_status() -> TailscaleStatus {
     for program in TAILSCALE_PROGRAMS {
-        let Ok(mut child) = std::process::Command::new(program)
+        let Ok(mut child) = quiet_command(program)
             .args(["serve", "status"])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())

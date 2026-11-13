@@ -13,7 +13,7 @@ no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 HIC_SHARE_DEFAULT_NAME="Test Collective" "$BIN" >"$T/node.log" 2>&1 & NPID=$!
-cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} 2>/dev/null; rm -rf "$T"; }
+cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} ${LPID:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
@@ -299,6 +299,18 @@ else
   [ "$(code "http://$LAN:8095/room")" = "403" ] && ok "the room can't see the room page" || no "the room saw the room page"
   [ "$(code "http://$LAN:8095/room/check")" = "200" ] && ok "the room can check it reached this computer" || no "room check failed"
   kill $RPID 2>/dev/null; wait $RPID 2>/dev/null
+
+  # A local commons open to the room, joined with the room code (ADR 0027, D4).
+  mkdir -p "$T/local"
+  HIC_DATA="$T/local" PORT=8096 HIC_ROLE=commons HIC_PRACTICE=1 HIC_ROOM=1 HIC_BIND="$LAN" HIC_ROOM_ADDRESS="http://$LAN:8096" HIC_ROOM_CODE=KTRMWX HIC_INSTANCE="Thursday" "$BIN" >"$T/local.log" 2>&1 & LPID=$!
+  curl -sf --retry 40 --retry-delay 1 --retry-connrefused "http://$LAN:8096/health" >/dev/null || no "local commons failed to start"
+  share_local(){ curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://$LAN:8096" --data-urlencode "invite=$1"; }
+  share_local "ABCDEF" | grep -q "room code isn't right" && ok "a wrong room code is refused" || no "a wrong room code wasn't refused"
+  curl -s "http://$LAN:8096/api/handle/tega" | grep -q '"available":true' && ok "and lists nobody" || no "a wrong room code listed someone"
+  share_local "ktr mwx" | grep -qi "federated to" && ok "a node shares to the local commons with the room code" || no "the room code didn't work"
+  curl -s "http://$LAN:8096/api/handle/tega" | grep -q '"available":false' && ok "and is listed straight away" || no "not listed with the room code"
+  grep -q KTRMWX "$T/local.log" && no "the room code appears in the server's log" || ok "the room code never appears in the server's log"
+  kill $LPID 2>/dev/null; wait $LPID 2>/dev/null
 fi
 
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"

@@ -2391,6 +2391,16 @@ a.rail-foot {
   background: var(--white);
 }
 
+/* Text only screen readers read (the room code, letter by letter). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The drawing scales with its frame; crisp edges keep the modules square. */
 .room-qr svg {
   display: block;

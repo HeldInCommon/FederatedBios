@@ -435,7 +435,7 @@ pub fn error_page(site: &Site, msg: &str) -> Response {
 /// with status 403.
 pub fn only_here(site: &Site) -> Response {
     let msg = format!(
-        "This page is only on {}'s own computer. People in the room can see public profiles and stories here.",
+        "This page of {} stays on its owner's computer. People in the room can see public profiles and stories here.",
         site.instance
     );
     message_page(site, "Only on this computer", "Not from the room", &msg, StatusCode::FORBIDDEN)
