@@ -31,6 +31,11 @@ pub struct Config {
     /// `HIC_SHARE_DEFAULT_NAME`: what to call that commons on pages
     /// ("Held in Common Collective Commons"), instead of its address.
     pub share_default_name: String,
+    /// `HIC_SHARE_NEARBY`: on a node, the commons the desktop app runs on this
+    /// same computer, offered as one-click shares: comma separated
+    /// `address=name` pairs (`http://127.0.0.1:8180=spark`). Their
+    /// `127.0.0.1` addresses never change, unlike the Wi-Fi's.
+    pub share_nearby: Vec<(String, String)>,
     /// `HIC_ROLE`, raw. Interpreted by [`crate::role::decide`].
     pub role_env: Option<String>,
     /// `HIC_LAUNCH_TOKEN`: set by the desktop app when it starts this server,
@@ -55,10 +60,10 @@ pub struct Config {
     /// `HIC_BASE_URL`, so nothing it shares names an address that stops
     /// working when the room closes.
     pub room_address: Option<String>,
-    /// `HIC_ROOM_CODE`: on a local commons open to the room, the code people
-    /// type to join (decision record 0027, D4), tidied to six capitals. The
-    /// desktop app makes a new one each time the room opens. Ignored unless
-    /// this is a local commons (`HIC_PRACTICE`) open to the room.
+    /// `HIC_ROOM_CODE`: on a commons open to the room, the code people type
+    /// (or carry in the join link) to join (decision record 0027, D4), tidied
+    /// to six capitals. The desktop app makes a new one each time the room
+    /// opens. Ignored unless open to the room.
     pub room_code: Option<String>,
     /// `HIC_FIREWALL_HINT`: what to do about this computer's firewall, read by
     /// the desktop app without admin rights and shown on the room page (D5).
@@ -112,6 +117,18 @@ pub fn commons_host(url: &str) -> String {
         .to_string()
 }
 
+/// `HIC_SHARE_NEARBY` read into (address, name) pairs: comma separated
+/// `address=name`, addresses with a scheme and no trailing slash. Anything
+/// malformed is skipped. Pure.
+fn parse_nearby(written: &str) -> Vec<(String, String)> {
+    written
+        .split(',')
+        .filter_map(|pair| pair.split_once('='))
+        .map(|(url, name)| (url.trim().trim_end_matches('/').to_string(), name.trim().to_string()))
+        .filter(|(url, name)| url.contains("://") && !name.is_empty())
+        .collect()
+}
+
 /// The sign-in cookie's name unless `HIC_SESSION_COOKIE` says otherwise.
 pub const DEFAULT_SESSION_COOKIE: &str = "hic_session";
 
@@ -145,13 +162,14 @@ impl Config {
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
+            share_nearby: parse_nearby(&get("HIC_SHARE_NEARBY").unwrap_or_default()),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
             room,
             exit_with_app: get("HIC_EXIT_WITH_APP").is_some_and(|v| v.trim() == "1"),
             room_code: get("HIC_ROOM_CODE")
-                .filter(|c| room && practice && crate::vouching::looks_like_room_code(c))
+                .filter(|c| room && crate::vouching::looks_like_room_code(c))
                 .map(|c| crate::vouching::tidy_room_code(&c)),
             // Plain text, shown escaped; capped so a stray value can't fill the page.
             firewall_hint: get("HIC_FIREWALL_HINT")
@@ -355,12 +373,29 @@ mod tests {
     }
 
     #[test]
-    fn only_a_local_commons_open_to_the_room_takes_a_room_code() {
+    fn only_a_commons_open_to_the_room_takes_a_room_code() {
         let local = [("HIC_ROOM", "1"), ("HIC_PRACTICE", "1"), ("HIC_ROOM_CODE", "ktr mwx")];
         assert_eq!(cfg(&local).room_code.as_deref(), Some("KTRMWX"));
         assert_eq!(cfg(&local[1..]).room_code, None, "closed to the room");
-        assert_eq!(cfg(&[local[0], local[2]]).room_code, None, "not a local commons");
+        assert_eq!(
+            cfg(&[local[0], local[2]]).room_code.as_deref(),
+            Some("KTRMWX"),
+            "a full commons open to the room too"
+        );
         assert_eq!(cfg(&[local[0], local[1], ("HIC_ROOM_CODE", "hic-invite-x")]).room_code, None, "not a room code");
+    }
+
+    #[test]
+    fn nearby_commons_are_read_as_address_and_name() {
+        let c = cfg(&[("HIC_SHARE_NEARBY", "http://127.0.0.1:8180/=spark, nonsense, http://127.0.0.1:8182=Thursday")]);
+        assert_eq!(
+            c.share_nearby,
+            vec![
+                ("http://127.0.0.1:8180".to_string(), "spark".to_string()),
+                ("http://127.0.0.1:8182".to_string(), "Thursday".to_string())
+            ]
+        );
+        assert!(cfg(&[]).share_nearby.is_empty());
     }
 
     #[test]

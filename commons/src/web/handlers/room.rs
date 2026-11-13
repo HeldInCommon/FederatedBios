@@ -8,7 +8,7 @@
 //! Someone running a server by hand on the network without `HIC_ROOM` sees
 //! only "closed to the room" there, with no address or code.
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
 
@@ -28,19 +28,22 @@ pub fn room_path(handles: &[String], public: &[String]) -> String {
     }
 }
 
-/// True for the servers that can be open to the room: a node or a local
-/// commons (decision record 0027, D7).
+/// True for the servers with room pages: a node or a local commons always
+/// (they have the switch, decision record 0027, D7), and a full commons
+/// while it's open to the room.
 fn has_room_pages(st: &AppState) -> bool {
-    !st.site.is_commons() || st.site.practice
+    !st.site.is_commons() || st.site.practice || st.config.room
 }
 
 /// The address people in the room open, while the server is open to the
 /// room: the room address the app gave it, plus the page the QR code leads
-/// to (on a commons, the front page). `None` while closed.
+/// to. On a commons with a room code that's its join link (`/join/KTRMWX`),
+/// which a node turns into the address and the code in one paste; on a
+/// node, the member's profile or the front page. `None` while closed.
 fn room_address(st: &AppState) -> Option<String> {
     let base = st.config.room_address.as_deref().filter(|_| st.config.room)?;
     let path = if st.site.is_commons() {
-        "/".to_string()
+        st.config.room_code.as_deref().map_or("/".to_string(), |code| format!("/join/{code}"))
     } else {
         let records = st.store.handles();
         let handles: Vec<String> = records.iter().map(|rec| rec.handle.clone()).collect();
@@ -71,10 +74,26 @@ pub async fn room(State(st): State<Shared>, headers: HeaderMap) -> Response {
         is_commons: st.site.is_commons(),
         address: address.as_deref(),
         qr_svg: svg.as_deref(),
-        room_code: st.config.room_code.as_deref(),
+        room_code: st.config.room_code.as_deref().filter(|_| st.site.is_commons()),
         firewall_hint: st.config.firewall_hint.as_deref(),
     };
     render(&st.site, Page::new("Open to the room", me.as_deref(), pages::room(&view)))
+}
+
+/// `GET /join/{code}` on a commons open to the room: what someone sees who
+/// opens the room's join link (by scanning its QR code, say): how to join
+/// from the Held in Common app on their laptop, with the link to paste.
+///
+/// It doesn't check the code. If it said whether a code was right, anyone
+/// could guess codes here without the limits a share has; the share checks
+/// it (five wrong per address, two hundred in all, `handlers/inbox.rs`).
+pub async fn join_room(State(st): State<Shared>, Path(code): Path<String>) -> Response {
+    if !st.site.is_commons() || !st.config.room || !crate::vouching::looks_like_room_code(&code) {
+        return not_found(&st.site, None);
+    }
+    let base = st.config.room_address.clone().unwrap_or_else(|| st.site.base_url.clone());
+    let link = qr::address(&base, &format!("/join/{}", crate::vouching::tidy_room_code(&code)));
+    render(&st.site, Page::new("Join this commons", None, pages::join_room(&st.site.instance, &link)))
 }
 
 /// `GET /room/check` — "It works: you reached …", for testing the connection

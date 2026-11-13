@@ -61,6 +61,16 @@ constant time and allows five wrong codes per sender address, then a
 fifteen-minute wait (as for passphrases, 0005). It's recorded as an admission
 with route `room-code`. It never appears in the server's output.
 
+**Update (13 November 2026): a full commons can be opened to the room too**
+(Phoenix). It already listens on the network, so opening it adds the door
+(the room never reaches the steward view), the room page, and a room code
+with a **join link** (`http://172.20.10.10:8180/join/KTRMWX`) that the QR code
+holds. Pasted into a node's "Share to a commons" box, the link fills in the
+commons and the code. The join page never says whether a code is right, so
+it can't be used to guess; the share checks it, with the limits above.
+Closing, quitting, a crash or a new address retires the code, as for a local
+commons.
+
 **D5. Firewalls: one port, private networks only.** The guide never tells
 people to switch a firewall off; one left off stays off at the next café.
 The app never changes the firewall. When a server opens, the app reads what

@@ -300,6 +300,21 @@ pub fn looks_like_room_code(typed: &str) -> bool {
     code.chars().count() == ROOM_CODE_LENGTH && code.chars().all(|c| ROOM_CODE_LETTERS.contains(c))
 }
 
+/// A room's join link split into the commons' address and its room code:
+/// `http://172.20.10.10:8180/join/KTRMWX` gives
+/// (`http://172.20.10.10:8180`, `Some("KTRMWX")`), the link the room page
+/// shows and its QR code holds (decision record 0027). Anything else comes
+/// back as it was, with no code. Pure.
+pub fn split_join_link(typed: &str) -> (String, Option<String>) {
+    let typed = typed.trim().trim_end_matches('/');
+    match typed.rsplit_once("/join/") {
+        Some((commons, code)) if looks_like_room_code(code) && commons.contains("://") => {
+            (commons.to_string(), Some(tidy_room_code(code)))
+        }
+        _ => (typed.to_string(), None),
+    }
+}
+
 /// Does the typed code match this commons' room code? Compared in time that
 /// doesn't depend on where they differ. `false` when the commons has no room
 /// code (it isn't open to the room). Pure.
@@ -323,6 +338,20 @@ mod tests {
         assert!(!room_code_matches("KTRMWY", Some("KTRMWX")));
         assert!(!room_code_matches("KTRMWX", None), "no room code when the room is closed");
         assert!(!room_code_matches("", Some("KTRMWX")));
+    }
+
+    #[test]
+    fn a_join_link_gives_the_commons_and_its_room_code() {
+        assert_eq!(
+            split_join_link(" http://172.20.10.10:8180/join/KTRMWX/ "),
+            ("http://172.20.10.10:8180".to_string(), Some("KTRMWX".to_string()))
+        );
+        assert_eq!(split_join_link("http://c.example/"), ("http://c.example".to_string(), None));
+        assert_eq!(
+            split_join_link("http://c.example/join/not-a-code"),
+            ("http://c.example/join/not-a-code".to_string(), None),
+            "only a real room code is taken out"
+        );
     }
 
     #[test]

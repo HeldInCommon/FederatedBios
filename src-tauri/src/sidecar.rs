@@ -88,6 +88,13 @@ impl Servers {
         }
     }
 
+    /// The address each running server can be reached at by other people,
+    /// for the switcher: a commons always, a node or local commons while
+    /// open to the room. Only reads.
+    pub fn addresses(&self) -> Vec<(Kind, String)> {
+        Kind::ALL.into_iter().filter_map(|k| self.get(k).address().map(|a| (k, a))).collect()
+    }
+
     /// The kinds open to the room right now. Only reads.
     pub fn open_kinds(&self) -> Vec<Kind> {
         Kind::ALL.into_iter().filter(|k| self.get(*k).is_open()).collect()
@@ -236,6 +243,12 @@ pub fn server_env(
         Kind::Commons => {
             env.extend(lan.map(|url| ("HIC_BASE_URL", url)));
             env.extend(public.map(|url| ("HIC_ALSO_KNOWN_AS", url)));
+            // Open to the room: it already listens on the network, so this
+            // adds the door (the room never reaches the steward view) and
+            // the room page with its join link (decision record 0027).
+            if let Some(url) = room.clone() {
+                env.extend([("HIC_ROOM", "1".to_string()), ("HIC_ROOM_ADDRESS", url)]);
+            }
         }
         // A local commons: for a workshop, a class or a session between
         // friends. Closed, only this computer reaches it. Open to the room,
@@ -257,6 +270,24 @@ pub fn server_env(
         }
     }
     env
+}
+
+/// For a node: the commons the app runs on this computer, as
+/// `HIC_SHARE_NEARBY` (`http://127.0.0.1:8180=spark,…`), so the node offers
+/// each as a one-click share. Their `127.0.0.1` addresses never change, so
+/// sharing keeps working when the Wi-Fi does; pages show them at this
+/// computer's network address. Commas and `=` in names are made spaces.
+/// Pure.
+pub fn nearby_commons(saved: &Saved) -> String {
+    [Kind::Commons, Kind::Practice]
+        .into_iter()
+        .filter(|k| saved.runs(*k))
+        .map(|k| {
+            let name = saved.shown_name(k).replace([',', '='], " ");
+            format!("{}={name}", local_url(saved.port_of(k)))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Start the server of `kind` on `port`, logging its output, open to the
@@ -291,8 +322,12 @@ fn spawn(
     {
         cmd = cmd.env(k, v);
     }
+    // A node offers the commons on this computer as one-click shares.
+    if kind == Kind::Node {
+        cmd = cmd.env("HIC_SHARE_NEARBY", nearby_commons(&crate::settings::load(&cfg.base).0));
+    }
     // Open to the room, with somewhere to open: its room code and hint.
-    if let (Some(extras), Some(_)) = (room, reached_at.as_ref().filter(|_| kind != Kind::Commons)) {
+    if let (Some(extras), Some(_)) = (room, reached_at.as_ref()) {
         for (k, v) in crate::room::room_env(kind, extras) {
             cmd = cmd.env(k, v);
         }
@@ -689,9 +724,32 @@ mod tests {
     }
 
     #[test]
-    fn a_full_commons_has_no_switch() {
-        assert_eq!(env_with(Kind::Commons, 8081, true), env_of(Kind::Commons, 8081));
-        assert!(!env_of(Kind::Commons, 8081).contains_key("HIC_ROOM"));
+    fn a_full_commons_open_to_the_room_keeps_its_address_and_adds_the_door() {
+        let open = env_with(Kind::Commons, 8081, true);
+        let closed = env_of(Kind::Commons, 8081);
+        assert_eq!(open["HIC_ROOM"], "1");
+        assert_eq!(open["HIC_ROOM_ADDRESS"], "http://192.168.1.5:8081");
+        assert_eq!(open["HIC_BASE_URL"], closed["HIC_BASE_URL"], "same address");
+        assert!(!open.contains_key("HIC_BIND"), "it listens as it always does");
+        assert!(!closed.contains_key("HIC_ROOM"));
+    }
+
+    #[test]
+    fn a_node_is_told_the_commons_on_this_computer() {
+        let saved = Saved {
+            role: Some("commons".into()),
+            name: Some("spark".into()),
+            other_name: Some("potato".into()),
+            practice: true,
+            practice_name: Some("Thurs, day=1".into()),
+            ..Default::default()
+        };
+        let base = crate::settings::port_offset();
+        assert_eq!(
+            nearby_commons(&saved),
+            format!("http://127.0.0.1:{}=spark,http://127.0.0.1:{}=Thurs  day 1", 8080 + base, 8082 + base)
+        );
+        assert_eq!(nearby_commons(&Saved { role: Some("node".into()), ..Default::default() }), "");
     }
 
     #[test]

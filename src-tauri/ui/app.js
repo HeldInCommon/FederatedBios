@@ -7,7 +7,7 @@
 //   do=rename&role=node|commons|practice   rename it
 //   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
-//   do=open-room&role=node|practice   confirm opening it to the room (ADR 0027)
+//   do=open-room&role=node|commons|practice   confirm opening it to the room (ADR 0027)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
 //   setup_state  -> { role, name, node_name, commons_name, practice_name, practice, lan_url }
@@ -201,8 +201,8 @@ function showRemove(){
 // The app checks it can (on a network, nothing forwarding to it) and says
 // why not here if it can't.
 function showOpenRoom(role){
-  if (role === 'practice'){
-    $('open-room-what').textContent = 'the local commons';
+  if (role === 'practice' || role === 'commons'){
+    $('open-room-what').textContent = role === 'practice' ? 'the local commons' : 'this commons';
     $('open-room-who').textContent = 'Anyone on this Wi-Fi will be able to share to it and see what is listed, and join with the room code. Your steward view stays on this computer.';
   }
   $('open-room').hidden = false;
@@ -279,7 +279,7 @@ async function init(){
   else if (todo === 'rename') showNaming(role, 'rename', { node: st.node_name, commons: st.commons_name, practice: st.practice_name }[role]);
   else if (todo === 'remove-practice') showRemove();
   else if (todo === 'steward-link') showStewardLink();
-  else if (todo === 'open-room') showOpenRoom(role === 'practice' ? 'practice' : 'node');
+  else if (todo === 'open-room') showOpenRoom(role);
   // The main window.
   else if (st.role && st.name) showLoading(st.role);
   else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed

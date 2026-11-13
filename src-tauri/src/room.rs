@@ -59,18 +59,19 @@ pub fn new_room_code() -> Result<String, rand::Error> {
 /// hint. Pure.
 pub fn room_env(kind: Kind, extras: &RoomExtras) -> Vec<(&'static str, String)> {
     let mut env = Vec::new();
-    if kind == Kind::Practice {
+    if kind != Kind::Node {
         env.extend(extras.code.clone().map(|code| ("HIC_ROOM_CODE", code)));
     }
     env.extend(extras.firewall_hint.clone().map(|hint| ("HIC_FIREWALL_HINT", hint)));
     env
 }
 
-/// Can this kind of server be opened to the room? A node and a local commons
-/// can. A full commons is reachable on the network already: that is what
-/// it's for, and it has no switch.
+/// Can this kind of server be opened to the room? All three can. For a node
+/// or a local commons it means listening on the room's network; a full
+/// commons is reachable there already, so for it, it means taking a room
+/// code (and showing the room page) until it's closed again.
 pub fn has_switch(kind: Kind) -> bool {
-    matches!(kind, Kind::Node | Kind::Practice)
+    matches!(kind, Kind::Node | Kind::Practice | Kind::Commons)
 }
 
 /// Why a server can't be opened to the room right now.
@@ -205,7 +206,8 @@ pub fn where_is(kind: Kind, open: bool) -> Option<&'static str> {
         (Kind::Node, true) => Some("open to the room: public pages only"),
         (Kind::Practice, false) => Some("local commons, closed to the room"),
         (Kind::Practice, true) => Some("local commons, open to the room"),
-        (Kind::Commons, _) => None,
+        (Kind::Commons, true) => Some("commons, open to the room"),
+        (Kind::Commons, false) => None,
     }
 }
 
@@ -272,11 +274,11 @@ mod tests {
     }
 
     #[test]
-    fn only_a_node_or_a_local_commons_can_be_opened() {
+    fn every_kind_can_be_opened_on_a_room_network() {
         let lan = Some("http://192.168.1.5:8080".to_string());
         assert_eq!(check_open(Kind::Node, lan.clone(), false), Ok("http://192.168.1.5:8080".to_string()));
         assert!(check_open(Kind::Practice, lan.clone(), false).is_ok());
-        assert_eq!(check_open(Kind::Commons, lan, false), Err(CantOpen::NoSwitch));
+        assert!(check_open(Kind::Commons, lan, false).is_ok(), "a full commons too: it takes a room code");
     }
 
     #[test]
@@ -323,11 +325,15 @@ mod tests {
     }
 
     #[test]
-    fn only_a_local_commons_is_given_a_room_code() {
+    fn a_commons_is_given_a_room_code_and_a_node_is_not() {
         let extras = RoomExtras { code: Some("KTRMWX".into()), firewall_hint: Some("Allow it".into()) };
         let local: Vec<_> = room_env(Kind::Practice, &extras);
         assert!(local.contains(&("HIC_ROOM_CODE", "KTRMWX".to_string())));
         assert!(local.contains(&("HIC_FIREWALL_HINT", "Allow it".to_string())));
+        assert!(
+            room_env(Kind::Commons, &extras).contains(&("HIC_ROOM_CODE", "KTRMWX".to_string())),
+            "a full commons too"
+        );
         let node = room_env(Kind::Node, &extras);
         assert!(!node.iter().any(|(k, _)| *k == "HIC_ROOM_CODE"), "a node admits nobody");
         assert!(room_env(Kind::Practice, &RoomExtras::default()).is_empty());
@@ -346,7 +352,8 @@ mod tests {
         assert_eq!(where_is(Kind::Node, false), Some("on this computer, only you"));
         assert_eq!(where_is(Kind::Node, true), Some("open to the room: public pages only"));
         assert_eq!(where_is(Kind::Practice, true), Some("local commons, open to the room"));
-        assert_eq!(where_is(Kind::Commons, true), None);
+        assert_eq!(where_is(Kind::Commons, true), Some("commons, open to the room"));
+        assert_eq!(where_is(Kind::Commons, false), None, "closed: as app.json says");
         assert_eq!(menu_label(Kind::Node, "Laptop", false), "Open my node to the room\u{2026}");
         assert_eq!(menu_label(Kind::Practice, "Thursday", true), "Close Thursday to the room");
     }

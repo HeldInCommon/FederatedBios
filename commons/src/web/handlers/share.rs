@@ -21,7 +21,9 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if !authorised_as(&st, &headers, &f, &h) {
         return error_page(&st.site, "Please sign in as this handle to share.");
     }
-    let commons = f.one("commons_url").trim_end_matches('/').to_string();
+    // A room's join link (`…/join/KTRMWX`) carries the room code: one paste
+    // fills in both (decision record 0027). A code typed in the box wins.
+    let (commons, code_from_link) = crate::vouching::split_join_link(&f.one("commons_url"));
     if !(commons.starts_with("http://") || commons.starts_with("https://")) {
         return error_page(&st.site, "Enter the full address of a commons, e.g. https://example.proxy.runpod.net");
     }
@@ -38,7 +40,8 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
     if v.reach() == Reach::Members {
         return error_page(&st.site, "Members-only profiles stay on your node — they are never shared.");
     }
-    let invite = f.one("invite");
+    let typed = f.one("invite");
+    let invite = if typed.trim().is_empty() { code_from_link.unwrap_or_default() } else { typed };
     let sent = send_share(&st, &commons, &rec, &v, Some(&invite)).await;
     let label = crate::web::layout::host_label(&commons);
     match sent {

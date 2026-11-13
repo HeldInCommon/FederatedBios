@@ -210,7 +210,8 @@ pub fn router(state: Shared) -> Router {
         // QR code, and two pages for anyone in the room.
         .route("/room", get(handlers::room))
         .route("/room/check", get(handlers::room_check))
-        .route("/room/help", get(handlers::room_help));
+        .route("/room/help", get(handlers::room_help))
+        .route("/join/{code}", get(handlers::join_room));
     // Open to the room (decision record 0027): the door stands in front of
     // every route, so a room visitor never reaches a page it doesn't allow.
     // Added only when `HIC_ROOM=1`; otherwise nothing changes.

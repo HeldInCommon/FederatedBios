@@ -32,7 +32,7 @@ fn from(addr: &str, mut req: Request<Body>) -> Request<Body> {
 /// Requests that don't say where they come from are marked as the owner's,
 /// so the shared helpers (`join_and_publish`) work as they do on any node.
 fn open_to_the_room(role: Role) -> (Router, hic_commons::store::Store) {
-    // A commons with the switch is a local commons (`HIC_PRACTICE`).
+    // Keeps these tests about a local commons (`HIC_PRACTICE`).
     let practice = if role == Role::Commons { "1" } else { "0" };
     let settings = [("HIC_ROOM", "1"), ("HIC_ROOM_ADDRESS", "http://192.168.1.23:8080"), ("HIC_PRACTICE", practice)];
     let (app, store) = server_with(role, &settings);
@@ -203,16 +203,15 @@ async fn a_full_commons_has_no_room_pages() {
     }
 }
 
-/// A local commons open to the room that needs vouching, with room code
-/// `code`, and its store. Without `practice` it's a full commons given the
-/// same settings, which must ignore the code.
-fn room_commons(code: &str, practice: bool) -> (Router, hic_commons::store::Store) {
+/// A commons that needs vouching, with room code `code` and open to the
+/// room when `open` (a full commons: decision record 0027 lets any commons
+/// the app runs take a room code while open), and its store.
+fn room_commons(code: &str, open: bool) -> (Router, hic_commons::store::Store) {
     let dir = std::env::temp_dir().join(format!("hic-http-roomcode-{}", hic_commons::sessions::random_hex(6)));
     let store = hic_commons::store::Store::open(&dir).unwrap();
     let code = code.to_string();
     let config = hic_commons::config::Config::from_lookup(move |k| match k {
-        "HIC_ROOM" => Some("1".into()),
-        "HIC_PRACTICE" if practice => Some("1".into()),
+        "HIC_ROOM" if open => Some("1".into()),
         "HIC_ROOM_CODE" => Some(code.clone()),
         "HIC_ROOM_ADDRESS" => Some("http://192.168.1.23:8082".into()),
         _ => None,
@@ -276,11 +275,32 @@ async fn an_old_room_code_fails_once_the_room_reopens() {
 }
 
 #[tokio::test]
-async fn a_full_commons_ignores_a_room_code() {
+async fn a_commons_closed_to_the_room_ignores_a_room_code() {
     let (commons, store) = room_commons("KTRMWX", false);
     let status = share_with_code(&commons, "ana", "KTRMWX", ROOM).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert!(!is_listed(&store, "ana"), "only a local commons open to the room takes one");
+    assert!(!is_listed(&store, "ana"), "only a commons open to the room takes one");
+    assert_eq!(send(&commons, get("/join/KTRMWX", None)).await.status, StatusCode::NOT_FOUND, "and has no join page");
+}
+
+#[tokio::test]
+async fn the_room_page_shows_a_join_link_and_the_join_page_explains_it() {
+    let (commons, _) = room_commons("KTRMWX", true);
+    let page = send(&commons, from(OWNER, get("/room", None))).await.text;
+    assert!(page.contains("<code>http://192.168.1.23:8082/join/KTRMWX</code>"), "the QR code's link, as text");
+    let join = send(&commons, from(ROOM, get("/join/ktrmwx", None))).await;
+    assert_eq!(join.status, StatusCode::OK, "anyone in the room can open the join link");
+    assert!(join.text.contains("<code>http://192.168.1.23:8082/join/KTRMWX</code>"));
+    let guess = send(&commons, from(ROOM, get("/join/ABCDEF", None))).await;
+    assert!(guess.text.contains("/join/ABCDEF"), "it never says whether a code is right, so it can't be used to guess");
+}
+
+#[tokio::test]
+async fn a_node_turns_a_pasted_join_link_into_the_commons_and_its_code() {
+    // The node's side: the share form's address box takes the whole link.
+    let (commons_url, code) = hic_commons::vouching::split_join_link("http://192.168.1.23:8082/join/KTRMWX");
+    assert_eq!(commons_url, "http://192.168.1.23:8082");
+    assert_eq!(code.as_deref(), Some("KTRMWX"));
 }
 
 #[tokio::test]

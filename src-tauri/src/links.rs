@@ -66,6 +66,10 @@ pub struct Place {
     /// Which kind of server it is (`node`, `commons`, `practice`): the rail's
     /// card picks its starburst colour from this.
     pub kind: &'static str,
+    /// The address other people reach it at (`172.20.10.10:8180`), for a
+    /// commons or a server open to the room: shown under its card, as text
+    /// to copy. `None` for a server only this computer can reach.
+    pub address: Option<String>,
     /// Where it is and who can reach it ("on this computer, only you",
     /// "local commons, anyone on this Wi-Fi"): the card's second line.
     pub place: String,
@@ -73,9 +77,10 @@ pub struct Place {
 
 /// The buttons for a page whose own server is `here` (`None` for a page
 /// somewhere else): every other server this computer runs, each saying
-/// whether it's open to the room (`open` lists those that are). Elsewhere,
-/// the labels say "back to".
-pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind]) -> Vec<Place> {
+/// whether it's open to the room (`open` lists those that are) and, where
+/// others can reach it, its address (`addresses`, the address each was
+/// started on). Elsewhere, the labels say "back to".
+pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind], addresses: &[(Kind, String)]) -> Vec<Place> {
     saved
         .running()
         .into_iter()
@@ -100,8 +105,19 @@ pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind]) -> Vec<Place> {
             },
             kind: k.key(),
             place: crate::room::place_text(saved, k, open.contains(&k)).to_string(),
+            address: addresses.iter().find(|(kind, _)| *kind == k).map(|(_, url)| without_scheme(url)),
         })
         .collect()
+}
+
+/// An address as people type it: `http://172.20.10.10:8180` gives
+/// `172.20.10.10:8180`. Pure.
+fn without_scheme(url: &str) -> String {
+    url.strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url)
+        .trim_end_matches('/')
+        .to_string()
 }
 
 /// The script the app adds to a server page to show `places`. Pages served
@@ -128,6 +144,8 @@ pub fn switcher_js(places: &[Place]) -> String {
       text.appendChild(name);
       if(p.place){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.place; text.appendChild(sub);}}
       a.appendChild(star); a.appendChild(text); slot.appendChild(a);
+      // The address sits under the card, outside the link, so it can be selected and copied.
+      if(p.address){{var ad=document.createElement('p'); ad.className='server-address'; var c=document.createElement('code'); c.textContent=p.address; ad.appendChild(c); slot.appendChild(ad);}}
     }});
     slot.hidden=!places.length;
     var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
@@ -164,6 +182,16 @@ mod tests {
     }
 
     #[test]
+    fn a_commons_card_carries_its_address_without_the_scheme() {
+        let s = saved(Some("Room 4"), true);
+        let addresses = vec![(Kind::Commons, "http://172.20.10.10:8181".to_string())];
+        let from_node = places(&s, Some(Kind::Node), &[], &addresses);
+        let commons = from_node.iter().find(|p| p.kind == "commons").unwrap();
+        assert_eq!(commons.address.as_deref(), Some("172.20.10.10:8181"));
+        assert!(from_node.iter().find(|p| p.kind == "practice").unwrap().address.is_none());
+    }
+
+    #[test]
     fn app_links_are_read() {
         assert_eq!(parse("hic-app://open/practice"), Some(AppLink::Open(Kind::Practice)));
         assert_eq!(parse("hic-app://open/commons/"), Some(AppLink::Open(Kind::Commons)));
@@ -176,17 +204,17 @@ mod tests {
     #[test]
     fn the_switcher_lists_the_other_servers() {
         let s = saved(Some("Room 4"), true);
-        let here_node: Vec<String> = places(&s, Some(Kind::Node), &[]).into_iter().map(|p| p.url).collect();
+        let here_node: Vec<String> = places(&s, Some(Kind::Node), &[], &[]).into_iter().map(|p| p.url).collect();
         assert_eq!(here_node, vec!["hic-app://open/commons", "hic-app://open/practice"]);
         assert!(here_node.iter().all(|u| !u.contains("launch")), "the token never goes into a page");
-        let labels: Vec<String> = places(&s, Some(Kind::Practice), &[]).into_iter().map(|p| p.label).collect();
+        let labels: Vec<String> = places(&s, Some(Kind::Practice), &[], &[]).into_iter().map(|p| p.label).collect();
         assert_eq!(labels, vec!["Your node", "Room 4"], "a commons is shown by its own name, never \"your commons\"");
     }
 
     #[test]
     fn each_rail_card_says_what_it_is_and_where() {
         let s = saved(Some("Room 4"), false);
-        let from_node = places(&s, Some(Kind::Node), &[]);
+        let from_node = places(&s, Some(Kind::Node), &[], &[]);
         assert_eq!(from_node.len(), 1);
         assert_eq!(from_node[0].label, "Room 4");
         assert_eq!(
@@ -198,8 +226,8 @@ mod tests {
     #[test]
     fn a_node_on_its_own_has_no_switcher_but_elsewhere_has_a_way_back() {
         let s = saved(None, false);
-        assert!(places(&s, Some(Kind::Node), &[]).is_empty());
-        let away = places(&s, None, &[]);
+        assert!(places(&s, Some(Kind::Node), &[], &[]).is_empty());
+        let away = places(&s, None, &[], &[]);
         assert_eq!(away.len(), 1);
         assert_eq!(away[0].label, "\u{2190} Back to your node");
         assert_eq!(away[0].url, "http://127.0.0.1:8080/");
@@ -232,9 +260,11 @@ mod tests {
             tone: "#000",
             kind: "node",
             place: evil.into(),
+            address: Some(evil.into()),
         }]);
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
         assert!(js.contains(r#""place":"'); alert(1); ('""#), "the place line too");
+        assert!(js.contains(r#""address":"'); alert(1); ('""#), "and the address");
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
         assert!(switcher_js(&[]).contains("places=[]"));
     }

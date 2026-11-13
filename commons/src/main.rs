@@ -32,6 +32,7 @@ async fn run(config: Config) -> Result<(), String> {
     // Pages call the node's default commons by its name, not its address
     // (see `web::layout::host_label`).
     hic_commons::web::layout::name_default_commons(&config.share_default, &config.share_default_name);
+    hic_commons::web::layout::name_nearby_commons(&config.share_nearby);
     let store = Store::open(&config.data_dir)
         .map_err(|e| format!("can't use the data folder {}: {e}", config.data_dir.display()))?;
     // Decide the folder's role: read what's there, apply the rule, then save

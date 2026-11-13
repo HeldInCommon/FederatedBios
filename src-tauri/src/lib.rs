@@ -267,8 +267,8 @@ fn on_page(window: &tauri::Webview, url: &str) {
     if let (Some(k), Some(w)) = (here, app.get_webview_window("main")) {
         let _ = w.set_title(&sidecar::title_for(k));
     }
-    let open = app.try_state::<Servers>().map(|s| s.open_kinds()).unwrap_or_default();
-    let _ = window.eval(links::switcher_js(&links::places(&saved, here, &open)));
+    let (open, addresses) = app.try_state::<Servers>().map(|s| (s.open_kinds(), s.addresses())).unwrap_or_default();
+    let _ = window.eval(links::switcher_js(&links::places(&saved, here, &open, &addresses)));
 }
 
 /// The log file: `~/Library/Logs/org.heldincommon.node/held-in-common.log` on

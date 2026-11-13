@@ -56,6 +56,7 @@ pub fn room(view: &RoomView) -> Markup {
                     p class="field-label" id="room-address-label" { "People in this room can open" }
                     p class="room-address" { code { (address) } }
                     @if let Some(code) = view.room_code {
+                        p class="hint" { "Paste the link above into Share to a commons on your node, and you're in. Or type the address without the end, and the room code below." }
                         p class="field-label" { "Room code, to join this commons" }
                         // Shown in two groups of three for reading aloud;
                         // screen readers get the letters one by one instead.
@@ -84,6 +85,26 @@ pub fn room(view: &RoomView) -> Markup {
                 p class="hint" { (hint) }
             }
             p { a href="/room/help" { "Can't reach someone?" } }
+        }
+    }
+}
+
+/// `GET /join/{code}`: someone opened a room's join link: how to join from
+/// their own node, with `link` to paste.
+pub fn join_room(name: &str, link: &str) -> Markup {
+    html! {
+        header class="intro" {
+            h1 { "Join " (name) }
+            p class="lede" { "Join from the Held in Common app on your laptop." }
+        }
+        section class="prose" {
+            ol {
+                li { "Open Held in Common on your laptop (install it first if you need to) and make your profile on your node." }
+                li { "On your profile, open " strong { "Sharing" } "." }
+                li { "Paste this link into " strong { "Share to a commons" } " and press " strong { "Share" } ". It carries the room code, so you're listed straight away." }
+            }
+            p class="room-address" { code { (link) } }
+            p class="hint" { "On a phone? Send this link to your laptop, or type it in there. If sharing says the code isn't right, the room has been opened again: scan the new code on the host's screen." }
         }
     }
 }
@@ -170,6 +191,13 @@ mod tests {
         let page = room(&RoomView { is_commons: true, room_code: Some("KTRMWX"), ..open_node() }).into_string();
         assert!(page.contains("KTR MWX"));
         assert!(page.contains("K T R M W X"), "screen readers get the letters one by one");
+    }
+
+    #[test]
+    fn the_join_page_gives_the_link_to_paste() {
+        let page = join_room("spark", "http://10.0.0.5:8180/join/KTRMWX").into_string();
+        assert!(page.contains("<code>http://10.0.0.5:8180/join/KTRMWX</code>"));
+        assert!(page.contains("Share to a commons"));
     }
 
     #[test]

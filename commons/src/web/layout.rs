@@ -271,7 +271,7 @@ fn rail(site: &Site) -> Markup {
                 }
                 // Open to the room: the one state here someone may need to
                 // act on (close it), so an oxblood pop, said in words.
-                @if site.room.is_some() && (site.practice || !site.is_commons()) {
+                @if site.room.is_some() {
                     p class="room-pop" { "Open to the room" }
                 }
                 div class="server-list" id="hic-servers" hidden {}
@@ -512,8 +512,35 @@ pub fn name_default_commons(url: &str, name: &str) {
 /// computer (`127.0.0.1:8082`) is shown at this computer's network address
 /// (`10.0.0.5:8082`), the one other people use: this node keeps talking to
 /// it through `127.0.0.1`, which never changes.
+///
+/// A commons on this same computer that the desktop app named
+/// ([`name_nearby_commons`]) shows its name and its network address,
+/// "spark (10.0.0.5:8180)", so the address people in the room use is right
+/// there.
 pub fn host_label(url: &str) -> String {
-    label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())), this_computer_ip())
+    let here = this_computer_ip();
+    let label = label_for(url, DEFAULT_COMMONS.get().map(|(u, n)| (u.as_str(), n.as_str())), here);
+    match nearby_name(url, NEARBY_COMMONS.get().map(Vec::as_slice).unwrap_or(&[])) {
+        Some(name) => format!("{name} ({label})"),
+        None => label,
+    }
+}
+
+/// The commons on this same computer the desktop app told the node about
+/// (address, name), for display only, set once at start-up like
+/// [`DEFAULT_COMMONS`].
+static NEARBY_COMMONS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+/// Record, once at start-up, the commons on this computer (address, name)
+/// so [`host_label`] can name them. Writes only that in-memory note.
+pub fn name_nearby_commons(nearby: &[(String, String)]) {
+    let _ = NEARBY_COMMONS.set(nearby.to_vec());
+}
+
+/// The name of the commons at `url` among `nearby`, if it's one of them. Pure.
+fn nearby_name<'a>(url: &str, nearby: &'a [(String, String)]) -> Option<&'a str> {
+    let url = url.trim_end_matches('/');
+    nearby.iter().find(|(u, _)| u == url).map(|(_, n)| n.as_str())
 }
 
 /// [`host_label`] with what it looks up passed in: `named` is (address,
@@ -760,6 +787,13 @@ mod tests {
             assert!(m.contains("src=\"/logo.png\""));
             assert!(m.contains(PROJECT_URL));
         }
+    }
+
+    #[test]
+    fn a_commons_on_this_computer_is_named_with_its_address() {
+        let nearby = vec![("http://127.0.0.1:8180".to_string(), "spark".to_string())];
+        assert_eq!(nearby_name("http://127.0.0.1:8180/", &nearby), Some("spark"));
+        assert_eq!(nearby_name("http://127.0.0.1:8181", &nearby), None);
     }
 
     #[test]

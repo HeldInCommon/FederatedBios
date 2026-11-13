@@ -645,6 +645,14 @@ a.rail-foot:hover {
   );
 }
 
+/* The address under another server's card in the rail (filled in by the
+   desktop app): plain text to select and copy, not part of the link. */
+.server-address {
+  margin: calc(var(--space-1) * -1) 0 var(--space-3);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
 /* "Open to the room" under the server card: oxblood, because whoever opened
    it may need to close it. The words carry the meaning; colour only adds. */
 .room-pop {
