@@ -2,9 +2,9 @@
 
 use maud::{html, Markup};
 
-use super::origin_host;
 use super::parts::own_terms_note;
 use super::profile::{places_list, profile_header, terms_line};
+use super::{origin_address, origin_host};
 use crate::canonical::short;
 use crate::model::{Reach, RemoteEntry};
 
@@ -20,7 +20,9 @@ pub fn federated(r: &RemoteEntry) -> Markup {
             div class="origin-box" {
                 p class="origin-line" {
                     "Shared from "
-                    @if r.origin.starts_with("http") { a href=(r.origin) { (origin_host(r)) } } @else { strong { (origin_host(r)) } }
+                    // Link only to an address that is somewhere else: a node on its
+                    // own computer (127.0.0.1) would link to the reader's own.
+                    @if let Some(address) = origin_address(&r.origin) { a href=(r.origin) { (address) } } @else { strong { (origin_host(r)) } }
                     @if !r.origin_label.is_empty() { span class="origin-label" { " — the node calls itself “" (r.origin_label) "”" } }
                 }
                 p class="origin-key" { "Signed by key " span class="mono" { (short(&r.ed_pub)) } }
