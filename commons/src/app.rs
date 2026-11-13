@@ -63,6 +63,9 @@ impl AppState {
             share_default_name: config.share_default_name.clone(),
             practice: config.practice,
             in_app: config.in_app(),
+            // Only while open to the room (decision record 0027).
+            // Its room address, or its own address if the app gave none.
+            room: config.room.then(|| config.room_address.clone().unwrap_or_else(|| config.base_url.clone())),
         };
         AppState {
             own_hosts: config.own_hosts(),
@@ -185,7 +188,12 @@ pub fn router(state: Shared) -> Router {
         .route("/logo.png", get(|| async { ([(header::CONTENT_TYPE, "image/png")], web::LOGO_PNG).into_response() }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))
         .route("/quilt/{file}", get(quilt))
-        .route("/health", get(api::health));
+        .route("/health", get(api::health))
+        // Open to the room (decision record 0027): the owner's page with the
+        // QR code, and two pages for anyone in the room.
+        .route("/room", get(handlers::room))
+        .route("/room/check", get(handlers::room_check))
+        .route("/room/help", get(handlers::room_help));
     // Open to the room (decision record 0027): the door stands in front of
     // every route, so a room visitor never reaches a page it doesn't allow.
     // Added only when `HIC_ROOM=1`; otherwise nothing changes.

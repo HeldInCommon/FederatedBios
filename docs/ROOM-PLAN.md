@@ -530,9 +530,9 @@ progress**, **Done**, **Blocked** (reason in the Run log), **Deferred**,
 | Preflight | Done | (no commit) |
 | 1 The door | Done | `a450fa5` |
 | 2 Stop with the app | Done | `60213dd`, fix in the next commit |
-| 3 The switch | In progress | |
-| 4 Address and QR | Not started | |
-| 5 Firewall and network help | Not started | |
+| 3 The switch | Done | (see Run log) |
+| 4 Address and QR | Done | (see Run log) |
+| 5 Firewall and network help | In progress | |
 | 6 Room code | Not started | |
 | 7 Who's in the room | Not started | |
 | 8 Rehearsal | Needs Phoenix | |
@@ -575,6 +575,13 @@ and never ticks these boxes itself.
   - [ ] One laptop changes Wi-Fi, and its room closes with the notice.
   - [ ] Next day, every app opens closed.
   - [ ] Write up what went wrong in `docs/ROOM-GUIDE.md`.
+- [ ] Run the app built from this branch (`cargo tauri dev` or a build) and
+      try the Go menu: open your node to the room (the confirm screen, then
+      the room page with its QR code), "Show the QR code for my node", Close.
+      Quit with it open and relaunch: it starts closed. Start a local commons
+      and check it says "closed to the room" until you open it.
+- [ ] With Tailscale serve or Funnel on a port, try to open that server: the
+      app should refuse and say why.
 - [ ] Read the branch, then push it and open the PR when happy.
 
 ---
@@ -672,3 +679,54 @@ found, and the commit.
   inherit it; the server would then stop when that sidecar stops. Low risk.
 - **Checks:** all green for `commons` (275 unit, 97 HTTP, 2 exit tests, 98
   end-to-end).
+
+### 2026-11-13, Phases 3 (the switch) and 4 (address and QR): done, one commit
+
+- **Why one commit:** Phase 3's review fixes and Phase 4 both change
+  `config.rs`, the layout and the room tests; split, the commit between them
+  wouldn't build.
+- **Phase 3 built:** an in-memory `open` flag per server (never in
+  `app.json`), `set_room` and `open_room_now` (only from the setup window,
+  run off the main thread), Go-menu items "Open my node to the room…" /
+  "Close … to the room" / "Show the QR code for …", a confirmation screen,
+  the read-only Tailscale check, `watch_addresses` closing an open server
+  when the address changes, crash handling, and the switcher and menu
+  wording. A local commons now starts closed ("Start a local commons").
+- **Phase 4 built:** `/room` (owner only: QR code as inline SVG, the address
+  as text), `/room/check` and `/room/help` (anyone in the room), the
+  `qrcode` crate (SVG only), the rail saying "open to the room" in words with
+  an oxblood "Open to the room" pop, and the app opening `/room` after
+  opening.
+- **Two reviews.** The first (Phase 3 only) found, all fixed:
+  - a removed local commons came back open with no confirmation
+    (`Sidecar::stop` now clears the flag);
+  - a crash restart racing an Open could leave an untracked server on the
+    network (a per-server `changing` lock, the restart re-checks after its
+    pause, and `set` kills any server it replaces);
+  - a crash without restart, or a failed start, left the flag open (cleared);
+  - the confirm command froze the window (now `async`), and could be reached
+    from the main window (now only from the setup window);
+  - `0.0.0.0` meant every network, including Tailscale's: an open server now
+    listens only on the room's address, plus `127.0.0.1` for its owner
+    (`Config::listen_addrs`, a second listener in `main.rs`);
+  - the Tailscale check failed open (now: no answer means refuse; any spelling
+    of loopback counts);
+  - "closes when this computer changes network" overpromised: it's when the
+    address changes, checked every minute; wording fixed everywhere.
+  The second review (fixes plus Phase 4) confirmed those, and found, all
+  fixed: room pages served on a full commons (now 404 there); the rail
+  depended on `HIC_ROOM_ADDRESS` (now on `HIC_ROOM`); `restart_node` didn't
+  refresh the menu; no oxblood pop; a VPN or Tailscale exit node would make
+  the room address a `100.x` or public one (now refused, "not a room
+  network"); a failing `tailscale` command counted as "nothing forwarded"
+  (now "couldn't check", unless Tailscale simply isn't running);
+  `remove_practice`, `restart_node` and `add_role` now take the lock; the QR
+  code leads to the profile only when the room can read it.
+- **Also caught while building:** Phase 1's fix allowing `/password.js` and
+  `/run-a-commons` had silently not applied (`rustfmt` had reflowed the line
+  my edit looked for). Applied now, with a test listing them.
+- **Not done, on purpose:** `/room` has no Close button; closing is an app
+  action, so the page points to the Go menu. The app isn't launched here (it
+  would use the installed app's data and ports); see Needs Phoenix.
+- **Checks:** all green: 286 unit, 102 HTTP, 4 spec, 2 exit tests (`commons`);
+  60 (`src-tauri`); 101 end-to-end; docs, spec vectors, CSS lint.

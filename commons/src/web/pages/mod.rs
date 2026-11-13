@@ -26,6 +26,7 @@
 //! | `here.rs` | a story shared "Only while I'm here": its text fetched just now, or "Not here right now" |
 //! | `story_form.rs` | writing a story (new or editing), then its rights step |
 //! | `rights.rs` | Sharing and rights: who can see it, licence, signals, Held in Common Signals, how a story travels |
+//! | `room.rs` | open to the room: the owner's room page with its QR code, the check page and "Can't reach someone?" |
 //! | `parts.rs` | shared pieces: page heading, section label, starburst, terms panel, "2 min ago" |
 
 use crate::model::RemoteEntry;
@@ -44,6 +45,7 @@ mod parts;
 mod profile;
 mod publish;
 mod rights;
+mod room;
 mod schematics;
 mod sharing;
 mod signin;
@@ -62,6 +64,7 @@ pub use owner::OwnerPanel;
 pub use parts::Chosen;
 pub use profile::profile;
 pub use publish::publish_form;
+pub use room::{room, room_check, room_help, RoomView};
 pub use sharing::{shared, shared_pending, vouch_outcome, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
 pub use stories::{author_stories, commons_stories, node_stories};

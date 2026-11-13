@@ -285,7 +285,7 @@ if [ -z "$LAN" ]; then
   echo "  SKIP  open to the room: this computer has no network address"
 else
   mkdir -p "$T/room"
-  HIC_DATA="$T/room" PORT=8095 HIC_ROLE=node HIC_BIND=0.0.0.0 HIC_ROOM=1 HIC_INSTANCE="Room node" HIC_BASE_URL="http://$LAN:8095" "$BIN" >"$T/room.log" 2>&1 & RPID=$!
+  HIC_DATA="$T/room" PORT=8095 HIC_ROLE=node HIC_BIND="$LAN" HIC_ROOM=1 HIC_ROOM_ADDRESS="http://$LAN:8095" HIC_INSTANCE="Room node" HIC_BASE_URL="http://$LAN:8095" "$BIN" >"$T/room.log" 2>&1 & RPID=$!
   curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://127.0.0.1:8095/health >/dev/null || no "room node failed to start"
   curl -s -X POST http://127.0.0.1:8095/join --data-urlencode "handle=ana" --data-urlencode "display_name=Ana" --data-urlencode "passphrase=supersecret7" --data-urlencode "passphrase_again=supersecret7" -o /dev/null
   code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
@@ -294,6 +294,10 @@ else
   [ "$(code -X POST "http://$LAN:8095/login" --data-urlencode "handle=ana" --data-urlencode "passphrase=guess")" = "403" ] && ok "the room can't guess passphrases" || no "the room could post a sign-in"
   [ "$(code http://127.0.0.1:8095/login)" = "200" ] && ok "the owner still reaches the sign-in page" || no "the owner was refused"
   [ "$(code -H "X-Forwarded-For: 203.0.113.9" http://127.0.0.1:8095/login)" = "403" ] && ok "a request through a proxy is a room visitor" || no "a proxied request counted as the owner"
+  # Ana hasn't published, so the room couldn't open her profile: the code leads to the front page.
+  curl -s http://127.0.0.1:8095/room | grep -q "<code>http://$LAN:8095/</code>" && ok "the owner's room page shows the address the room uses" || no "room page missing the room address"
+  [ "$(code "http://$LAN:8095/room")" = "403" ] && ok "the room can't see the room page" || no "the room saw the room page"
+  [ "$(code "http://$LAN:8095/room/check")" = "200" ] && ok "the room can check it reached this computer" || no "room check failed"
   kill $RPID 2>/dev/null; wait $RPID 2>/dev/null
 fi
 

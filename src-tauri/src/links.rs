@@ -72,9 +72,10 @@ pub struct Place {
 }
 
 /// The buttons for a page whose own server is `here` (`None` for a page
-/// somewhere else): every other server this computer runs. Elsewhere, the
-/// labels say "back to".
-pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
+/// somewhere else): every other server this computer runs, each saying
+/// whether it's open to the room (`open` lists those that are). Elsewhere,
+/// the labels say "back to".
+pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind]) -> Vec<Place> {
     saved
         .running()
         .into_iter()
@@ -98,7 +99,7 @@ pub fn places(saved: &Saved, here: Option<Kind>) -> Vec<Place> {
                 Kind::Practice => "#1f5cff",
             },
             kind: k.key(),
-            place: saved.where_is(k).to_string(),
+            place: crate::room::place_text(saved, k, open.contains(&k)).to_string(),
         })
         .collect()
 }
@@ -175,17 +176,17 @@ mod tests {
     #[test]
     fn the_switcher_lists_the_other_servers() {
         let s = saved(Some("Room 4"), true);
-        let here_node: Vec<String> = places(&s, Some(Kind::Node)).into_iter().map(|p| p.url).collect();
+        let here_node: Vec<String> = places(&s, Some(Kind::Node), &[]).into_iter().map(|p| p.url).collect();
         assert_eq!(here_node, vec!["hic-app://open/commons", "hic-app://open/practice"]);
         assert!(here_node.iter().all(|u| !u.contains("launch")), "the token never goes into a page");
-        let labels: Vec<String> = places(&s, Some(Kind::Practice)).into_iter().map(|p| p.label).collect();
+        let labels: Vec<String> = places(&s, Some(Kind::Practice), &[]).into_iter().map(|p| p.label).collect();
         assert_eq!(labels, vec!["Your node", "Room 4"], "a commons is shown by its own name, never \"your commons\"");
     }
 
     #[test]
     fn each_rail_card_says_what_it_is_and_where() {
         let s = saved(Some("Room 4"), false);
-        let from_node = places(&s, Some(Kind::Node));
+        let from_node = places(&s, Some(Kind::Node), &[]);
         assert_eq!(from_node.len(), 1);
         assert_eq!(from_node[0].label, "Room 4");
         assert_eq!(
@@ -197,8 +198,8 @@ mod tests {
     #[test]
     fn a_node_on_its_own_has_no_switcher_but_elsewhere_has_a_way_back() {
         let s = saved(None, false);
-        assert!(places(&s, Some(Kind::Node)).is_empty());
-        let away = places(&s, None);
+        assert!(places(&s, Some(Kind::Node), &[]).is_empty());
+        let away = places(&s, None, &[]);
         assert_eq!(away.len(), 1);
         assert_eq!(away[0].label, "\u{2190} Back to your node");
         assert_eq!(away[0].url, "http://127.0.0.1:8080/");

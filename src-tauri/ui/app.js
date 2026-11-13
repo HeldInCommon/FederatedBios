@@ -7,6 +7,7 @@
 //   do=rename&role=node|commons|practice   rename it
 //   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
+//   do=open-room&role=node|practice   confirm opening it to the room (ADR 0027)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
 //   setup_state  -> { role, name, node_name, commons_name, practice_name, practice, lan_url }
@@ -14,6 +15,7 @@
 //   add_role     (role, name)           add the other role and start it
 //   set_name     (role, name)           name (or rename) the node or commons
 //   remove_practice_now                 delete the local commons
+//   open_room_now (which)               open a node or local commons to the room
 //   steward_links -> [string]           the commons' steward link, per address
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
@@ -195,6 +197,24 @@ function showRemove(){
   });
 }
 
+// Open a node or local commons to the room, after saying who will reach it.
+// The app checks it can (on a network, nothing forwarding to it) and says
+// why not here if it can't.
+function showOpenRoom(role){
+  if (role === 'practice'){
+    $('open-room-what').textContent = 'the local commons';
+    $('open-room-who').textContent = 'Anyone on this Wi-Fi will be able to share to it and see what is listed, and join with the room code. Your steward view stays on this computer.';
+  }
+  $('open-room').hidden = false;
+  $('open-room-back').addEventListener('click', () => invoke('close_setup'));
+  $('open-room-go').addEventListener('click', async () => {
+    $('open-room-go').disabled = true;
+    $('open-room-err').textContent = '';
+    try { await invoke('open_room_now', { which: role }); }
+    catch(err){ $('open-room-err').textContent = ('' + err) || 'Could not open it.'; $('open-room-go').disabled = false; }
+  });
+}
+
 // The steward link: one row per address, each with a Copy button. If the
 // clipboard can't be reached, the link is selected so the person can copy
 // it themselves.
@@ -259,6 +279,7 @@ async function init(){
   else if (todo === 'rename') showNaming(role, 'rename', { node: st.node_name, commons: st.commons_name, practice: st.practice_name }[role]);
   else if (todo === 'remove-practice') showRemove();
   else if (todo === 'steward-link') showStewardLink();
+  else if (todo === 'open-room') showOpenRoom(role === 'practice' ? 'practice' : 'node');
   // The main window.
   else if (st.role && st.name) showLoading(st.role);
   else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed

@@ -57,7 +57,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             p { "The copies people share and nothing else. Members-only work is never sent. When someone withdraws a copy, the commons removes it. A copy someone already downloaded stays with them, as with anything shared." }
 
             h2 class="section-h" { "What's a local commons?" }
-            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Open it from the " strong { "Go" } " menu, give it a name, and tell the room its address, which the sidebar shows (it looks like http://192.168.1.20:8082). People share to it from their own nodes and, as on any commons, are listed once a member vouches for them, which is one click, or you approve them. When the session's over, remove it from the " strong { "Go" } " menu and it's gone." }
+            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Start it from the " strong { "Go" } " menu and give it a name. It starts closed: only this computer can reach it. When the room is ready, choose " strong { "Open … to the room" } " in the " strong { "Go" } " menu, and show the room its QR code and room code. People share to it from their own nodes and, as on any commons, are listed once a member vouches for them, which is one click, or you approve them. When the session's over, remove it from the " strong { "Go" } " menu and it's gone." }
             p { "An " strong { "online commons" } " is different: it has an address anyone can reach, on a server or through a tunnel such as Tailscale Funnel, and it stays up for a community over time." }
         }
     }
@@ -69,9 +69,9 @@ fn try_it(in_app: bool) -> Markup {
         section class="recovery try-commons" {
             h2 class="field-label" { "Try it" }
             @if in_app {
-                p { "Open a local commons for a workshop or a session: anyone on this Wi-Fi can share to it while the app is open. Your node keeps running." }
+                p { "Start a local commons for a workshop or a session, then open it to the room from the Go menu: anyone on this Wi-Fi can share to it while it's open. Your node keeps running." }
                 div class="commons-actions" {
-                    a class="primary" href=(OPEN_PRACTICE) { "Open a local commons" }
+                    a class="primary" href=(OPEN_PRACTICE) { "Start a local commons" }
                     a class="secondary" href=(OPEN_COMMONS) { "Set up a real commons" }
                 }
                 p class="hint" { "A real commons on this computer can be reached by people on the same Wi-Fi." }

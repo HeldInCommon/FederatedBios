@@ -80,6 +80,19 @@
     <p class="err" id="remove-err" role="alert"></p>
   </main>
 
+  <!-- Open a node or local commons to the room (Go → Open … to the room…), ADR 0027 -->
+  <main class="choose" id="open-room" hidden>
+    <p class="eyebrow">Held in Common · open to the room</p>
+    <h1>Open <span id="open-room-what">your node</span> to the room<span class="dot">?</span></h1>
+    <p class="sub" id="open-room-who">Anyone on this Wi-Fi will be able to see your public profile and public stories. Signing in, your keys and anything members-only stay on this computer.</p>
+    <p class="sub"><strong>Only open this on a network you trust: a classroom, a studio, your own hotspot.</strong> It closes when you choose Close in the Go menu, when you quit the app, and when this computer's network address changes (the app checks every minute).</p>
+    <div class="row">
+      <button class="btn" id="open-room-go" type="button">Open it</button>
+      <button class="link" id="open-room-back" type="button">Cancel</button>
+    </div>
+    <p class="err" id="open-room-err" role="alert"></p>
+  </main>
+
   <!-- The commons' steward link (Go → Show steward link…), ADR 0024 -->
   <main class="choose" id="steward" hidden>
     <p class="eyebrow">Held in Common · the commons on this computer</p>

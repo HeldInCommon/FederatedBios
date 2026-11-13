@@ -274,6 +274,7 @@ mod tests {
             share_default_name: String::new(),
             practice: false,
             in_app: true,
+            room: None,
         };
         assert_eq!(headline(&site(crate::role::Role::Node, "phoenixs_machine")), "phoenixs_machine node");
         assert_eq!(headline(&site(crate::role::Role::Node, "  ")), "Your node");

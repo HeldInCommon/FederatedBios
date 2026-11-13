@@ -79,7 +79,8 @@ async fn run(config: Config) -> Result<(), String> {
     if config.exit_with_app {
         stop_when_the_app_is_gone();
     }
-    let addr = SocketAddr::new(config.bind_addr(role), config.port);
+    let addrs: Vec<SocketAddr> =
+        config.listen_addrs(role).into_iter().map(|ip| SocketAddr::new(ip, config.port)).collect();
     let state = Arc::new(app::AppState::new(config, role, store));
     if role == role::Role::Node {
         // Once at start-up: ask each commons we're waiting on whether we've been
@@ -94,10 +95,29 @@ async fn run(config: Config) -> Result<(), String> {
         // opens these itself; it still accepts nothing (decision record 0004).
         tokio::spawn(hic_commons::relay_node::run(state.clone()));
     }
-    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
-    println!("hic-commons listening on {addr}");
-    // With connection info, so handlers can see the sender's address (rate limits).
-    axum::serve(listener, app::router(state).into_make_service_with_connect_info::<SocketAddr>())
+    // Usually one address. A server open to the room on the room's address
+    // also listens on 127.0.0.1 for its owner (`Config::listen_addrs`):
+    // every listener but the first runs on its own task, and the process
+    // ends when the first one stops.
+    let mut listeners = Vec::new();
+    for addr in &addrs {
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| format!("can't listen on {addr}: {e}"))?;
+        println!("hic-commons listening on {addr}");
+        listeners.push(listener);
+    }
+    let router = app::router(state);
+    for listener in listeners.split_off(1) {
+        let service = router.clone().into_make_service_with_connect_info::<SocketAddr>();
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, service).await {
+                eprintln!("hic-commons: a listener stopped: {e}");
+            }
+        });
+    }
+    let first = listeners.pop().ok_or("no address to listen on")?;
+    // With connection info, so handlers can see the sender's address (rate
+    // limits, and the door when open to the room).
+    axum::serve(first, router.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))

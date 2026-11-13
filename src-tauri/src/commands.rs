@@ -100,7 +100,9 @@ pub fn remove_practice(app: &AppHandle) -> Result<(), String> {
     let mut current = chosen.0.lock().unwrap();
     let cfg = app.state::<AppConfig>();
     let port = current.port_of(Kind::Practice);
-    app.state::<Servers>().get(Kind::Practice).stop();
+    let servers = app.state::<Servers>();
+    let _changing = servers.get(Kind::Practice).changing();
+    servers.get(Kind::Practice).stop();
     wait_until_free(port, &cfg.launch_token);
     let dir = settings::data_dir_for(&cfg.base, Kind::Practice);
     match std::fs::remove_dir_all(&dir) {
@@ -116,6 +118,58 @@ pub fn remove_practice(app: &AppHandle) -> Result<(), String> {
         sidecar::open_when_up(app.clone(), cfg.launch_token.clone(), home, current.port_of(home));
     }
     Ok(())
+}
+
+/// Open `kind` to the room or close it (decision record 0027): check it
+/// may be opened (a node or local commons, on a network, with no Tailscale
+/// forwarding to it), then restart its server open or closed, and rebuild
+/// the Go menu. Opening shows it in the main window. Whether it's open is
+/// kept in memory only, never in `app.json`.
+pub fn set_room(app: &AppHandle, kind: Kind, open: bool) -> Result<(), String> {
+    let saved = app.state::<Chosen>().0.lock().unwrap().clone();
+    if !saved.runs(kind) {
+        return Err(format!("This computer doesn't run {}.", kind.a_kind()));
+    }
+    let port = saved.port_of(kind);
+    if open {
+        // D9: refuse a port that Tailscale forwards to (read-only check). If
+        // Tailscale is installed but doesn't answer, we can't tell, so refuse.
+        let forwarded = match network::tailscale_serve_status() {
+            network::TailscaleStatus::NotInstalled => false,
+            network::TailscaleStatus::Answered(status) => crate::room::forwards_to(&status, port),
+            network::TailscaleStatus::NoAnswer => {
+                return Err("Couldn't check whether Tailscale passes traffic to this server, so it stays closed. \
+                     Try again in a moment."
+                    .into())
+            }
+        };
+        crate::room::check_open(kind, network::lan_url(port), forwarded).map_err(|why| why.message().to_string())?;
+    }
+    let cfg = app.state::<AppConfig>();
+    let servers = app.state::<Servers>();
+    let sc = servers.get(kind);
+    let _changing = sc.changing();
+    if sc.is_open() == open {
+        crate::refresh_menu(app, &saved);
+        return Ok(());
+    }
+    sc.stop(); // also closes it to the room
+    wait_until_free(port, &cfg.launch_token);
+    sc.set_open(open);
+    let shown = app.state::<Shown>().0.lock().unwrap().clone();
+    // Closing: keep showing it if the window was. Opening: show its room
+    // page, with the QR code for the room, once it answers.
+    let show = !open && network::local_port(&shown).is_some_and(|p| p == port);
+    let started = sidecar::start(app, &cfg, &servers, &saved, kind, show);
+    if started.is_err() {
+        // It didn't start, so it isn't open to anyone.
+        sc.set_open(false);
+    } else if open && sc.is_open() {
+        sidecar::show_when_up(app.clone(), cfg.launch_token.clone(), port, sidecar::room_page_url(port));
+    }
+    crate::refresh_menu(app, &saved);
+    log::info!("{} is now {} the room", kind.key(), if sc.is_open() { "open to" } else { "closed to" });
+    started
 }
 
 /// Open the setup window with `query` (what it should do), or bring it
@@ -300,7 +354,9 @@ pub fn add_role(app: AppHandle, role: String, name: String) -> Result<(), String
         return Err(port_taken(port));
     }
     remember(&app, &mut current, next)?;
-    sidecar::start(&app, &cfg, &app.state::<Servers>(), &current, kind, true)
+    let servers = app.state::<Servers>();
+    let _changing = servers.get(kind).changing();
+    sidecar::start(&app, &cfg, &servers, &current, kind, true)
 }
 
 /// Name (or rename) this computer's node or commons (`role`; default the
@@ -352,8 +408,29 @@ pub fn restart_node(app: AppHandle, which: Option<String>) -> Result<(), String>
         Probe::Nothing => {}
     }
     let servers = app.state::<Servers>();
-    servers.get(kind).stop();
-    sidecar::start(&app, &cfg, &servers, &saved, kind, false)
+    let _changing = servers.get(kind).changing();
+    servers.get(kind).stop(); // also closes it to the room
+    let started = sidecar::start(&app, &cfg, &servers, &saved, kind, false);
+    crate::refresh_menu(&app, &saved);
+    started
+}
+
+/// Open a node or local commons (`which`) to the room: the setup window's
+/// confirm button, after it has said who will be able to reach it.
+///
+/// Only the setup window may ask (as for the steward link, ADR 0024), so no
+/// page shown in the main window can open anything to the room. Runs off the
+/// main thread (`async`), since checking Tailscale and restarting the server
+/// take a few seconds and would otherwise freeze the app.
+#[tauri::command(async)]
+pub fn open_room_now(window: tauri::WebviewWindow, app: AppHandle, which: String) -> Result<(), String> {
+    if window.label() != SETUP_WINDOW {
+        return Err("Open it to the room from the Go menu.".into());
+    }
+    let kind = Kind::parse(&which).ok_or("Unknown kind of server.")?;
+    set_room(&app, kind, true)?;
+    close_setup(app);
+    Ok(())
 }
 
 /// Remove the local commons (the setup window's confirm button).

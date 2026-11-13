@@ -645,6 +645,18 @@ a.rail-foot:hover {
   );
 }
 
+/* "Open to the room" under the server card: oxblood, because whoever opened
+   it may need to close it. The words carry the meaning; colour only adds. */
+.room-pop {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--oxblood);
+  color: var(--white);
+  font: 700 var(--text-xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
 .rail-foot {
   margin: auto 0 0;
   font-size: var(--text-sm);
@@ -2358,6 +2370,52 @@ a.rail-foot {
 
 .account-signout {
   margin-top: var(--space-6);
+}
+
+/* Open to the room (decision record 0027): the QR code beside the address,
+   big enough to scan from across a room or off a projector. The code sits on
+   white inside a 2px ink rule, so it reads on any quilt. */
+.room {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: center;
+  margin-block: var(--space-6);
+}
+
+.room-qr {
+  width: min(100%, 22rem);
+  margin: 0;
+  padding: var(--space-4);
+  border: var(--rule);
+  background: var(--white);
+}
+
+/* The drawing scales with its frame; crisp edges keep the modules square. */
+.room-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.room-words {
+  flex: 1 1 18rem;
+}
+
+/* The address and the room code are real text, large enough to read aloud
+   or copy from the back of a room. */
+.room-address,
+.room-code {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+.room-code {
+  font-size: var(--text-lede);
+  font-weight: 700;
+  letter-spacing: var(--track-wide);
 }
 
 /* 6. Small screens --------------------------------------------------------- */

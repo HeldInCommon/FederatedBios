@@ -23,6 +23,7 @@
 //! | `account.rs` | recovery key, replacing and recovering a key |
 //! | `membership.rs` | invite codes and vouches, from a member's node (`POST /invite`, `POST /vouch`) |
 //! | `waiting_list.rs` | `POST /api/waiting`: a commons shows its members who is waiting for a vouch |
+//! | `room.rs` | open to the room: `GET /room` (the owner's QR code), `GET /room/check`, `GET /room/help` |
 //! | `steward.rs` | the steward view of a commons |
 //! | `stories.rs` | `GET /stories` (a node's, or a commons' with recent withdrawals), `GET /stories/{keyid}/{id}` |
 //! | `story.rs` | one story on its author's node: `GET /story/{id}`, export, `POST /story/share`, `POST /story/withdraw` |
@@ -46,6 +47,7 @@ mod inbox;
 mod notices;
 mod profile;
 mod publish;
+mod room;
 mod share;
 mod signin;
 mod stories;
@@ -67,6 +69,7 @@ pub(crate) use inbox::list_entry_response;
 pub use notices::{check_waiting, dismiss_notices};
 pub use profile::profile;
 pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
+pub use room::{room, room_check, room_help};
 pub(crate) use share::{post_to_commons, post_to_commons_at, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};

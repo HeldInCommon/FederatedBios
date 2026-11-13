@@ -164,12 +164,13 @@ impl Saved {
 
     /// Where `kind` is and who can reach it, in a few words, so the app's
     /// buttons and menu never leave anyone guessing: "on this computer, only
-    /// you", "local commons, anyone on this Wi-Fi", "online commons, hosted
-    /// on this computer".
+    /// you", "local commons, closed to the room", "online commons, hosted
+    /// on this computer". This is how each starts; a node or local commons
+    /// open to the room says so instead (see `room::place_text`).
     pub fn where_is(&self, kind: Kind) -> &'static str {
         match kind {
             Kind::Node => "on this computer, only you",
-            Kind::Practice => "local commons, anyone on this Wi-Fi",
+            Kind::Practice => "local commons, closed to the room",
             Kind::Commons if self.public_address.is_some() => "online commons, hosted on this computer",
             Kind::Commons => "commons on this computer, anyone on this Wi-Fi",
         }
@@ -339,6 +340,18 @@ pub fn save(base: &Path, s: &Saved) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn whether_a_server_is_open_to_the_room_is_never_saved() {
+        // Decision record 0027, D2: the room lives in memory only, so every
+        // launch starts closed. app.json has no field for it.
+        let s = Saved { role: Some("node".into()), name: Some("Laptop".into()), practice: true, ..Default::default() };
+        let json = serde_json::to_string(&s).unwrap();
+        let lower = json.to_lowercase();
+        assert!(!lower.contains("open") && !lower.contains("room"), "{json}");
+        let back: Saved = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
+    }
+
     #[cfg(unix)]
     #[test]
     fn the_log_folder_is_readable_only_by_its_owner() {
@@ -488,7 +501,7 @@ mod tests {
         assert_eq!(s.shown_name(Kind::Node), "Your node", "the node is the person's own");
         assert_eq!(s.shown_name(Kind::Practice), PRACTICE_NAME);
         assert_eq!(s.where_is(Kind::Node), "on this computer, only you");
-        assert_eq!(s.where_is(Kind::Practice), "local commons, anyone on this Wi-Fi");
+        assert_eq!(s.where_is(Kind::Practice), "local commons, closed to the room", "every launch starts closed");
         assert_eq!(s.where_is(Kind::Commons), "commons on this computer, anyone on this Wi-Fi");
         let online = Saved { public_address: Some("https://hic.tail.ts.net".into()), ..s.clone() };
         assert_eq!(online.where_is(Kind::Commons), "online commons, hosted on this computer");

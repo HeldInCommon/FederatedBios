@@ -94,8 +94,21 @@ pub fn visitor(peer: Option<IpAddr>, forwarded: bool) -> Visitor {
 /// Pages and files on a **node** that a room visitor may fetch with `GET`,
 /// matched exactly. Profiles, stories and quilts are matched by shape in
 /// [`node_lets_in`].
-const NODE_OPEN_PATHS: [&str; 9] =
-    ["/", "/about", "/stories", "/style.css", "/logo.png", "/avatar.js", "/robots.txt", "/health", "/room/check"];
+const NODE_OPEN_PATHS: [&str; 13] = [
+    "/",
+    "/about",
+    "/run-a-commons",
+    "/stories",
+    "/style.css",
+    "/logo.png",
+    "/avatar.js",
+    "/password.js",
+    "/robots.txt",
+    "/health",
+    "/room/check",
+    "/room/help",
+    "/favicon.ico",
+];
 
 /// True when `path` is `prefix` followed by exactly one non-empty segment
 /// with no further `/`: `one_segment_after("/@", "/@ana")` is true, and
@@ -206,8 +219,19 @@ mod tests {
 
     #[test]
     fn a_room_visitor_reads_public_pages_on_a_node() {
-        for path in ["/", "/@ana", "/stories", "/story/abc123", "/style.css", "/quilt/3.svg", "/health", "/room/check"]
-        {
+        for path in [
+            "/",
+            "/@ana",
+            "/stories",
+            "/story/abc123",
+            "/style.css",
+            "/password.js",
+            "/run-a-commons",
+            "/quilt/3.svg",
+            "/health",
+            "/room/check",
+            "/room/help",
+        ] {
             assert_eq!(door(Role::Node, room(), &Method::GET, path), Door::In, "{path}");
         }
     }

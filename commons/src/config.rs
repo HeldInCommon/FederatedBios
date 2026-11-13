@@ -49,6 +49,12 @@ pub struct Config {
     /// does, even after a crash (decision record 0027). Off for Docker and
     /// people running the server by hand, where stdin may be empty.
     pub exit_with_app: bool,
+    /// `HIC_ROOM_ADDRESS`: the address people in the room reach this server
+    /// at (`http://192.168.1.23:8080`), set by the desktop app while it's open
+    /// to the room. The room page's QR code holds it. A node keeps its own
+    /// `HIC_BASE_URL`, so nothing it shares names an address that stops
+    /// working when the room closes.
+    pub room_address: Option<String>,
     /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
     pub open_commons: bool,
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
@@ -135,6 +141,9 @@ impl Config {
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
             room,
             exit_with_app: get("HIC_EXIT_WITH_APP").is_some_and(|v| v.trim() == "1"),
+            room_address: get("HIC_ROOM_ADDRESS")
+                .map(|u| u.trim().trim_end_matches('/').to_string())
+                .filter(|u| u.starts_with("http://") || u.starts_with("https://")),
             open_commons: get("HIC_OPEN_COMMONS").is_some_and(|v| v.trim() == "1"),
             vouch_limit: get("HIC_VOUCH_LIMIT")
                 .and_then(|v| v.trim().parse().ok())
@@ -210,6 +219,20 @@ impl Config {
             personal: self.bind_addr(role).is_loopback(),
             allow_private: self.allow_private_share,
             in_room: self.room && role == crate::role::Role::Node,
+        }
+    }
+
+    /// Every address to listen on: [`Config::bind_addr`], and also this
+    /// computer (`127.0.0.1`) when a server open to the room listens on one
+    /// network address only (the desktop app gives it the room's address, so
+    /// it isn't also reachable over a VPN or Tailscale; the owner's window
+    /// still reaches it on `127.0.0.1`). Decision record 0027. Pure.
+    pub fn listen_addrs(&self, role: crate::role::Role) -> Vec<IpAddr> {
+        let main = self.bind_addr(role);
+        if self.room && !main.is_loopback() && !main.is_unspecified() {
+            vec![main, IpAddr::V4(Ipv4Addr::LOCALHOST)]
+        } else {
+            vec![main]
         }
     }
 
@@ -293,6 +316,26 @@ mod tests {
         assert_eq!(commons_host("https://hic.example.ts.net/"), "hic.example.ts.net");
         assert_eq!(commons_host("http://127.0.0.1:8082"), "127.0.0.1:8082", "never swapped for a network address");
         assert_eq!(commons_host("http://10.0.0.5:8081"), "10.0.0.5:8081");
+    }
+
+    #[test]
+    fn a_server_open_on_one_address_also_listens_for_its_owner() {
+        let open = cfg(&[("HIC_ROOM", "1"), ("HIC_BIND", "192.168.1.23")]);
+        let addrs: Vec<String> = open.listen_addrs(Role::Node).iter().map(|a| a.to_string()).collect();
+        assert_eq!(addrs, vec!["192.168.1.23", "127.0.0.1"]);
+        let everywhere = cfg(&[("HIC_ROOM", "1")]);
+        assert_eq!(everywhere.listen_addrs(Role::Node).len(), 1, "0.0.0.0 already includes this computer");
+        assert_eq!(cfg(&[("HIC_BIND", "192.168.1.23")]).listen_addrs(Role::Node).len(), 1, "only with the room");
+    }
+
+    #[test]
+    fn the_room_address_is_tidied_and_must_be_a_web_address() {
+        assert_eq!(
+            cfg(&[("HIC_ROOM_ADDRESS", " http://192.168.1.23:8080/ ")]).room_address.as_deref(),
+            Some("http://192.168.1.23:8080")
+        );
+        assert_eq!(cfg(&[("HIC_ROOM_ADDRESS", "192.168.1.23")]).room_address, None);
+        assert_eq!(cfg(&[]).room_address, None);
     }
 
     #[test]

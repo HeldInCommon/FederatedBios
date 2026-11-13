@@ -28,11 +28,14 @@ fn from(addr: &str, mut req: Request<Body>) -> Request<Body> {
     req
 }
 
-/// A server open to the room in `role`. Requests that don't say where they
-/// come from are marked as the owner's, so the shared helpers
-/// (`join_and_publish`) work as they do on any node.
+/// A server open to the room in `role` (a commons is a local commons).
+/// Requests that don't say where they come from are marked as the owner's,
+/// so the shared helpers (`join_and_publish`) work as they do on any node.
 fn open_to_the_room(role: Role) -> (Router, hic_commons::store::Store) {
-    let (app, store) = server_with(role, &[("HIC_ROOM", "1")]);
+    // A commons with the switch is a local commons (`HIC_PRACTICE`).
+    let practice = if role == Role::Commons { "1" } else { "0" };
+    let settings = [("HIC_ROOM", "1"), ("HIC_ROOM_ADDRESS", "http://192.168.1.23:8080"), ("HIC_PRACTICE", practice)];
+    let (app, store) = server_with(role, &settings);
     let app = app.layer(axum::middleware::map_request(|mut req: Request<Body>| async move {
         if req.extensions().get::<ConnectInfo<SocketAddr>>().is_none() {
             req.extensions_mut().insert(ConnectInfo(OWNER.parse::<SocketAddr>().unwrap()));
@@ -149,4 +152,53 @@ async fn a_node_open_to_the_room_may_still_share_to_the_room() {
     let body = format!("handle=ana&csrf={csrf}&commons_url=http://169.254.169.254");
     let r = send(&node, post_form("/share", &body, Some(&sid))).await;
     assert!(r.text.contains("inside its own network"), "link-local stays refused");
+}
+
+#[tokio::test]
+async fn the_owner_sees_the_qr_code_and_the_address_for_the_room() {
+    let (node, _) = open_to_the_room(Role::Node);
+    join_and_publish(&node, "ana", "public").await;
+    let page = send(&node, from(OWNER, get("/room", None))).await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.text.contains("<code>http://192.168.1.23:8080/@ana</code>"), "the address as real text");
+    assert!(page.text.contains("<svg"), "the QR code");
+    assert!(page.text.contains(r#"aria-label="QR code for http://192.168.1.23:8080/@ana""#));
+    assert!(page.text.contains(r#"href="/room/help""#));
+}
+
+#[tokio::test]
+async fn the_room_cannot_see_the_room_page_but_can_check_and_get_help() {
+    for role in [Role::Node, Role::Commons] {
+        let (app, _) = open_to_the_room(role);
+        assert_eq!(send(&app, from(ROOM, get("/room", None))).await.status, StatusCode::FORBIDDEN, "{role:?}");
+        let check = send(&app, from(ROOM, get("/room/check", None))).await;
+        assert_eq!(check.status, StatusCode::OK, "{role:?}");
+        assert!(check.text.contains("You reached Test."));
+        assert_eq!(send(&app, from(OWNER, get("/room/check", None))).await.status, StatusCode::OK);
+        let help = send(&app, from(ROOM, get("/room/help", None))).await;
+        assert!(help.text.contains("client isolation"), "{role:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_closed_server_says_so_on_its_room_page() {
+    let (node, _) = server(Role::Node);
+    let page = send(&node, get("/room", None)).await;
+    assert!(page.text.contains("closed to the room"));
+    assert!(!page.text.contains("<svg"), "no code to scan while closed");
+}
+
+#[tokio::test]
+async fn a_local_commons_qr_code_leads_to_its_front_page() {
+    let (commons, _) = open_to_the_room(Role::Commons);
+    let page = send(&commons, from(OWNER, get("/room", None))).await;
+    assert!(page.text.contains("<code>http://192.168.1.23:8080/</code>"));
+}
+
+#[tokio::test]
+async fn a_full_commons_has_no_room_pages() {
+    let (commons, _) = server(Role::Commons);
+    for path in ["/room", "/room/check", "/room/help"] {
+        assert_eq!(send(&commons, get(path, None)).await.status, StatusCode::NOT_FOUND, "{path}");
+    }
 }

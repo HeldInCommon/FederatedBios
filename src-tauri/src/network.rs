@@ -126,6 +126,74 @@ pub fn lan_url(port: u16) -> Option<String> {
     Some(format!("http://{ip}:{port}"))
 }
 
+/// Where the Tailscale command-line tool may be: on the `PATH` (Linux,
+/// Windows, Homebrew), or inside the Mac app, which doesn't put it there.
+const TAILSCALE_PROGRAMS: [&str; 2] = ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"];
+
+/// What `tailscale serve status` printed, if Tailscale is installed.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TailscaleStatus {
+    /// Tailscale isn't installed here (or not where we look).
+    NotInstalled,
+    /// What it printed: which ports Tailscale (Serve or Funnel) forwards to.
+    /// Empty when it isn't running or forwards nothing.
+    Answered(String),
+    /// It's installed but didn't answer within three seconds.
+    NoAnswer,
+}
+
+/// What a finished `tailscale serve status` means: its answer when it
+/// succeeded; "forwards nothing" when it failed because Tailscale isn't
+/// running (then nothing can be forwarded); otherwise no answer, since a
+/// failure we don't recognise could hide a Funnel that's on. Pure.
+pub fn tailscale_outcome(succeeded: bool, out: String, err: &str) -> TailscaleStatus {
+    let err = err.to_lowercase();
+    let not_running = err.contains("tailscaled") && (err.contains("not running") || err.contains("failed to connect"));
+    match (succeeded, not_running) {
+        (true, _) => TailscaleStatus::Answered(out),
+        (false, true) => TailscaleStatus::Answered(String::new()),
+        (false, false) => TailscaleStatus::NoAnswer,
+    }
+}
+
+/// Ask `tailscale serve status` which ports Tailscale (Serve or Funnel)
+/// forwards to on this computer, waiting at most three seconds; a Tailscale
+/// that doesn't answer is stopped. Only reads Tailscale's settings; changes
+/// nothing (decision record 0027, D9; see [`crate::room::forwards_to`]).
+pub fn tailscale_serve_status() -> TailscaleStatus {
+    for program in TAILSCALE_PROGRAMS {
+        let Ok(mut child) = std::process::Command::new(program)
+            .args(["serve", "status"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        else {
+            continue;
+        };
+        // Wait in small steps rather than forever, so a stuck Tailscale
+        // can't freeze the app. Its answer is a few lines, which fit in the
+        // pipe while it finishes.
+        for _ in 0..30 {
+            if let Ok(Some(status)) = child.try_wait() {
+                let (mut out, mut err) = (String::new(), String::new());
+                if let Some(mut stdout) = child.stdout.take() {
+                    let _ = stdout.read_to_string(&mut out);
+                }
+                if let Some(mut stderr) = child.stderr.take() {
+                    let _ = stderr.read_to_string(&mut err);
+                }
+                return tailscale_outcome(status.success(), out, &err);
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        return TailscaleStatus::NoAnswer;
+    }
+    TailscaleStatus::NotInstalled
+}
+
 /// A random token for this launch of the app: 32 bytes from the operating
 /// system, as hex. It is a **secret**: it tells our servers apart from others,
 /// collects the node's notices, and opens a commons' steward view (ADR 0023).
@@ -148,6 +216,14 @@ pub fn launch_token() -> Result<String, rand::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_tailscale_check_counts_as_no_answer_unless_tailscale_is_off() {
+        let off = "failed to connect to local tailscaled; it doesn't appear to be running";
+        assert_eq!(tailscale_outcome(false, String::new(), off), TailscaleStatus::Answered(String::new()));
+        assert_eq!(tailscale_outcome(false, String::new(), "permission denied"), TailscaleStatus::NoAnswer);
+        assert_eq!(tailscale_outcome(true, "x".into(), ""), TailscaleStatus::Answered("x".into()));
+    }
 
     #[test]
     fn our_server_is_recognised() {

@@ -128,10 +128,13 @@ minute. Write a small story from what you hear."). It stays on their computer
 until they press **Share**, and goes to a commons where they're listed. They
 can **Withdraw** it from there at any time, and **Export** it as a text file.
 
-**A local commons, for a workshop or a session.** **Go → Open a local commons
-(this Wi-Fi)** starts a commons on this computer that anyone on the same Wi-Fi
-can reach. Name it (**Go → Rename local commons…**) and tell the room its
-address, which its sidebar shows (it looks like `http://192.168.1.20:8082`).
+**A local commons, for a workshop or a session.** **Go → Start a local
+commons** starts a commons on this computer. It starts closed: only this
+computer can reach it. Name it (**Go → Rename local commons…**), and when the
+room is ready choose **Go → Open … to the room…**: anyone on the same Wi-Fi
+can then reach it at this computer's address (it looks like
+`http://192.168.1.20:8082`). It closes when you choose Close, quit the app, or
+this computer's network address changes. See `docs/ROOM-GUIDE.md` for running a session.
 People share to it from their own nodes and are listed once a member vouches
 (one click on their People tab) or you approve them. **Go → Remove local
 commons…** deletes it when the session's over.

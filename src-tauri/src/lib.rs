@@ -13,6 +13,7 @@
 //! | [`network`] | is *our* server answering; this computer's network address |
 //! | [`sidecar`] | starting and stopping the server processes |
 //! | [`steward`] | the commons' steward link: hidden in the log, shown from the Go menu (pure parts) |
+//! | [`room`] | open to the room: the switch's rules (pure) |
 //! | [`links`] | `hic-app://` links and the switcher between servers (pure) |
 //! | [`commands`] | what the app's screens (`ui/app.js`), the menu and links can ask for |
 //!
@@ -21,6 +22,7 @@
 pub mod commands;
 pub mod links;
 pub mod network;
+pub mod room;
 pub mod settings;
 pub mod sidecar;
 pub mod steward;
@@ -50,16 +52,35 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
         menu.append(&go)?;
         return Ok(menu);
     }
+    // Which servers are open to the room (decision record 0027): in memory
+    // only, so before the servers exist, none.
+    let open = app.try_state::<Servers>().map(|s| s.open_kinds()).unwrap_or_default();
     for k in Kind::ALL {
         let text = match (k, saved.runs(k)) {
             // Every server says where it is: "Your node (on this computer,
-            // only you)", "Thursday session (local commons, anyone on this Wi-Fi)".
-            (_, true) => format!("{} ({})", saved.shown_name(k), saved.where_is(k)),
+            // only you)", "Thursday session (local commons, open to the room)".
+            (_, true) => format!("{} ({})", saved.shown_name(k), room::place_text(saved, k, open.contains(&k))),
             (Kind::Node, false) => "Add your own node\u{2026}".to_string(),
             (Kind::Commons, false) => "Set up a commons\u{2026}".to_string(),
-            (Kind::Practice, false) => "Open a local commons (this Wi-Fi)".to_string(),
+            (Kind::Practice, false) => "Start a local commons".to_string(),
         };
         go.append(&MenuItem::with_id(app, format!("open:{}", k.key()), text, true, None::<&str>)?)?;
+    }
+    go.append(&PredefinedMenuItem::separator(app)?)?;
+    // Open or close each node or local commons to the room. Opening asks
+    // first (in the setup window); closing doesn't need to.
+    for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k) && room::has_switch(*k)) {
+        let is_open = open.contains(&k);
+        let id = if is_open { format!("room-close:{}", k.key()) } else { format!("room-open:{}", k.key()) };
+        let text = room::menu_label(k, &saved.shown_name(k), is_open);
+        go.append(&MenuItem::with_id(app, id, text, true, None::<&str>)?)?;
+        if is_open {
+            let show = format!(
+                "Show the QR code for {}",
+                if k == Kind::Node { "my node".to_string() } else { saved.shown_name(k) }
+            );
+            go.append(&MenuItem::with_id(app, format!("room-show:{}", k.key()), show, true, None::<&str>)?)?;
+        }
     }
     go.append(&PredefinedMenuItem::separator(app)?)?;
     for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k)) {
@@ -108,6 +129,24 @@ fn on_menu(app: &tauri::AppHandle, id: &str) {
         commands::open(app, k)
     } else if let Some(k) = id.strip_prefix("rename:").and_then(Kind::parse) {
         commands::open_setup(app, &format!("do=rename&role={}", k.key()), "Rename");
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-open:").and_then(Kind::parse) {
+        commands::open_setup(app, &format!("do=open-room&role={}", k.key()), "Open to the room");
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-show:").and_then(Kind::parse) {
+        if let (Some(chosen), Some(cfg)) = (app.try_state::<Chosen>(), app.try_state::<AppConfig>()) {
+            let port = chosen.0.lock().unwrap().port_of(k);
+            sidecar::show_when_up(app.clone(), cfg.launch_token.clone(), port, sidecar::room_page_url(port));
+        }
+        Ok(())
+    } else if let Some(k) = id.strip_prefix("room-close:").and_then(Kind::parse) {
+        // Restarting the server waits for its port, so not on the menu's thread.
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = commands::set_room(&app, k, false) {
+                log::warn!("closing {} to the room: {e}", k.key());
+            }
+        });
         Ok(())
     } else if id == "steward-link" {
         commands::open_setup(app, "do=steward-link", "Steward link");
@@ -226,7 +265,8 @@ fn on_page(window: &tauri::Webview, url: &str) {
     if let (Some(k), Some(w)) = (here, app.get_webview_window("main")) {
         let _ = w.set_title(&sidecar::title_for(k));
     }
-    let _ = window.eval(links::switcher_js(&links::places(&saved, here)));
+    let open = app.try_state::<Servers>().map(|s| s.open_kinds()).unwrap_or_default();
+    let _ = window.eval(links::switcher_js(&links::places(&saved, here, &open)));
 }
 
 /// The log file: `~/Library/Logs/org.heldincommon.node/held-in-common.log` on
@@ -285,6 +325,7 @@ pub fn run() {
             commands::close_setup,
             commands::restart_node,
             commands::remove_practice_now,
+            commands::open_room_now,
             commands::steward_links
         ])
         .on_page_load(|webview, payload| {
