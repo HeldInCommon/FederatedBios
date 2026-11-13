@@ -116,10 +116,7 @@ pub(crate) async fn post_to_commons_at(
     body: &serde_json::Value,
     timeout: std::time::Duration,
 ) -> Result<reqwest::Response, String> {
-    let policy = outbound::Policy {
-        personal: st.config.bind_addr(st.site.role).is_loopback(),
-        allow_private: st.config.allow_private_share,
-    };
+    let policy = st.config.share_policy(st.site.role);
     let client = outbound::client_for(commons, policy).await?;
     client
         .post(format!("{commons}{path}"))

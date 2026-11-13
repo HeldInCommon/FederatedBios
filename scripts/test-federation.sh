@@ -13,7 +13,7 @@ no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 HIC_SHARE_DEFAULT_NAME="Test Collective" "$BIN" >"$T/node.log" 2>&1 & NPID=$!
-cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} 2>/dev/null; rm -rf "$T"; }
+cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
@@ -274,6 +274,28 @@ WCSRF=$(curl -s http://localhost:8093/new -H "Cookie: hic_session=$WSID" | grep 
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8093/story/withdraw -H "Cookie: hic_session=$WSID" --data-urlencode "id=$HID" --data-urlencode "csrf=$WCSRF" --data-urlencode "commons_url=http://localhost:8091")" = "303" ] && ok "node withdrew the Only while I'm here story" || no "withdrawing the card failed"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8091$HPATH")" = "404" ] && ok "a withdrawn card can't be read, at once" || no "withdrawn card still readable"
 curl -s http://localhost:8091/stories | grep -q "Bus stop hum" && no "withdrawn card still listed" || ok "withdrawn card gone from the list"
+
+# Open to the room (ADR 0027): a node listening on the room's network with the
+# door in front of it. Fetching this computer's own LAN address makes the
+# request arrive from that address, not 127.0.0.1, so it counts as someone in
+# the room; no second device is needed.
+LAN=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$LAN" ] && command -v ipconfig >/dev/null; then LAN=$(ipconfig getifaddr en0 2>/dev/null); fi
+if [ -z "$LAN" ]; then
+  echo "  SKIP  open to the room: this computer has no network address"
+else
+  mkdir -p "$T/room"
+  HIC_DATA="$T/room" PORT=8095 HIC_ROLE=node HIC_BIND=0.0.0.0 HIC_ROOM=1 HIC_INSTANCE="Room node" HIC_BASE_URL="http://$LAN:8095" "$BIN" >"$T/room.log" 2>&1 & RPID=$!
+  curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://127.0.0.1:8095/health >/dev/null || no "room node failed to start"
+  curl -s -X POST http://127.0.0.1:8095/join --data-urlencode "handle=ana" --data-urlencode "display_name=Ana" --data-urlencode "passphrase=supersecret7" --data-urlencode "passphrase_again=supersecret7" -o /dev/null
+  code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
+  [ "$(code "http://$LAN:8095/@ana")" = "200" ] && ok "the room reads a profile on an open node" || no "the room can't read a profile"
+  [ "$(code "http://$LAN:8095/login")" = "403" ] && ok "the room can't open the sign-in page" || no "the room reached the sign-in page"
+  [ "$(code -X POST "http://$LAN:8095/login" --data-urlencode "handle=ana" --data-urlencode "passphrase=guess")" = "403" ] && ok "the room can't guess passphrases" || no "the room could post a sign-in"
+  [ "$(code http://127.0.0.1:8095/login)" = "200" ] && ok "the owner still reaches the sign-in page" || no "the owner was refused"
+  [ "$(code -H "X-Forwarded-For: 203.0.113.9" http://127.0.0.1:8095/login)" = "403" ] && ok "a request through a proxy is a room visitor" || no "a proxied request counted as the owner"
+  kill $RPID 2>/dev/null; wait $RPID 2>/dev/null
+fi
 
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"
 exit $FAIL

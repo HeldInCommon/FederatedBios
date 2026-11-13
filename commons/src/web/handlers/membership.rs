@@ -54,10 +54,7 @@ pub async fn invite(State(st): State<Shared>, headers: HeaderMap, body: String) 
 /// The full key of someone waiting on `commons` with this handle, whose key
 /// starts with `prefix` (as shown on the commons' page).
 async fn find_waiting(st: &AppState, commons: &str, who: &str, prefix: &str) -> Result<String, String> {
-    let policy = outbound::Policy {
-        personal: st.config.bind_addr(st.site.role).is_loopback(),
-        allow_private: st.config.allow_private_share,
-    };
+    let policy = st.config.share_policy(st.site.role);
     let client = outbound::client_for(commons, policy).await?;
     let list: serde_json::Value = client
         .get(format!("{commons}/api/pending"))

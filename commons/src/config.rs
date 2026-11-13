@@ -40,6 +40,10 @@ pub struct Config {
     /// `HIC_ALLOW_PRIVATE_SHARE=1`: a node reachable from the network may
     /// still share to local-network addresses (see [`crate::outbound`]).
     pub allow_private_share: bool,
+    /// `HIC_ROOM=1`: this server is open to the room (decision record 0027).
+    /// The door in [`crate::room`] stands in front of every request, and a
+    /// node listens on the network unless `HIC_BIND` says otherwise.
+    pub room: bool,
     /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
     pub open_commons: bool,
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
@@ -103,6 +107,7 @@ impl Config {
     /// Build from any `name -> value` lookup.
     pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Config {
         let port = get("PORT").and_then(|p| p.parse().ok()).unwrap_or(8080);
+        let room = get("HIC_ROOM").is_some_and(|v| v.trim() == "1");
         Config {
             data_dir: PathBuf::from(get("HIC_DATA").unwrap_or_else(|| "./data".into())),
             port,
@@ -123,6 +128,7 @@ impl Config {
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
+            room,
             open_commons: get("HIC_OPEN_COMMONS").is_some_and(|v| v.trim() == "1"),
             vouch_limit: get("HIC_VOUCH_LIMIT")
                 .and_then(|v| v.trim().parse().ok())
@@ -188,13 +194,29 @@ impl Config {
         self.base_url.starts_with("https://")
     }
 
+    /// Which addresses this server may contact when a member asks it to
+    /// (sharing, vouching, checking a waiting list): decision record 0012,
+    /// see [`crate::outbound`]. A server listening only on this computer is
+    /// *personal*; a node open to the room (decision record 0027) may also
+    /// reach the room's network and this machine. Pure.
+    pub fn share_policy(&self, role: crate::role::Role) -> crate::outbound::Policy {
+        crate::outbound::Policy {
+            personal: self.bind_addr(role).is_loopback(),
+            allow_private: self.allow_private_share,
+            in_room: self.room && role == crate::role::Role::Node,
+        }
+    }
+
     /// Where to listen. A **node** listens only on this computer
     /// (`127.0.0.1`) unless `HIC_BIND` says otherwise: it holds its members'
     /// keys and sign-in page, and shouldn't be reachable from the rest of the
     /// Wi-Fi. A **commons** exists to be reached, so it listens on every
-    /// interface (`0.0.0.0`). Docker images set `HIC_BIND=0.0.0.0`.
+    /// interface (`0.0.0.0`). Docker images set `HIC_BIND=0.0.0.0`. A node
+    /// **open to the room** (`HIC_ROOM=1`) listens everywhere too, with the
+    /// door in front of it (decision record 0027).
     pub fn bind_addr(&self, role: crate::role::Role) -> IpAddr {
         self.bind.unwrap_or(match role {
+            crate::role::Role::Node if self.room => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             crate::role::Role::Node => IpAddr::V4(Ipv4Addr::LOCALHOST),
             crate::role::Role::Commons => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         })
@@ -273,6 +295,18 @@ mod tests {
         assert!(cfg(&[("HIC_PRACTICE", "1")]).practice);
         assert!(!cfg(&[]).in_app());
         assert!(cfg(&[("HIC_LAUNCH_TOKEN", "t")]).in_app());
+    }
+
+    #[test]
+    fn a_node_open_to_the_room_listens_on_the_network_and_shares_to_the_room() {
+        let open = cfg(&[("HIC_ROOM", "1")]);
+        assert!(open.room);
+        assert_eq!(open.bind_addr(Role::Node).to_string(), "0.0.0.0", "the room implies the network");
+        assert!(open.share_policy(Role::Node).in_room);
+        assert!(!open.share_policy(Role::Node).personal);
+        assert!(!open.share_policy(Role::Commons).in_room, "a commons takes requests from anyone");
+        assert!(cfg(&[]).share_policy(Role::Node).personal, "a node on 127.0.0.1");
+        assert!(!cfg(&[("HIC_BIND", "0.0.0.0")]).share_policy(Role::Node).in_room, "networked without the door");
     }
 
     #[test]

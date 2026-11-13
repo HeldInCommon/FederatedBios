@@ -13,6 +13,12 @@
 //! - A node **reachable from the network** refuses its own machine's
 //!   addresses and link-local ones, and refuses local-network addresses unless
 //!   `HIC_ALLOW_PRIVATE_SHARE=1`.
+//! - A node **open to the room** (decision record 0027) may reach the room's
+//!   network and its own machine (the room's local commons can be on the same
+//!   laptop), because the door refuses every form sent from the room. It
+//!   still refuses link-local addresses, including the cloud credentials
+//!   address, in case a forwarder on the computer hides where visitors come
+//!   from.
 //!
 //! The address is checked after the DNS lookup, and the request is then pinned
 //! to the checked address (so a second lookup can't swap it), with redirects
@@ -79,6 +85,9 @@ pub struct Policy {
     pub personal: bool,
     /// `HIC_ALLOW_PRIVATE_SHARE=1`: a networked node may reach local-network addresses.
     pub allow_private: bool,
+    /// True for a node open to the room (`HIC_ROOM=1`): local-network and
+    /// this-machine addresses are allowed, link-local ones aren't.
+    pub in_room: bool,
 }
 
 /// May this server contact an address of this kind?
@@ -88,7 +97,8 @@ pub fn permitted(k: Kind, p: Policy) -> bool {
     }
     match k {
         Kind::Public => true,
-        Kind::Private => p.allow_private,
+        Kind::Private => p.allow_private || p.in_room,
+        Kind::Loopback if p.in_room => true,
         Kind::Loopback | Kind::LinkLocal | Kind::Unspecified => false,
     }
 }
@@ -153,7 +163,7 @@ mod tests {
 
     #[test]
     fn personal_node_may_share_anywhere() {
-        let p = Policy { personal: true, allow_private: false };
+        let p = Policy { personal: true, allow_private: false, in_room: false };
         for k in [Kind::Loopback, Kind::LinkLocal, Kind::Private, Kind::Public] {
             assert!(permitted(k, p));
         }
@@ -161,7 +171,7 @@ mod tests {
 
     #[test]
     fn networked_node_refuses_inside_addresses() {
-        let p = Policy { personal: false, allow_private: false };
+        let p = Policy { personal: false, allow_private: false, in_room: false };
         assert!(permitted(Kind::Public, p));
         assert!(!permitted(Kind::Private, p));
         assert!(!permitted(Kind::Loopback, p));
@@ -172,8 +182,18 @@ mod tests {
     }
 
     #[test]
+    fn a_node_open_to_the_room_reaches_the_room_but_not_link_local() {
+        let p = Policy { personal: false, allow_private: false, in_room: true };
+        assert!(permitted(Kind::Private, p), "the room's local commons");
+        assert!(permitted(Kind::Loopback, p), "a local commons on the same laptop");
+        assert!(permitted(Kind::Public, p));
+        assert!(!permitted(Kind::LinkLocal, p), "never the cloud credentials address");
+        assert!(!permitted(Kind::Unspecified, p));
+    }
+
+    #[test]
     fn a_name_with_any_unsafe_address_is_refused() {
-        let p = Policy { personal: false, allow_private: false };
+        let p = Policy { personal: false, allow_private: false, in_room: false };
         let mixed: Vec<SocketAddr> = vec!["93.184.216.34:443".parse().unwrap(), "127.0.0.1:443".parse().unwrap()];
         assert!(check_all(&mixed, p).is_err());
         assert!(check_all(&mixed[..1], p).is_ok());

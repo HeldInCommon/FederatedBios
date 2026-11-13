@@ -141,10 +141,7 @@ fn sentence(reason: &str) -> String {
 
 /// Which addresses this node may contact for a member (decision record 0012).
 fn policy(st: &AppState) -> outbound::Policy {
-    outbound::Policy {
-        personal: st.config.bind_addr(st.site.role).is_loopback(),
-        allow_private: st.config.allow_private_share,
-    }
+    st.config.share_policy(st.site.role)
 }
 
 /// Ask `commons` who is waiting there, signing the request with `rec`'s key.

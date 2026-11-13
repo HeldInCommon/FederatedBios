@@ -406,6 +406,17 @@ pub fn error_page(site: &Site, msg: &str) -> Response {
     message_page(site, "Error", "Hmm", msg, StatusCode::BAD_REQUEST)
 }
 
+/// The answer a room visitor gets for a page that stays on its owner's
+/// computer while the server is open to the room (decision record 0027),
+/// with status 403.
+pub fn only_here(site: &Site) -> Response {
+    let msg = format!(
+        "This page is only on {}'s own computer. People in the room can see public profiles and stories here.",
+        site.instance
+    );
+    message_page(site, "Only on this computer", "Not from the room", &msg, StatusCode::FORBIDDEN)
+}
+
 /// A page for a failure on our side (status 500). The details go to the log,
 /// not the page.
 pub fn server_error(site: &Site, detail: &dyn std::fmt::Display) -> Response {

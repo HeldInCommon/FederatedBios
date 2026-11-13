@@ -40,6 +40,7 @@ Writes happen in clearly named places that say what they change.
 | `identity.rs` | Who holds a handle on a commons; recovery keys and key rotation rules. | yes |
 | `member.rs` | Pure changes to a member's record (moving to new keys). | yes |
 | `publishing.rs` | Sign a profile version (used by publish and by key rotation). | yes, except members-only encryption |
+| `room.rs` | Open to the room (ADR 0027): who on the room's network may reach which page (the door). | yes, except the middleware |
 | `outbound.rs` | Which addresses this server may contact for a member (ADR 0012). | yes, except the DNS lookup |
 | `keys.rs` | Generate keys, sign/verify a `cid`, encrypt to members. | yes, except key generation |
 | `passphrase.rs` | Argon2id hashing and checking; upgrades old SHA-256 hashes. | yes, except salt generation |

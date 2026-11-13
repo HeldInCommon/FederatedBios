@@ -122,7 +122,7 @@ pub fn router(state: Shared) -> Router {
             HeaderValue::from_static("geolocation=(), microphone=(), camera=()"),
         ));
 
-    Router::new()
+    let routes = Router::new()
         // Pages
         .route("/", get(handlers::directory))
         .route("/about", get(handlers::about))
@@ -185,8 +185,14 @@ pub fn router(state: Shared) -> Router {
         .route("/logo.png", get(|| async { ([(header::CONTENT_TYPE, "image/png")], web::LOGO_PNG).into_response() }))
         .route("/robots.txt", get(|| async { static_file("text/plain", ROBOTS_TXT) }))
         .route("/quilt/{file}", get(quilt))
-        .route("/health", get(api::health))
-        .layer(security)
-        .layer(RequestBodyLimitLayer::new(BODY_LIMIT))
-        .with_state(state)
+        .route("/health", get(api::health));
+    // Open to the room (decision record 0027): the door stands in front of
+    // every route, so a room visitor never reaches a page it doesn't allow.
+    // Added only when `HIC_ROOM=1`; otherwise nothing changes.
+    let routes = if state.config.room {
+        routes.layer(axum::middleware::from_fn_with_state(state.clone(), crate::room::guard))
+    } else {
+        routes
+    };
+    routes.layer(security).layer(RequestBodyLimitLayer::new(BODY_LIMIT)).with_state(state)
 }

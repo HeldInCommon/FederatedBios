@@ -18,6 +18,7 @@ mod here;
 mod one_click_vouching;
 mod publishing;
 mod ramp;
+mod room;
 mod sharing;
 mod steward;
 mod stories;
