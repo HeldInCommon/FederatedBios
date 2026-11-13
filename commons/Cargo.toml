@@ -1,6 +1,6 @@
 [package]
 name = "hic-commons"
-version = "0.8.2"
+version = "0.9.0"
 edition = "2021"
 description = "Held in Common — the commons server (directory, identity, content-addressed publishing, ActivityPub-ready)"
 
