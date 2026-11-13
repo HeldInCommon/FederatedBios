@@ -76,9 +76,16 @@ pub struct Place {
     /// commons or a server open to the room: shown under its card, as text
     /// to copy. `None` for a server only this computer can reach.
     pub address: Option<String>,
-    /// Where it is and who can reach it ("on this computer, only you",
-    /// "local commons, anyone on this Wi-Fi"): the card's second line.
-    pub place: String,
+    /// What kind of server it is ("Local commons"), or for your node its
+    /// name ("Studio laptop"): the card's second line. `None` when it would
+    /// only repeat the card's name.
+    pub sub: Option<String>,
+    /// Who can reach it ("Only you", "Closed to the room"): the chip on the
+    /// card.
+    pub chip: String,
+    /// Is it open to the room? Its chip turns oxblood, and closing it and its
+    /// QR code come out from under Options onto the card.
+    pub open: bool,
 }
 
 /// The buttons for a page whose own server is `here` (`None` for a page
@@ -110,10 +117,24 @@ pub fn places(saved: &Saved, here: Option<Kind>, open: &[Kind], addresses: &[(Ki
                 Kind::Practice => "#1f5cff",
             },
             kind: k.key(),
-            place: crate::room::place_text(saved, k, open.contains(&k)).to_string(),
+            sub: card_sub(saved, k),
+            chip: crate::room::chip_text(saved, k, open.contains(&k)).to_string(),
+            open: open.contains(&k),
             address: addresses.iter().find(|(kind, _)| *kind == k).map(|(_, url)| without_scheme(url)),
         })
         .collect()
+}
+
+/// A card's second line: your node's own name under "Your node", or what
+/// kind of server a commons is under its name. `None` when that would say
+/// the name twice ("Local commons" / "Local commons"). Pure.
+fn card_sub(saved: &Saved, kind: Kind) -> Option<String> {
+    let sub = match kind {
+        Kind::Node => saved.name_of(kind)?.to_string(),
+        _ => crate::room::kind_text(saved, kind).to_string(),
+    };
+    let repeats_the_name = sub.trim().eq_ignore_ascii_case(saved.shown_name(kind).trim());
+    (!sub.trim().is_empty() && !repeats_the_name).then_some(sub)
 }
 
 /// An address as people type it: `http://172.20.10.10:8180` gives
@@ -127,19 +148,29 @@ fn without_scheme(url: &str) -> String {
 }
 
 /// The script the app adds to a server page to show `places`. Pages served
-/// by Held in Common have an "On this computer" slot in their side rail
-/// (`#hic-servers`): the script fills it with one card per server and shows
-/// it. Pages elsewhere have no slot, so the script adds a row of buttons in
-/// the bottom-right corner instead: the way back. Running it again replaces
-/// what it added before. The labels and addresses go in as JSON and are set
-/// as text, so nothing in them can break out.
-pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::Item]) -> String {
+/// by Held in Common have a "This computer" slot in their side rail
+/// (`#hic-servers`): the script fills it with one card per other server and
+/// shows it, puts each server's `actions` on its own card (the card you're
+/// on is drawn by the page, and gets its actions here too), and ends with a
+/// dashed card for each server this computer could add. Pages elsewhere have
+/// no slot, so the script adds a row of buttons in the bottom-right corner
+/// instead: the way back. Running it again replaces what it added before.
+/// The labels and addresses go in as JSON and are set as text, so nothing in
+/// them can break out.
+pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::SidebarItem]) -> String {
     let data = serde_json::to_string(places).unwrap_or_else(|_| "[]".into());
     // The Go menu's items for the "This computer" panel, as links the app
-    // follows (`hic-app://menu/<id>`).
+    // follows (`hic-app://menu/<id>`), each saying whose card it goes on.
     let acts: Vec<serde_json::Value> = actions
         .iter()
-        .map(|a| serde_json::json!({ "label": a.label, "url": format!("{SCHEME}://menu/{}", a.id) }))
+        .map(|a| {
+            serde_json::json!({
+                "label": a.label,
+                "url": format!("{SCHEME}://menu/{}", a.id),
+                "server": a.server,
+                "slot": a.slot,
+            })
+        })
         .collect();
     let acts = serde_json::to_string(&acts).unwrap_or_else(|_| "[]".into());
     format!(
@@ -148,26 +179,57 @@ pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::Item]) -> String
   var old=document.getElementById(id); if(old){{old.remove();}}
   var slot=document.getElementById('hic-servers');
   if(slot){{
-    while(slot.firstChild){{slot.removeChild(slot.firstChild);}}
-    places.forEach(function(p){{
-      var a=document.createElement('a'); a.href=p.url; a.className='server-card'; a.setAttribute('data-kind',p.kind);
-      var star=document.createElement('span'); star.className='star'; star.setAttribute('aria-hidden','true');
-      var text=document.createElement('span'); text.className='server-text';
-      var name=document.createElement('span'); name.className='server-name'; name.textContent=p.label;
-      text.appendChild(name);
-      if(p.place){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.place; text.appendChild(sub);}}
-      a.appendChild(star); a.appendChild(text); slot.appendChild(a);
-      // The address sits under the card, outside the link, so it can be selected and copied.
-      if(p.address){{var ad=document.createElement('p'); ad.className='server-address'; ad.setAttribute('data-kind',p.kind); var c=document.createElement('code'); c.textContent=p.address; ad.appendChild(c); slot.appendChild(ad);}}
-    }});
-    // The Go menu, in the page: what you can do with this computer's servers.
-    if(actions.length){{
-      var box=document.createElement('nav'); box.className='app-actions'; box.setAttribute('aria-label','This computer');
-      var h=document.createElement('p'); h.className='rail-label'; h.textContent='This computer'; box.appendChild(h);
-      var ul=document.createElement('ul');
-      actions.forEach(function(x){{var li=document.createElement('li'); var a=document.createElement('a'); a.href=x.url; a.textContent=x.label; li.appendChild(a); ul.appendChild(li);}});
-      box.appendChild(ul); slot.appendChild(box);
+    // An element with a class and text: always set as text, never as markup.
+    function el(tag,cls,text){{var e=document.createElement(tag); if(cls){{e.className=cls;}} if(text){{e.textContent=text;}} return e;}}
+    // A server's actions on its card: open-to-the-room ones on the card
+    // itself, the rest in a list under its Options button.
+    function addActions(box,kind){{
+      var mine=actions.filter(function(x){{return x.server===kind&&x.slot!=='add';}});
+      // The QR code comes first, as the main button: it's what the room needs.
+      var onCard=mine.filter(function(x){{return x.slot==='card';}}).sort(function(a,b){{return (b.url.indexOf('room-show')>-1)-(a.url.indexOf('room-show')>-1);}});
+      if(onCard.length){{
+        var row=el('div','server-room');
+        onCard.forEach(function(x,i){{var a=el('a',i===0?'btn-solid':'btn-line',x.label); a.href=x.url; row.appendChild(a);}});
+        box.appendChild(row);
+      }}
+      var opts=mine.filter(function(x){{return x.slot==='option'||x.slot==='danger';}});
+      var foot=box.querySelector('.server-foot');
+      if(!opts.length||!foot){{return;}}
+      var listId='hic-options-'+kind;
+      var b=el('button','server-options-toggle','Options'); b.type='button';
+      b.setAttribute('aria-expanded','false'); b.setAttribute('aria-controls',listId);
+      var ul=el('ul','server-options'); ul.id=listId; ul.hidden=true;
+      opts.forEach(function(x){{var li=el('li',x.slot==='danger'?'is-danger':''); var a=el('a','',x.label); a.href=x.url; li.appendChild(a); ul.appendChild(li);}});
+      b.addEventListener('click',function(){{var show=ul.hidden; ul.hidden=!show; b.setAttribute('aria-expanded',show?'true':'false');}});
+      foot.appendChild(b); box.appendChild(ul);
     }}
+    while(slot.firstChild){{slot.removeChild(slot.firstChild);}}
+    // The card you're on: drawn by the page, given its actions here (after
+    // clearing any from an earlier run).
+    var here=document.querySelector('.server.is-here');
+    if(here){{
+      here.querySelectorAll('.server-room,.server-options,.server-options-toggle').forEach(function(n){{n.remove();}});
+      addActions(here,here.getAttribute('data-kind'));
+    }}
+    places.forEach(function(p){{
+      var box=el('div','server'); box.setAttribute('data-kind',p.kind);
+      var a=el('a','server-card'); a.href=p.url;
+      var star=el('span','star'); star.setAttribute('aria-hidden','true');
+      var text=el('span','server-text'); text.appendChild(el('span','server-name',p.label));
+      if(p.sub){{text.appendChild(el('span','server-sub',p.sub));}}
+      a.appendChild(star); a.appendChild(text); box.appendChild(a);
+      var foot=el('div','server-foot'); foot.appendChild(el('span','server-chip'+(p.open?' is-open':''),p.chip)); box.appendChild(foot);
+      // The address sits outside the link, so it can be selected and copied.
+      if(p.address){{var ad=el('p','server-address'); ad.appendChild(el('code','',p.address)); box.appendChild(ad);}}
+      addActions(box,p.kind);
+      slot.appendChild(box);
+    }});
+    // Servers this computer could add: dashed cards at the end.
+    actions.filter(function(x){{return x.slot==='add';}}).forEach(function(x){{
+      var a=el('a','server-add'); a.href=x.url; if(x.server){{a.setAttribute('data-kind',x.server);}}
+      var mark=el('span','server-add-mark','+'); mark.setAttribute('aria-hidden','true');
+      a.appendChild(mark); a.appendChild(el('span','',x.label)); slot.appendChild(a);
+    }});
     slot.hidden=!places.length&&!actions.length;
     var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
     return;
@@ -246,10 +308,30 @@ mod tests {
         let from_node = places(&s, Some(Kind::Node), &[], &[]);
         assert_eq!(from_node.len(), 1);
         assert_eq!(from_node[0].label, "Room 4");
-        assert_eq!(
-            (from_node[0].kind, from_node[0].place.as_str()),
-            ("commons", "commons on this computer, anyone on this Wi-Fi")
-        );
+        assert_eq!(from_node[0].kind, "commons");
+        assert_eq!(from_node[0].sub.as_deref(), Some("Commons on this Wi-Fi"));
+        assert_eq!(from_node[0].chip, "Anyone on this Wi-Fi");
+    }
+
+    #[test]
+    fn a_card_never_says_its_name_twice() {
+        // An unnamed local commons is called "Local commons", so its kind
+        // isn't repeated underneath.
+        let s = saved(None, true);
+        let practice = places(&s, Some(Kind::Node), &[], &[]).into_iter().find(|p| p.kind == "practice").unwrap();
+        assert_eq!((practice.label.as_str(), practice.sub), ("Local commons", None));
+        assert_eq!(practice.chip, "Closed to the room");
+        // Your node shows its own name under "Your node".
+        let node = places(&s, Some(Kind::Practice), &[], &[]).into_iter().find(|p| p.kind == "node").unwrap();
+        assert_eq!((node.label.as_str(), node.sub.as_deref()), ("Your node", Some("Laptop")));
+    }
+
+    #[test]
+    fn an_open_server_says_so_on_its_chip() {
+        let s = saved(None, true);
+        let practice = places(&s, Some(Kind::Node), &[Kind::Practice], &[]).into_iter().next().unwrap();
+        assert!(practice.open);
+        assert_eq!(practice.chip, "Open to the room");
     }
 
     #[test]
@@ -289,19 +371,30 @@ mod tests {
                 url: "x".into(),
                 tone: "#000",
                 kind: "node",
-                place: evil.into(),
+                sub: Some(evil.into()),
+                chip: evil.into(),
+                open: false,
                 address: Some(evil.into()),
             }],
-            &[crate::go_menu::Item {
+            &[crate::go_menu::SidebarItem {
                 id: "rename:node".into(),
                 label: evil.into(),
-                group: crate::go_menu::Group::Settings,
+                server: Some("node"),
+                slot: crate::go_menu::Slot::Option,
             }],
         );
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
-        assert!(js.contains(r#""place":"'); alert(1); ('""#), "the place line too");
+        assert!(js.contains(r#""sub":"'); alert(1); ('""#), "the second line too");
+        assert!(js.contains(r#""chip":"'); alert(1); ('""#), "and the chip");
         assert!(js.contains(r#""address":"'); alert(1); ('""#), "and the address");
-        assert!(js.contains(r#""label":"'); alert(1); ('","url":"hic-app://menu/rename:node""#), "and the menu items");
+        // serde_json sorts an object's keys, so the menu item reads label,
+        // server, slot, url.
+        assert!(
+            js.contains(
+                r#""label":"'); alert(1); ('","server":"node","slot":"option","url":"hic-app://menu/rename:node""#
+            ),
+            "and the menu items"
+        );
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
         assert!(switcher_js(&[], &[]).contains("places=[]"));
     }

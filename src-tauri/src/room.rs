@@ -218,6 +218,31 @@ pub fn place_text(saved: &crate::settings::Saved, kind: Kind, open: bool) -> &'s
     where_is(kind, open).unwrap_or_else(|| saved.where_is(kind))
 }
 
+/// Who can reach a server, in a few words, for the chip on its card in the
+/// sidebar ("Only you", "Open to the room"). The card's name already says
+/// what it is, so the chip doesn't repeat it. Matches `Place::chip` in
+/// `commons/src/web/layout.rs`, which draws the card you're on. Pure.
+pub fn chip_text(saved: &crate::settings::Saved, kind: Kind, open: bool) -> &'static str {
+    match (kind, open) {
+        (_, true) => "Open to the room",
+        (Kind::Node, false) => "Only you",
+        (Kind::Practice, false) => "Closed to the room",
+        (Kind::Commons, false) if saved.public_address.is_some() => "Anyone with its address",
+        (Kind::Commons, false) => "Anyone on this Wi-Fi",
+    }
+}
+
+/// What kind of server it is, for a card's second line ("Local commons").
+/// Matches `Place::kind_name` in `commons/src/web/layout.rs`. Pure.
+pub fn kind_text(saved: &crate::settings::Saved, kind: Kind) -> &'static str {
+    match kind {
+        Kind::Node => "Your node",
+        Kind::Practice => "Local commons",
+        Kind::Commons if saved.public_address.is_some() => "Online commons",
+        Kind::Commons => "Commons on this Wi-Fi",
+    }
+}
+
 /// The Go menu item that opens or closes `kind`, named `name`, for the room.
 /// Pure.
 pub fn menu_label(kind: Kind, name: &str, open: bool) -> String {

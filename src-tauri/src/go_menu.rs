@@ -94,9 +94,72 @@ pub fn items(saved: &Saved, open: &[Kind]) -> Vec<Item> {
     out
 }
 
+/// Where an item sits in the sidebar's "This computer" panel. Each server's
+/// actions live on its own card, so they say what they act on by where they
+/// are, not by repeating its name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Slot {
+    /// A server this computer doesn't run yet: a dashed "+" card at the end.
+    Add,
+    /// Shown on the server's card itself, not tucked away: only the actions
+    /// for a server that is open to the room (close it, show its QR code),
+    /// because that's the one state someone may need to act on quickly.
+    Card,
+    /// Under the card's Options button.
+    Option,
+    /// Under Options, set apart at the bottom: removes something.
+    Danger,
+}
+
+/// One item in the sidebar's "This computer" panel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SidebarItem {
+    /// The Go-menu id the app acts on, as in [`Item::id`].
+    pub id: String,
+    /// What it says on the card: shorter than the menu bar's label, because
+    /// the card already names the server ("Rename…", not "Rename spark…").
+    pub label: String,
+    /// The server it acts on (`node`, `commons`, `practice`): whose card it
+    /// goes on, or for an [`Slot::Add`] card, which colour it takes.
+    pub server: Option<&'static str>,
+    /// Where on the panel it goes.
+    pub slot: Slot,
+}
+
+/// Which server a Go-menu item acts on, from its id: the kind after the
+/// colon (`rename:practice`), or the one server a stand-alone item is for.
+/// Pure.
+pub fn server_of(id: &str) -> Option<Kind> {
+    match id {
+        // Only a commons has a steward and a public address.
+        "steward-link" | "public-address" => Some(Kind::Commons),
+        "remove-practice" => Some(Kind::Practice),
+        _ => id.split_once(':').and_then(|(_, kind)| Kind::parse(kind)),
+    }
+}
+
+/// Where `item` goes in the sidebar, and what it says there. Pure.
+fn sidebar_entry(item: Item) -> SidebarItem {
+    let server = server_of(&item.id).map(Kind::key);
+    // The part of the id before the colon says what the item does.
+    let action = item.id.split_once(':').map_or(item.id.as_str(), |(action, _)| action);
+    let (slot, label) = match action {
+        "open" => (Slot::Add, item.label),
+        "room-close" => (Slot::Card, "Close to the room".to_string()),
+        "room-show" => (Slot::Card, "Show QR code".to_string()),
+        "room-open" => (Slot::Option, "Open to the room\u{2026}".to_string()),
+        "rename" => (Slot::Option, "Rename\u{2026}".to_string()),
+        "remove-practice" => (Slot::Danger, item.label),
+        _ => (Slot::Option, item.label),
+    };
+    SidebarItem { id: item.id, label, server, slot }
+}
+
 /// The items for the sidebar's "This computer" panel: all but the servers
-/// already there as cards (adding one that isn't running stays). Pure.
-pub fn sidebar_items(saved: &Saved, open: &[Kind]) -> Vec<Item> {
+/// already there as cards (adding one that isn't running stays, as an
+/// [`Slot::Add`] card), each placed on its server's card. Pure.
+pub fn sidebar_items(saved: &Saved, open: &[Kind]) -> Vec<SidebarItem> {
     items(saved, open)
         .into_iter()
         .filter(|i| {
@@ -104,6 +167,7 @@ pub fn sidebar_items(saved: &Saved, open: &[Kind]) -> Vec<Item> {
                 && i.id.strip_prefix("open:").and_then(Kind::parse).is_some_and(|k| saved.runs(k));
             !shown_as_card
         })
+        .map(sidebar_entry)
         .collect()
 }
 
@@ -161,6 +225,30 @@ mod tests {
         assert!(!side.iter().any(|i| i.id == "open:node"), "your node is a card already");
         assert!(side.iter().any(|i| i.id == "open:commons" && i.label == "Set up a commons\u{2026}"));
         assert!(side.iter().any(|i| i.id == "room-open:node"));
+    }
+
+    #[test]
+    fn each_sidebar_action_goes_on_its_own_servers_card() {
+        let side = sidebar_items(&spark(), &[Kind::Practice]);
+        let find = |id: &str| side.iter().find(|i| i.id == id).unwrap_or_else(|| panic!("{id}"));
+        // The card names the server, so the label doesn't.
+        assert_eq!(find("rename:commons").label, "Rename\u{2026}");
+        assert_eq!(find("rename:commons").server, Some("commons"));
+        assert_eq!(find("room-open:node").slot, Slot::Option);
+        // Open to the room: close it and its QR code are on the card itself.
+        assert_eq!(find("room-close:practice").slot, Slot::Card);
+        assert_eq!(find("room-show:practice").label, "Show QR code");
+        assert_eq!(find("steward-link").server, Some("commons"));
+        assert_eq!(find("remove-practice").slot, Slot::Danger);
+        assert_eq!(find("remove-practice").server, Some("practice"));
+    }
+
+    #[test]
+    fn a_server_this_computer_could_add_is_an_add_card() {
+        let only_node = Saved { role: Some("node".into()), name: Some("potato".into()), ..Default::default() };
+        let side = sidebar_items(&only_node, &[]);
+        let add = side.iter().find(|i| i.id == "open:practice").expect("start a local commons");
+        assert_eq!((add.slot, add.server), (Slot::Add, Some("practice")));
     }
 
     #[test]
