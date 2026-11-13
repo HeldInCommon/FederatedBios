@@ -554,23 +554,19 @@ and never ticks these boxes itself.
 - [ ] On a Mac with the installed app: the firewall prompt's wording, and
       whether sharing to a local commons on another computer brings up the
       Local Network prompt (gap 8). Update `docs/ROOM-GUIDE.md`.
-- [ ] On Windows: the Defender dialog, and whether a Public network blocks it
-      as expected.
 - [ ] On a phone hotspot and, if possible, a school or guest network: see
       client isolation happen.
 - [ ] Scan the QR codes with an iPhone and an Android phone.
-- [ ] On a Mac with the firewall on, and on Windows on a Public network: open
-      to the room and check the room page shows the firewall hint, and that
-      following it works. Then remove "(not yet tried …)" from the guide.
-- [ ] On Windows: no console window flashes when opening to the room.
+- [ ] On a Mac with the firewall on: open to the room and check the room page
+      shows the firewall hint, and that following it works. Then remove
+      "(not yet tried …)" from the guide.
 - [ ] Join a local commons with the room code from a second computer, typing
       it with a space as shown on screen.
 - [ ] Force-quit the app (`kill -9`) with the room open, and check nothing
       still listens: `ss -ltnp | grep 808` (Linux) or
       `lsof -iTCP -sTCP:LISTEN | grep 808` (Mac).
 - [ ] Switch Wi-Fi with the room open: it closes, with the notice.
-- [ ] **Rehearsal** with this Linux ARM machine, a Mac, a Windows laptop if
-      there is one, and two phones, all on a travel router or hotspot:
+- [ ] **Rehearsal** with this Linux ARM machine, a Mac and two phones, all on a travel router or hotspot:
   - [ ] The host opens a local commons and shows `/room` on the big screen.
   - [ ] Each laptop opens its node to the room, and phones scan the QR codes.
   - [ ] A phone opens someone's profile and a public story.
@@ -621,6 +617,10 @@ not pushed:
 **Try first:** build the app from this branch, open your node to the room,
 and scan the QR code from your phone on the same Wi-Fi (then try `/login`
 from the phone: it should be refused). Then work down **Needs Phoenix**.
+
+**Windows:** not a target yet (Phoenix, 13 November 2026). The Windows code
+paths (firewall hint, hidden console window) are in place but untested, and
+Windows checks are off the Needs Phoenix list.
 
 **Unsure about:**
 
