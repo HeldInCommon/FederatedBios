@@ -41,6 +41,9 @@ pub struct AppState {
     /// [`ROOM_CODE_MAX_WRONG`], the code stops working until the host
     /// reopens the room, so many addresses can't share out the guessing.
     pub room_code_wrong: std::sync::atomic::AtomicU32,
+    /// Probe values this server is checking its own public address with
+    /// (see `api::check_public_address`).
+    pub probes: Probes,
     /// Held while reading, changing and saving a record, so two requests
     /// can't interleave their changes.
     pub write: Mutex<()>,
@@ -55,6 +58,50 @@ pub struct AppState {
     /// On a node: the state of each outgoing connection to a commons holding
     /// one of our cards (see [`crate::relay_node`]).
     pub links: crate::relay_node::Links,
+}
+
+/// Random values this server is waiting to see come back to it through its
+/// own public address, each with a secret answer, for a minute at most. In
+/// memory only; shared state behind a lock, the kind the house style allows
+/// (ADR 0016).
+///
+/// The address is asked `/health?probe=<probe>`; only this server knows the
+/// matching answer, so an address that sends it back really leads here. A
+/// server elsewhere could see the probe, but can't know the answer.
+#[derive(Default)]
+pub struct Probes {
+    /// (probe, answer, when it was made)
+    waiting: Mutex<Vec<(String, String, u64)>>,
+}
+
+impl Probes {
+    /// How long a probe counts, in seconds.
+    const LIFETIME: u64 = 60;
+
+    /// Start waiting for `probe`, made at time `now`, whose answer is
+    /// `answer`; forgets any older than a minute. Writes only this list.
+    pub fn start(&self, probe: &str, answer: &str, now: u64) {
+        let mut waiting = self.waiting.lock().unwrap();
+        waiting.retain(|(_, _, at)| now < at + Self::LIFETIME);
+        waiting.push((probe.to_string(), answer.to_string(), now));
+    }
+
+    /// Stop waiting for `probe`. Writes only this list.
+    pub fn finish(&self, probe: &str) {
+        self.waiting.lock().unwrap().retain(|(p, _, _)| p != probe);
+    }
+
+    /// The answer to `probe`, if this server is waiting for it (compared in
+    /// constant time). Only reads.
+    pub fn answer_to(&self, probe: &str) -> Option<String> {
+        let now = crate::now();
+        self.waiting
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(p, _, at)| now < at + Self::LIFETIME && crate::keys::ct_eq(p, probe))
+            .map(|(_, answer, _)| answer.clone())
+    }
 }
 
 /// The state as handlers receive it.
@@ -85,6 +132,7 @@ impl AppState {
             attempts: AttemptLimiter::default(),
             room_code_attempts: AttemptLimiter::default(),
             room_code_wrong: std::sync::atomic::AtomicU32::new(0),
+            probes: Probes::default(),
             write: Mutex::new(()),
             http: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::limited(3))
@@ -192,6 +240,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/waiting", post(handlers::waiting_list))
         .route("/api/status", get(api::share_status))
         .route("/api/notices/claim", post(api::claim_notices))
+        .route("/api/public-address/check", post(api::check_public_address))
         .route("/notices/dismiss", post(handlers::dismiss_notices))
         .route("/waiting/check", post(handlers::check_waiting))
         .route("/.well-known/webfinger", get(api::webfinger))
@@ -221,4 +270,27 @@ pub fn router(state: Shared) -> Router {
         routes
     };
     routes.layer(security).layer(RequestBodyLimitLayer::new(BODY_LIMIT)).with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_probe_has_an_answer_only_while_it_is_being_checked() {
+        let probes = Probes::default();
+        assert_eq!(probes.answer_to("abc"), None);
+        probes.start("abc", "secret", crate::now());
+        assert_eq!(probes.answer_to("abc").as_deref(), Some("secret"));
+        assert_eq!(probes.answer_to("abd"), None, "only the exact value");
+        probes.finish("abc");
+        assert_eq!(probes.answer_to("abc"), None, "single use");
+    }
+
+    #[test]
+    fn an_old_probe_is_forgotten() {
+        let probes = Probes::default();
+        probes.start("old", "secret", crate::now() - 120);
+        assert_eq!(probes.answer_to("old"), None);
+    }
 }

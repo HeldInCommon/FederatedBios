@@ -8,10 +8,14 @@
 //   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
 //   do=open-room&role=node|commons|practice   confirm opening it to the room (ADR 0027)
+//   do=public-address             set, check or clear the commons' public address (ADR 0028)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
 //   setup_state  -> { role, name, node_name, commons_name, practice_name, practice, lan_url }
-//   choose_role  (role, name)           first launch: save the choice and name, start it
+//   choose_role  (role, name, publicAddress)  first launch: save the choice, name (and a
+//                                       commons' public address), start it
+//   set_public_address (address|null)   save the commons' public address and restart it
+//   check_address (address) -> { reached, here, detail }   does it reach this commons?
 //   add_role     (role, name)           add the other role and start it
 //   set_name     (role, name)           name (or rename) the node or commons
 //   remove_practice_now                 delete the local commons
@@ -110,7 +114,7 @@ function showLoading(role, which){
 //   'migrate' installed before names existed: name it once (set_name)
 //   'rename'  opened from Go → Rename… (set_name)
 //   'add'     opened from Go, or a page's link, to run the other role too (add_role)
-let naming = null, lanUrl = null;
+let naming = null, lanUrl = null, commonsPort = 8080, publicAddress = null;
 
 const NAMING_TEXT = {
   first:   { eyebrow: 'Held in Common · first launch', note: '', go: 'Start' },
@@ -173,7 +177,7 @@ $('name-form').addEventListener('submit', async e => {
   $('name-err').textContent = '';
   $('name-go').disabled = true;
   try {
-    if (naming.mode === 'first') await invoke('choose_role', { role: naming.role, name });
+    if (naming.mode === 'first') await invoke('choose_role', { role: naming.role, name, publicAddress });
     else if (naming.mode === 'add') await invoke('add_role', { role: naming.role, name });
     else await invoke('set_name', { role: naming.mode === 'rename' ? naming.role : undefined, name });
     if (naming.mode === 'rename') return;   // the app closes this window and reopens the server
@@ -212,6 +216,57 @@ function showOpenRoom(role){
     $('open-room-err').textContent = '';
     try { await invoke('open_room_now', { which: role }); }
     catch(err){ $('open-room-err').textContent = ('' + err) || 'Could not open it.'; $('open-room-go').disabled = false; }
+  });
+}
+
+// The commons' port, wherever a screen says what a tunnel or forward must
+// lead to (`tailscale funnel --bg 8080`).
+function showPort(){
+  document.querySelectorAll('.ts-command').forEach(c => { c.textContent = 'tailscale funnel --bg ' + commonsPort; });
+  document.querySelectorAll('.commons-port').forEach(c => { c.textContent = commonsPort; });
+}
+
+// The Docker command for a commons on a server at `address` (a placeholder
+// until one is typed).
+function dockerCommand(address){
+  // Only characters an address uses, so the copied command can't break the
+  // shell (a stray quote, `$(`, a backtick).
+  const where = (address || 'https://commons.example.org').replace(/[^A-Za-z0-9.:\/\-_\[\]]/g, '');
+  return 'docker run -d --name hic-commons --restart unless-stopped \\\n' +
+    '  -p 8080:8080 -v hic-commons:/data \\\n' +
+    '  -e HIC_ROLE=commons -e HIC_INSTANCE="Our commons" \\\n' +
+    '  -e HIC_BASE_URL="' + where + '" \\\n' +
+    '  ghcr.io/heldincommon/hic-node:latest';
+}
+
+// Go → Public address…: set it, check it, or clear it.
+function showPublic(current){
+  showPort();
+  $('public').hidden = false;
+  $('public-input').value = current || '';
+  $('public-back').addEventListener('click', () => invoke('close_setup'));
+  $('public-check').addEventListener('click', async () => {
+    const address = $('public-input').value.trim();
+    $('public-err').textContent = '';
+    $('public-result').hidden = true;
+    if (!address){ $('public-err').textContent = 'Enter an address to check.'; return; }
+    $('public-check').disabled = true;
+    $('public-check').textContent = 'Checking…';
+    try {
+      const r = await invoke('check_address', { address });
+      $('public-result').textContent = (r.here ? '\u2713 ' : '\u2717 ') + r.detail;
+      $('public-result').hidden = false;
+    } catch(err){ $('public-err').textContent = ('' + err) || 'Could not check it.'; }
+    $('public-check').disabled = false;
+    $('public-check').textContent = 'Check it';
+  });
+  $('public-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    $('public-err').textContent = '';
+    $('public-save').disabled = true;
+    const address = $('public-input').value.trim() || null;
+    try { await invoke('set_public_address', { address }); }
+    catch(err){ $('public-err').textContent = ('' + err) || 'Could not save it.'; $('public-save').disabled = false; }
   });
 }
 
@@ -261,7 +316,36 @@ function showChooser(){
     $('reach').hidden = true;
     $('pick-commons').focus();
   });
-  $('start-commons').addEventListener('click', () => choose('commons'));
+  // Where people will reach the commons: the room, an address set up for
+  // it (Tailscale, a domain), or a server of its own (Docker, not this app).
+  showPort();
+  const reachChanged = () => {
+    const how = document.querySelector('input[name="reach"]:checked').value;
+    $('online-setup').hidden = how !== 'online';
+    $('server-setup').hidden = how !== 'server';
+    $('start-commons').textContent = how === 'server' ? 'Run my own node here' : 'Start the commons';
+    if (how === 'online') $('public-address').focus();
+    if (how === 'server') $('server-address').focus();
+  };
+  document.querySelectorAll('input[name="reach"]').forEach(r => r.addEventListener('change', reachChanged));
+  $('docker-command').textContent = dockerCommand('');
+  $('server-address').addEventListener('input', () => { $('docker-command').textContent = dockerCommand($('server-address').value.trim()); });
+  $('copy-docker').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('docker-command').textContent); $('copy-docker').textContent = 'Copied'; }
+    catch(e){ getSelection().selectAllChildren($('docker-command')); $('copy-docker').textContent = 'Selected: copy with \u2318C or Ctrl+C'; }
+  });
+  $('start-commons').addEventListener('click', () => {
+    const how = document.querySelector('input[name="reach"]:checked').value;
+    $('choose-err').textContent = '';
+    if (how === 'server'){ publicAddress = null; choose('node'); return; }
+    publicAddress = null;
+    if (how === 'online'){
+      const a = $('public-address').value.trim();
+      if (!/^https?:\/\/./.test(a)){ $('choose-err').textContent = 'Enter the whole public address, starting with https://.'; $('public-address').focus(); return; }
+      publicAddress = a;
+    }
+    choose('commons');
+  });
   $('chooser').hidden = false;
 }
 
@@ -271,6 +355,7 @@ async function init(){
   let st = null;
   try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node', name: 'node' }; }
   lanUrl = st.lan_url;
+  commonsPort = st.commons_port || commonsPort;
   // The setup window (opened from the Go menu or a page's link).
   const q = new URLSearchParams(location.search);
   const asked = q.get('role');
@@ -280,6 +365,7 @@ async function init(){
   else if (todo === 'remove-practice') showRemove();
   else if (todo === 'steward-link') showStewardLink();
   else if (todo === 'open-room') showOpenRoom(role);
+  else if (todo === 'public-address') showPublic(st.public_address);
   // The main window.
   else if (st.role && st.name) showLoading(st.role);
   else if (st.role) showNaming(st.role, 'migrate', '');             // installed before names existed

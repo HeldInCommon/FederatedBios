@@ -831,3 +831,34 @@ Until then, people scan each other's QR codes directly.
   a wrong-code counter; opening on a Mac can take a few seconds while the
   firewall is read (it runs off the main thread).
 - **Checks:** all green (see the commit).
+
+### 2026-11-13, after the plan: online commons and the Go menu in the page
+
+Phoenix asked for three clear choices: a local commons for a room, a real
+commons for a community (online through Tailscale, a domain or Docker,
+without editing files), and their own node. And for the Go menu to be in the
+app, not only the menu bar. Built (ADR 0028):
+
+- First launch: "Online, at an address I've set up" (paste a Tailscale Funnel
+  address or a domain; the screen gives the exact `tailscale funnel` command
+  and port) and "A server I host" (the `docker run` command, filled in).
+- **Go → Public address…**: set, check, or clear it; saving restarts the
+  commons. "Check it" proves the address leads to this commons with a
+  random probe and a secret answer only the commons knows.
+- A "This computer" panel in every page's sidebar with the Go menu's items.
+- Earlier in the same pass: one-click share to the commons on this computer,
+  its address under its card, and a join link for a room's commons
+  (ADR 0027 update).
+
+Reviewer found, all fixed: any server could fake the check by answering
+`"probe": true` (now a secret answer, with an end-to-end test using a fake
+server); saving an address closed a commons open to the room (now kept
+open); a page still loading could use `hic-app://` links (now refused until
+it finishes, and only items on the Go menu at that moment); `/health` failed
+on a repeated `?probe`; the wording said the check ran "from outside" (it
+starts on this computer: the screens now say to try a phone with Wi-Fi off);
+the Docker command now strips characters that would break a shell.
+
+Needs Phoenix: try "Online, at an address I've set up" with a real Funnel
+address on a fresh test app, and "Check it"; then open the address on a
+phone with Wi-Fi off.

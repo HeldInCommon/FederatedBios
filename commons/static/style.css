@@ -518,8 +518,43 @@ fieldset {
 }
 
 .server-card.is-node,
-.server-card[data-kind="node"] {
+.server-card[data-kind="node"],
+.room-pop.is-node,
+.server-address[data-kind="node"] {
   order: 1;
+}
+
+/* What follows a card (its address, "Open to the room") sorts with it;
+   the Go menu's panel comes last. */
+.room-pop.is-commons,
+.server-address[data-kind="commons"] {
+  order: 2;
+}
+
+.room-pop.is-practice,
+.server-address[data-kind="practice"] {
+  order: 3;
+}
+
+/* The Go menu, in the page (filled in by the desktop app): plain links,
+   one per line, under a label, after this computer's servers. */
+.app-actions {
+  order: 4;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.app-actions ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-actions a {
+  font-size: var(--text-sm);
+  color: var(--ink);
 }
 
 .rail-label {

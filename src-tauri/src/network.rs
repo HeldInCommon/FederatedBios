@@ -92,6 +92,51 @@ pub fn parse_notices(body: &str) -> Vec<String> {
         .collect()
 }
 
+/// What the commons said about its public address (decision record 0028).
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AddressCheck {
+    /// Something answered at the address.
+    pub reached: bool,
+    /// It was this commons.
+    pub here: bool,
+    /// What to tell the person.
+    pub detail: String,
+}
+
+/// Ask the commons on `port` (proving it's the app with the launch token)
+/// whether `url` reaches it from outside: it fetches `url/health` with a
+/// one-time probe value only it knows. Waits up to twelve seconds. Only
+/// talks to this computer; the commons does the fetching.
+pub fn check_public_address(port: u16, token: &str, url: &str) -> Result<AddressCheck, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(400))
+        .map_err(|_| "The commons isn't running, so it can't check its address.".to_string())?;
+    let _ = s.set_read_timeout(Some(Duration::from_secs(12)));
+    let body = serde_json::json!({ "url": url }).to_string();
+    let req = format!(
+        "POST /api/public-address/check HTTP/1.0\r\nHost: 127.0.0.1\r\nX-HIC-Launch: {token}\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    let mut raw = String::new();
+    let _ = s.take(64 * 1024).read_to_string(&mut raw);
+    match split_http(&raw) {
+        (true, body) => parse_address_check(body).ok_or_else(|| "The commons gave an answer we couldn't read.".into()),
+        _ => Err("The commons couldn't check the address.".into()),
+    }
+}
+
+/// Read the commons' answer to an address check. Pure.
+pub fn parse_address_check(body: &str) -> Option<AddressCheck> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    Some(AddressCheck {
+        reached: v["reached"].as_bool()?,
+        here: v["here"].as_bool()?,
+        detail: v["detail"].as_str()?.to_string(),
+    })
+}
+
 /// Collect the node's news that hasn't been shown as a notification yet (the
 /// node marks it as shown). Proves it's the app with the launch token. Only
 /// talks to this computer.
@@ -238,6 +283,13 @@ mod tests {
         assert_eq!(tailscale_outcome(false, String::new(), off), TailscaleStatus::Answered(String::new()));
         assert_eq!(tailscale_outcome(false, String::new(), "permission denied"), TailscaleStatus::NoAnswer);
         assert_eq!(tailscale_outcome(true, "x".into(), ""), TailscaleStatus::Answered("x".into()));
+    }
+
+    #[test]
+    fn an_address_check_is_read() {
+        let got = parse_address_check(r#"{"reached":true,"here":true,"detail":"It reaches this commons."}"#);
+        assert_eq!(got, Some(AddressCheck { reached: true, here: true, detail: "It reaches this commons.".into() }));
+        assert_eq!(parse_address_check("not json"), None);
     }
 
     #[test]

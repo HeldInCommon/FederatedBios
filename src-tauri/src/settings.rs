@@ -319,7 +319,7 @@ pub fn instance_label(override_: Option<&str>, name: Option<&str>, role: &str) -
 
 /// A public address as typed into `app.json`: trimmed, without a trailing
 /// slash, and only if it is an `http(s)://` URL.
-fn clean_address(a: &str) -> Option<String> {
+pub fn clean_address(a: &str) -> Option<String> {
     let a = a.trim().trim_end_matches('/');
     (a.starts_with("https://") || a.starts_with("http://")).then(|| a.to_string())
 }

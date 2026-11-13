@@ -136,7 +136,11 @@ fn node_lets_in(path: &str) -> bool {
 /// app's notices. Pure.
 fn commons_owner_only(path: &str) -> bool {
     let room_page = path == "/room" || (path.starts_with("/room/") && !ROOM_PAGES_FOR_EVERYONE.contains(&path));
-    path == "/steward" || path.starts_with("/steward/") || room_page || path == "/api/notices/claim"
+    path == "/steward"
+        || path.starts_with("/steward/")
+        || room_page
+        || path == "/api/notices/claim"
+        || path == "/api/public-address/check"
 }
 
 /// The room pages anyone in the room may open, on a node or a commons: the

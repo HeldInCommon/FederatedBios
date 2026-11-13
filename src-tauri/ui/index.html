@@ -32,16 +32,31 @@
         <b>This room</b>
         <small id="room-detail">People on the same Wi-Fi or network share to this computer.</small>
       </label>
-      <label class="off">
-        <input type="radio" name="reach" id="reach-tunnel" value="tunnel" disabled />
-        <b>Online, through a tunnel</b>
-        <small>Coming soon.</small>
+      <label>
+        <input type="radio" name="reach" id="reach-online" value="online" />
+        <b>Online, at an address I've set up</b>
+        <small>A Tailscale Funnel address, or your own domain or fixed IP forwarded to this computer. It runs here, in this app.</small>
       </label>
-      <label class="off">
-        <input type="radio" name="reach" id="reach-server" value="server" disabled />
+      <div class="setup-help" id="online-setup" hidden>
+        <label for="public-address" class="name-label">Its public address</label>
+        <input id="public-address" type="url" placeholder="https://your-computer.your-tailnet.ts.net" autocomplete="off" />
+        <p class="help"><b>With Tailscale:</b> on this computer, run <code class="ts-command">tailscale funnel --bg 8080</code>, then paste the <code>https://….ts.net</code> address it shows.</p>
+        <p class="help"><b>With your own domain or a fixed IP:</b> forward it (a reverse proxy, or your router) to port <code class="commons-port">8080</code> on this computer.</p>
+        <p class="help">After it starts, check it from <b>Go → Public address…</b>, or add it there later. To be sure people elsewhere can reach it, open it on a phone with Wi-Fi turned off.</p>
+      </div>
+      <label>
+        <input type="radio" name="reach" id="reach-server" value="server" />
         <b>A server I host</b>
-        <small>Use the Docker image on your server instead of this app. See the install guide.</small>
+        <small>A computer that's always on, with Docker: a VPS, or a machine with a fixed IP. The commons runs there, not in this app.</small>
       </label>
+      <div class="setup-help" id="server-setup" hidden>
+        <label for="server-address" class="name-label">The server's address</label>
+        <input id="server-address" type="url" placeholder="https://commons.example.org" autocomplete="off" />
+        <p class="help">On the server, run:</p>
+        <pre class="command" id="docker-command"></pre>
+        <div class="row"><button class="link" id="copy-docker" type="button">Copy</button></div>
+        <p class="help">Then <code>docker logs hic-commons</code> shows the commons' steward link and founding invite: keep both private. Make the address lead to port 8080 on the server (a reverse proxy for https, or the IP and port as they are). Then run your own node here and share to it.</p>
+      </div>
       <div class="row">
         <button class="btn violet" id="start-commons" type="button">Start the commons</button>
         <button class="link" id="back" type="button">Back</button>
@@ -91,6 +106,29 @@
       <button class="link" id="open-room-back" type="button">Cancel</button>
     </div>
     <p class="err" id="open-room-err" role="alert"></p>
+  </main>
+
+  <!-- The commons' public address (Go → Public address…), ADR 0028 -->
+  <main class="choose" id="public" hidden>
+    <p class="eyebrow">Held in Common · the commons on this computer</p>
+    <h1>Public address<span class="dot">.</span></h1>
+    <p class="sub">The address people outside this room use to reach this commons. Invites, steward links and its pages show it first. Leave it empty if only people on this Wi-Fi share to it.</p>
+    <form class="name-form" id="public-form">
+      <label for="public-input" class="name-label">Public address</label>
+      <input id="public-input" type="url" placeholder="https://your-computer.your-tailnet.ts.net" autocomplete="off" />
+      <div class="row">
+        <button class="btn violet" id="public-save" type="submit">Save</button>
+        <button class="link" id="public-check" type="button">Check it</button>
+        <button class="link" id="public-back" type="button">Cancel</button>
+      </div>
+    </form>
+    <p class="note" id="public-result" role="status" hidden></p>
+    <p class="err" id="public-err" role="alert"></p>
+    <div class="setup-help">
+      <p class="help"><b>With Tailscale:</b> run <code class="ts-command">tailscale funnel --bg 8080</code> on this computer, then use the <code>https://….ts.net</code> address it shows. Your Tailscale admin page needs Funnel allowed for this computer.</p>
+      <p class="help"><b>With your own domain or a fixed IP:</b> point it at this computer and forward it (a reverse proxy such as Caddy, or your router) to port <code class="commons-port">8080</code>.</p>
+      <p class="help"><b>Check it</b> asks the commons to visit that address and confirms it leads back to this commons. The visit starts on this computer, so to be sure people elsewhere can reach it, open the address on a phone with Wi-Fi turned off. Saving restarts the commons with the new address; people on this Wi-Fi can keep using the room address.</p>
+    </div>
   </main>
 
   <!-- The commons' steward link (Go → Show steward link…), ADR 0024 -->

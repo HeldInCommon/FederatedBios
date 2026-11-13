@@ -297,6 +297,11 @@ pub struct SetupState {
     practice: bool,
     /// Where nodes in the same room would reach this computer's commons.
     lan_url: Option<String>,
+    /// The commons' port on this computer: what a tunnel or port forward
+    /// must lead to (decision record 0028).
+    commons_port: u16,
+    /// The commons' public address, if one is set.
+    public_address: Option<String>,
 }
 
 /// What this computer runs, and what a room commons' address would be.
@@ -309,9 +314,77 @@ pub fn setup_state(chosen: tauri::State<'_, Chosen>) -> SetupState {
         practice_name: s.name_of(Kind::Practice).map(String::from),
         practice: s.practice,
         lan_url: network::lan_url(s.port_of(Kind::Commons)),
+        commons_port: s.port_of(Kind::Commons),
+        public_address: s.public_address.clone(),
         role: s.role,
         name: s.name,
     }
+}
+
+/// Said when a public address isn't a web address.
+const BAD_ADDRESS: &str = "Enter the whole address, starting with https:// (or http:// for a fixed IP).";
+
+/// Set or clear the commons' public address (decision record 0028): save it
+/// in `app.json`, then restart the commons so its invites, steward links and
+/// pages use it. Only the setup window may ask. Runs off the main thread,
+/// since restarting waits for the port.
+#[tauri::command(async)]
+pub fn set_public_address(window: tauri::WebviewWindow, app: AppHandle, address: Option<String>) -> Result<(), String> {
+    if window.label() != SETUP_WINDOW {
+        return Err("Set the public address from the Go menu.".into());
+    }
+    let address = match address.filter(|a| !a.trim().is_empty()) {
+        Some(a) => Some(settings::clean_address(&a).ok_or(BAD_ADDRESS)?),
+        None => None,
+    };
+    let saved = {
+        let chosen = app.state::<Chosen>();
+        let mut current = chosen.0.lock().unwrap();
+        if !current.runs(Kind::Commons) {
+            return Err("This computer doesn't run a commons.".into());
+        }
+        let next = Saved { public_address: address, ..current.clone() };
+        remember(&app, &mut current, next)?;
+        current.clone()
+    };
+    let cfg = app.state::<AppConfig>();
+    let servers = app.state::<Servers>();
+    let sc = servers.get(Kind::Commons);
+    let _changing = sc.changing();
+    let port = saved.port_of(Kind::Commons);
+    // Saving the address mustn't close the room: keep it open (with its room
+    // code) if it was. `stop` closes it, so remember first.
+    let was_open = sc.is_open();
+    sc.stop();
+    wait_until_free(port, &cfg.launch_token);
+    sc.set_open(was_open);
+    let started = sidecar::start(&app, &cfg, &servers, &saved, Kind::Commons, false);
+    crate::refresh_menu(&app, &saved);
+    started?;
+    close_setup(app.clone());
+    Ok(())
+}
+
+/// Ask this computer's commons whether `address` reaches it from outside
+/// (decision record 0028): it fetches the address with a one-time probe
+/// value only it knows, so a yes means a tunnel or port forward really leads
+/// here. Only reads; only the setup window may ask. Off the main thread.
+#[tauri::command(async)]
+pub fn check_address(
+    window: tauri::WebviewWindow,
+    app: AppHandle,
+    address: String,
+) -> Result<network::AddressCheck, String> {
+    if window.label() != SETUP_WINDOW {
+        return Err("Check the public address from the Go menu.".into());
+    }
+    let address = settings::clean_address(&address).ok_or(BAD_ADDRESS)?;
+    let saved = app.state::<Chosen>().0.lock().unwrap().clone();
+    if !saved.runs(Kind::Commons) {
+        return Err("This computer doesn't run a commons.".into());
+    }
+    let cfg = app.state::<AppConfig>();
+    network::check_public_address(saved.port_of(Kind::Commons), &cfg.launch_token, &address)
 }
 
 /// Close the setup window (its Back and Cancel buttons, or once it's done).
@@ -324,19 +397,27 @@ pub fn close_setup(app: AppHandle) {
 
 /// First launch: save the role and name, and start the server. The
 /// first-launch role keeps port 8080; the other can be added later.
+///
+/// A commons can come with its public address (`public_address`: a
+/// Tailscale Funnel address, or a domain or fixed IP forwarded here;
+/// decision record 0028).
 #[tauri::command]
-pub fn choose_role(app: AppHandle, role: String, name: String) -> Result<(), String> {
+pub fn choose_role(app: AppHandle, role: String, name: String, public_address: Option<String>) -> Result<(), String> {
     if !valid_role(&role) {
         return Err("Choose a node or a commons.".into());
     }
     let name = clean_name(&name)?;
+    let public_address = match public_address.filter(|a| !a.trim().is_empty()) {
+        Some(a) if role == "commons" => Some(settings::clean_address(&a).ok_or(BAD_ADDRESS)?),
+        _ => None,
+    };
     let chosen = app.state::<Chosen>();
     let mut current = chosen.0.lock().unwrap();
     if let Some(existing) = current.role.as_deref().filter(|r| *r != role) {
         return Err(format!("This computer is already set up as a {existing}."));
     }
     let cfg = app.state::<AppConfig>();
-    let next = Saved { role: Some(role), name: Some(name), ..current.clone() };
+    let next = Saved { role: Some(role), name: Some(name), public_address, ..current.clone() };
     let kind = next.first().expect("a valid role");
     if network::probe(next.port_of(kind), &cfg.launch_token) == Probe::Other {
         return Err(port_taken(next.port_of(kind)));

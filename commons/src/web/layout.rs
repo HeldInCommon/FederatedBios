@@ -272,7 +272,7 @@ fn rail(site: &Site) -> Markup {
                 // Open to the room: the one state here someone may need to
                 // act on (close it), so an oxblood pop, said in words.
                 @if site.room.is_some() {
-                    p class="room-pop" { "Open to the room" }
+                    p class={ "room-pop " (place.class()) } { "Open to the room" }
                 }
                 div class="server-list" id="hic-servers" hidden {}
             }
@@ -673,9 +673,9 @@ mod tests {
             Site { instance: "Studio laptop".into(), room: Some("http://192.168.1.5:8080".into()), ..site(Role::Node) };
         let page = frame(&open, &Page::new("t", None, html! {})).into_string();
         assert!(page.contains("Studio laptop: open to the room: public pages only"), "says so in words");
-        assert!(page.contains(r#"class="room-pop""#), "with the oxblood pop");
+        assert!(page.contains(r#"class="room-pop is-node""#), "with the oxblood pop");
         let closed = frame(&site(Role::Node), &Page::new("t", None, html! {})).into_string();
-        assert!(!closed.contains(r#"class="room-pop""#));
+        assert!(!closed.contains("room-pop"));
     }
 
     #[test]

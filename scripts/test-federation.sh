@@ -13,7 +13,7 @@ no(){ echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
 HIC_DATA="$T/commons" PORT=8091 HIC_ROLE=commons HIC_INSTANCE="Shared Commons" HIC_BASE_URL=http://localhost:8091 "$BIN" >"$T/commons.log" 2>&1 & CPID=$!
 HIC_DATA="$T/node" PORT=8090 HIC_INSTANCE="Tega node" HIC_BASE_URL=http://localhost:8090 HIC_SHARE_DEFAULT=http://localhost:8091 HIC_SHARE_DEFAULT_NAME="Test Collective" "$BIN" >"$T/node.log" 2>&1 & NPID=$!
-cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} ${LPID:-} 2>/dev/null; rm -rf "$T"; }
+cleanup(){ kill $CPID $NPID ${IPID:-} ${CAPPID:-} ${C2PID:-} ${N3PID:-} ${RPID:-} ${LPID:-} ${FAKEPID:-} ${PPID2:-} 2>/dev/null; rm -rf "$T"; }
 trap cleanup EXIT
 
 curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://localhost:8091/health >/dev/null && ok "commons up" || no "commons failed to start"
@@ -312,6 +312,29 @@ else
   grep -q KTRMWX "$T/local.log" && no "the room code appears in the server's log" || ok "the room code never appears in the server's log"
   kill $LPID 2>/dev/null; wait $LPID 2>/dev/null
 fi
+
+# A commons checks its own public address (ADR 0028): it asks the address
+# for a random probe value only it knows. Here the "public address" is just
+# 127.0.0.1, which does lead to it; the shared commons on 8091 doesn't.
+mkdir -p "$T/pub"
+HIC_DATA="$T/pub" PORT=8097 HIC_ROLE=commons HIC_LAUNCH_TOKEN=t0k "$BIN" >"$T/pub.log" 2>&1 & PPID2=$!
+curl -sf --retry 40 --retry-delay 1 --retry-connrefused http://127.0.0.1:8097/health >/dev/null || no "address-check commons failed to start"
+check_addr(){ curl -s -X POST http://127.0.0.1:8097/api/public-address/check -H "X-HIC-Launch: $1" -H "Content-Type: application/json" -d "{\"url\":\"$2\"}"; }
+check_addr t0k http://127.0.0.1:8097 | grep -q '"here":true' && ok "a commons recognises its own public address" || no "a commons didn't recognise itself"
+check_addr t0k http://localhost:8091 | grep -q 'a different one' && ok "and tells another commons apart" || no "another commons counted as itself"
+check_addr wrong http://127.0.0.1:8097 | grep -q "only the desktop app" && ok "only the app can ask" || no "anyone could ask the commons to fetch addresses"
+# A server that claims to be anything can't pass: it doesn't know the answer.
+python3 -c 'import http.server,json
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(s):
+        b=json.dumps({"service":"hic-commons","probe":True,"probe_answer":"guess"}).encode()
+        s.send_response(200); s.send_header("Content-Type","application/json"); s.end_headers(); s.wfile.write(b)
+    def log_message(s,*a): pass
+http.server.HTTPServer(("127.0.0.1",8098),H).serve_forever()' & FAKEPID=$!
+sleep 1
+check_addr t0k http://127.0.0.1:8098 | grep -q '"here":false' && ok "a server pretending to be the commons fails the check" || no "a fake server passed the address check"
+kill $FAKEPID 2>/dev/null; wait $FAKEPID 2>/dev/null
+kill $PPID2 2>/dev/null; wait $PPID2 2>/dev/null
 
 echo ""; echo "RESULT: $PASS passed, $FAIL failed"
 exit $FAIL

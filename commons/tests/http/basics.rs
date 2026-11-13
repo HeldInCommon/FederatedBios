@@ -1,6 +1,6 @@
 //! The server as a whole: health, robots.txt, and what each role offers.
 
-use crate::common::{get, post_form, send, server, session_from};
+use crate::common::{get, post_form, post_json, send, server, server_with, session_from};
 use hic_commons::app::{router, AppState};
 use hic_commons::config::Config;
 use hic_commons::role::Role;
@@ -53,4 +53,20 @@ async fn commons_has_no_sign_up() {
     assert!(r.text.contains("This is a shared commons"));
     assert!(session_from(&r).is_none());
     assert!(store.handles().is_empty());
+}
+
+#[tokio::test]
+async fn only_the_desktop_app_can_ask_a_commons_to_check_its_address() {
+    let (commons, _) = server_with(Role::Commons, &[("HIC_LAUNCH_TOKEN", "t0k")]);
+    let r = send(&commons, post_json("/api/public-address/check", &serde_json::json!({"url": "http://x"}))).await;
+    assert_eq!(r.status, axum::http::StatusCode::FORBIDDEN, "a web page can't make the server fetch addresses");
+}
+
+#[tokio::test]
+async fn health_answers_a_probe_only_for_a_value_being_checked() {
+    let (commons, _) = server(Role::Commons);
+    let r = send(&commons, get("/health?probe=guess", None)).await;
+    assert!(!r.text.contains("probe_answer"));
+    let twice = send(&commons, get("/health?probe=a&probe=b&x=%zz", None)).await;
+    assert_eq!(twice.status, axum::http::StatusCode::OK, "a strange query never breaks /health");
 }

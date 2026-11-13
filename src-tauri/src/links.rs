@@ -35,6 +35,9 @@ pub enum AppLink {
     /// Show this kind of server, setting it up (or, for practice, starting
     /// it) if this computer doesn't run it yet.
     Open(Kind),
+    /// Do what this Go-menu item does (`go_menu.rs`), from the sidebar's
+    /// "This computer" panel: `hic-app://menu/<id>`.
+    Menu(String),
 }
 
 /// Read a `hic-app://` link. Anything else, or a link this app doesn't
@@ -42,6 +45,9 @@ pub enum AppLink {
 pub fn parse(url: &str) -> Option<AppLink> {
     let rest = url.strip_prefix(SCHEME)?.strip_prefix("://")?;
     let rest = rest.trim_end_matches('/');
+    if let Some(id) = rest.strip_prefix("menu/") {
+        return crate::go_menu::is_menu_id(id).then(|| AppLink::Menu(id.to_string()));
+    }
     let kind = rest.strip_prefix("open/")?;
     Kind::parse(kind).map(AppLink::Open)
 }
@@ -127,11 +133,18 @@ fn without_scheme(url: &str) -> String {
 /// the bottom-right corner instead: the way back. Running it again replaces
 /// what it added before. The labels and addresses go in as JSON and are set
 /// as text, so nothing in them can break out.
-pub fn switcher_js(places: &[Place]) -> String {
+pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::Item]) -> String {
     let data = serde_json::to_string(places).unwrap_or_else(|_| "[]".into());
+    // The Go menu's items for the "This computer" panel, as links the app
+    // follows (`hic-app://menu/<id>`).
+    let acts: Vec<serde_json::Value> = actions
+        .iter()
+        .map(|a| serde_json::json!({ "label": a.label, "url": format!("{SCHEME}://menu/{}", a.id) }))
+        .collect();
+    let acts = serde_json::to_string(&acts).unwrap_or_else(|_| "[]".into());
     format!(
         r#"(function(){{
-  var id='hic-switch', places={data};
+  var id='hic-switch', places={data}, actions={acts};
   var old=document.getElementById(id); if(old){{old.remove();}}
   var slot=document.getElementById('hic-servers');
   if(slot){{
@@ -145,9 +158,17 @@ pub fn switcher_js(places: &[Place]) -> String {
       if(p.place){{var sub=document.createElement('span'); sub.className='server-sub'; sub.textContent=p.place; text.appendChild(sub);}}
       a.appendChild(star); a.appendChild(text); slot.appendChild(a);
       // The address sits under the card, outside the link, so it can be selected and copied.
-      if(p.address){{var ad=document.createElement('p'); ad.className='server-address'; var c=document.createElement('code'); c.textContent=p.address; ad.appendChild(c); slot.appendChild(ad);}}
+      if(p.address){{var ad=document.createElement('p'); ad.className='server-address'; ad.setAttribute('data-kind',p.kind); var c=document.createElement('code'); c.textContent=p.address; ad.appendChild(c); slot.appendChild(ad);}}
     }});
-    slot.hidden=!places.length;
+    // The Go menu, in the page: what you can do with this computer's servers.
+    if(actions.length){{
+      var box=document.createElement('nav'); box.className='app-actions'; box.setAttribute('aria-label','This computer');
+      var h=document.createElement('p'); h.className='rail-label'; h.textContent='This computer'; box.appendChild(h);
+      var ul=document.createElement('ul');
+      actions.forEach(function(x){{var li=document.createElement('li'); var a=document.createElement('a'); a.href=x.url; a.textContent=x.label; li.appendChild(a); ul.appendChild(li);}});
+      box.appendChild(ul); slot.appendChild(box);
+    }}
+    slot.hidden=!places.length&&!actions.length;
     var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
     return;
   }}
@@ -198,6 +219,14 @@ mod tests {
         assert_eq!(parse("hic-app://open/node"), Some(AppLink::Open(Kind::Node)));
         assert_eq!(parse("hic-app://open/elsewhere"), None);
         assert_eq!(parse("hic-app://remove/practice"), None, "pages can't remove anything");
+        assert_eq!(parse("hic-app://menu/room-close:node"), Some(AppLink::Menu("room-close:node".into())));
+        assert_eq!(
+            parse("hic-app://menu/remove-practice"),
+            Some(AppLink::Menu("remove-practice".into())),
+            "only opens the confirmation in the setup window"
+        );
+        assert_eq!(parse("hic-app://menu/about-project"), None, "only the Go menu's actions");
+        assert_eq!(parse("hic-app://menu/rm"), None);
         assert_eq!(parse("https://open/node"), None);
     }
 
@@ -254,18 +283,26 @@ mod tests {
     #[test]
     fn labels_cannot_break_out_of_the_script() {
         let evil = "'); alert(1); ('";
-        let js = switcher_js(&[Place {
-            label: evil.into(),
-            url: "x".into(),
-            tone: "#000",
-            kind: "node",
-            place: evil.into(),
-            address: Some(evil.into()),
-        }]);
+        let js = switcher_js(
+            &[Place {
+                label: evil.into(),
+                url: "x".into(),
+                tone: "#000",
+                kind: "node",
+                place: evil.into(),
+                address: Some(evil.into()),
+            }],
+            &[crate::go_menu::Item {
+                id: "rename:node".into(),
+                label: evil.into(),
+                group: crate::go_menu::Group::Settings,
+            }],
+        );
         assert!(js.contains(r#""label":"'); alert(1); ('""#), "inside a JSON string");
         assert!(js.contains(r#""place":"'); alert(1); ('""#), "the place line too");
         assert!(js.contains(r#""address":"'); alert(1); ('""#), "and the address");
+        assert!(js.contains(r#""label":"'); alert(1); ('","url":"hic-app://menu/rename:node""#), "and the menu items");
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
-        assert!(switcher_js(&[]).contains("places=[]"));
+        assert!(switcher_js(&[], &[]).contains("places=[]"));
     }
 }

@@ -48,7 +48,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             h2 class="section-h" { "Where can people reach it?" }
             p {
                 strong { "On this Wi-Fi: " } "the desktop app can run a " strong { "local commons" } " on this computer, and people on the same Wi-Fi share to it. It's there while this computer is awake and the app is open, which suits a workshop, a class or a session. "
-                strong { "Online: " } "an " strong { "online commons" } " runs on a server with the Docker image (see " a href=(DOCKER_GUIDE) { "the commons guide" } "), or from this app through a tunnel such as Tailscale Funnel, once you give it its public address (see the install guide)."
+                strong { "Online: " } "an " strong { "online commons" } " runs on a server with the Docker image (see " a href=(DOCKER_GUIDE) { "the commons guide" } "), or from this app at an address you've set up, such as a Tailscale Funnel address or your own domain: choose it when you set up the commons, or later from " strong { "Go → Public address…" } ", which can check that it works."
             }
 
             (figure(REACH_SVG, html! { "How far each reaches: " strong { "your node" } " stays on this computer; a " strong { "local commons" } " reaches anyone on the same Wi-Fi while the app is open; an " strong { "online commons" } " reaches anyone with its address." }))
@@ -76,7 +76,7 @@ fn try_it(in_app: bool) -> Markup {
                 }
                 p class="hint" { "A real commons on this computer can be reached by people on the same Wi-Fi." }
             } @else {
-                p { "The Held in Common desktop app can open a local commons that anyone on the same Wi-Fi can reach, for a workshop or a session. To host a commons online, use the Docker image on a server." }
+                p { "The Held in Common desktop app can open a local commons that anyone on the same Wi-Fi can reach, for a workshop or a session. To host a commons online, run it from the app at an address such as a Tailscale Funnel address, or on a server with the Docker image." }
                 p { a href=(INSTALL_GUIDE) { "Install the desktop app" } " · " a href=(DOCKER_GUIDE) { "Run a commons in Docker" } }
             }
         }

@@ -147,6 +147,7 @@ interleave) → redirect to the profile.
 | `src/network.rs` | Is *our* server on a port answering (launch token check)? This computer's LAN address. |
 | `src/sidecar.rs` | Start and stop the servers (one per `Kind`, side by side); restart one after a crash (up to 3 times); whether each is open to the room (in memory only). |
 | `src/room.rs` | Open to the room (ADR 0027): who may open, the Tailscale check, the room code, wording. Pure. |
+| `src/go_menu.rs` | The Go menu's items, for the menu bar and the sidebar's "This computer" panel. Pure. |
 | `src/firewall.rs` | A hint about this computer's firewall for the room page, read without admin rights. |
 | `src/steward.rs` | The commons' steward link: hidden from the log, read for **Go → Show steward link…** (ADR 0024). |
 | `src/links.rs` | `hic-app://open/<kind>` links and the switcher's buttons (pure). |
