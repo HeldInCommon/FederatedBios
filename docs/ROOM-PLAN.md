@@ -528,9 +528,9 @@ progress**, **Done**, **Blocked** (reason in the Run log), **Deferred**,
 | Phase | Status | Commit |
 |---|---|---|
 | Preflight | Done | (no commit) |
-| 1 The door | Done | (see Run log) |
-| 2 Stop with the app | In progress | |
-| 3 The switch | Not started | |
+| 1 The door | Done | `a450fa5` |
+| 2 Stop with the app | Done | `60213dd`, fix in the next commit |
+| 3 The switch | In progress | |
 | 4 Address and QR | Not started | |
 | 5 Firewall and network help | Not started | |
 | 6 Room code | Not started | |
@@ -643,3 +643,32 @@ found, and the commit.
   without headers, `ssh -R`, `socat`, `tailscale serve --tcp`) would make
   outside visitors look like the owner. ADR 0027 records this; the app's
   Tailscale check (Phase 3) and the guide cover the common cases.
+
+### 2026-11-13, Phase 2 (stop with the app): done
+
+- **Built:** `HIC_EXIT_WITH_APP=1` (in `Config`), which the app now sets for
+  every server. The server reads stdin on a thread and exits when it ends.
+- **How the stdin pipe was checked:** read `tauri-plugin-shell` 2.5.0's
+  `Command::spawn`. It pipes stdin, and the writing end lives in
+  `CommandChild`, which the app keeps in `Sidecar::child` until it stops the
+  server. The reviewer confirmed the pipe is close-on-exec (os_pipe uses
+  `pipe2(O_CLOEXEC)` on Linux), so other children don't keep it open.
+- **Order:** committed before the review (`60213dd`) so Phase 3 could change
+  `sidecar.rs` cleanly; the review's fix is a separate commit.
+- **Reviewer found a critical bug, now fixed:** when the app really dies, its
+  ends of the server's stdout and stderr close too. The goodbye `println!`
+  then panicked on the broken pipe, which stopped only that thread, so the
+  server **kept running**. My test and my first `kill -9` check had sent the
+  server's output to `/dev/null` and missed it. Now nothing is printed on the
+  way out; an interrupted read is retried. The test now closes all three
+  pipes (it fails on the old code and passes on the fix), waits for this
+  server's own `/health` reply rather than any listener, kills the server and
+  deletes its folder even when an assert fails.
+- **Checked by hand:** a parent process started the server with all three
+  pipes, as the app does, and was killed with `kill -9`. The server was gone
+  within 1.5 seconds.
+- **Not changed (reviewer, unverified):** on macOS the pipe is made
+  close-on-exec in two steps, so a sidecar started at that exact moment could
+  inherit it; the server would then stop when that sidecar stops. Low risk.
+- **Checks:** all green for `commons` (275 unit, 97 HTTP, 2 exit tests, 98
+  end-to-end).

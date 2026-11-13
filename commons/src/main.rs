@@ -108,31 +108,39 @@ async fn run(config: Config) -> Result<(), String> {
 /// The desktop app holds the writing end of our stdin for as long as it
 /// runs. When the app ends for any reason, including a crash or a
 /// force-quit that skips its own clean-up, the operating system closes that
-/// end, so reading stdin returns "end of file" (or an error), and we exit at
-/// once. That stops a server open to the room from outliving the app. A
-/// plain `exit` rather than a graceful shutdown: nobody is left to answer,
-/// and a long poll could otherwise hold the port open for half a minute.
+/// end, so reading stdin returns "end of file", and we exit at once. That
+/// stops a server open to the room from outliving the app. A plain `exit`
+/// rather than a graceful shutdown: nobody is left to answer, and a long
+/// poll could otherwise hold the port open for half a minute.
+///
+/// Nothing is printed on the way out: the app's end of our stdout has
+/// closed too, and `println!` would panic on the broken pipe, stopping only
+/// this thread and leaving the server running.
 ///
 /// Runs on its own thread, because reading stdin blocks. Anything the app
 /// writes to stdin is read and ignored.
 fn stop_when_the_app_is_gone() {
     std::thread::spawn(|| {
-        use std::io::Read;
+        use std::io::{ErrorKind, Read};
         let mut stdin = std::io::stdin();
         let mut buffer = [0u8; 256];
-        // `Ok(0)` is end of file; an error means stdin is gone too.
-        while let Ok(n) = stdin.read(&mut buffer) {
-            if n == 0 {
-                break;
+        loop {
+            match stdin.read(&mut buffer) {
+                // End of file: the app's end of the pipe has closed.
+                Ok(0) => break,
+                Ok(_) => continue,
+                // A signal arrived mid-read; that's not the app going away.
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                // Any other error means stdin is gone too.
+                Err(_) => break,
             }
         }
-        println!("hic-commons: the desktop app has gone, so this server is stopping");
         std::process::exit(0);
     });
 }
 
-/// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` and the desktop app
-/// send), so in-flight requests finish before the process exits.
+/// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` sends; the desktop
+/// app stops its servers with SIGKILL, or by closing their stdin), so in-flight requests finish before the process exits.
 async fn shutdown_signal() {
     let ctrl_c = async {
         let _ = tokio::signal::ctrl_c().await;
