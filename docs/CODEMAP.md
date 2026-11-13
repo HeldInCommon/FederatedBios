@@ -153,7 +153,8 @@ interleave) → redirect to the profile.
 | `src/links.rs` | `hic-app://open/<kind>` links and the switcher's buttons (pure). |
 | `src/commands.rs` | What the screens, the Go menu and links can do: `open` a server (setting it up if needed), `remove_practice`; commands `setup_state`, `choose_role`, `add_role`, `set_name`, `close_setup`, `node_up`, `server_url`, `restart_node`, `remove_practice_now`. |
 | `src/lib.rs` (also) | The main window (hands `mailto:` to the mail app, `hic-app://` to `commands::open`), the **Go** menu, the log file. |
-| `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser, loading screen, and the setup window (add, rename, remove practice). |
+| `ui/index.html`, `ui/app.js`, `ui/style.css` | The first-launch chooser, loading screen, and the setup window's popups (add, rename, open to the room, public address, steward link, remove the local commons), each headed by the server it acts on. |
+| `ui/fonts/` | Space Grotesk and Space Mono, shipped in the app so its screens match the site offline, with their licences. |
 | `capabilities/default.json` | What the screens may call (core APIs only). |
 | `tauri.conf.json` | Window, bundle, and the screens' Content-Security-Policy. |
 

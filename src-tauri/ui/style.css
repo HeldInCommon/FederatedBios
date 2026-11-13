@@ -1,12 +1,39 @@
 /* Styles for the desktop app's own screens: the loading screen, the
- * first-launch chooser and the naming step. (The node and commons pages are
+ * first-launch chooser, the naming step, and the setup window's popups
+ * (rename, open to the room, public address, steward link, remove). (The node and commons pages are
  * styled by the server: commons/static/style.css.)
  *
  * Organised like the server's stylesheet: tokens first (change a colour or
  * size there and every screen follows), then base, shared patterns, screens.
  * The loader always animates, including with macOS "Reduce Motion" on
  * (Phoenix's decision, 10 Nov 2026).
+ *
+ * The look matches the site: Space Grotesk and Space Mono, the stage grey,
+ * square buttons with a hard ink shadow. The fonts ship inside the app
+ * (fonts/, with their licences) because these screens work offline.
  */
+
+/* The site's two families, Latin subset (fonts/README.md). */
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/SpaceGrotesk.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Mono";
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/SpaceMono-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Mono";
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/SpaceMono-Bold.woff2") format("woff2");
+}
 
 /* 1. Design tokens --------------------------------------------------------- */
 
@@ -14,24 +41,23 @@
   /* Brand colours (the same as the server's) */
   --pink: #ff2d9b;
   --blue: #1f5cff;
-  --blue-deep: #1748d6;
   --jade-ink: #0a7a54;
   --violet: #8b3fd9;
-  --violet-deep: #7432b8;
-  --blue-glow: rgb(31 92 255 / 35%);
-  --violet-glow: rgb(139 63 217 / 35%);
+  --oxblood: #451018; /* only for warnings and removing something */
   --error: #b00052;
 
   /* Neutrals */
   --ink: #111;
-  --gray: #6f6f6f;
+  --gray: #5e5e5e; /* 6.4:1 on white, as the site's muted text */
   --white: #fff;
-  --canvas: #f2f1ed;
+  --canvas: #f8f8fa; /* the site's stage grey */
+  --surface-sunk: #f1f0f2; /* a server's header, as its card in the sidebar */
   --line: rgb(17 17 17 / 18%);
 
-  /* Fonts: the app uses the system's own, so it works offline */
-  --font-text: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* Fonts: the site's, shipped in fonts/ so they work offline */
+  --font-text: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* Type sizes */
   --text-2xs: 0.6875rem; /* 11px: eyebrows, tags */
@@ -59,6 +85,7 @@
   /* No thin lines: an edge that must show is 2px; a divider is space. */
   --rule: 2px solid var(--ink);
   --focus: 2px solid var(--pink);
+  --shadow-lift: 4px 4px 0 var(--ink); /* a button rises onto it, as on the site */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --pulse: 2.1s; /* one beat of the loader */
 }
@@ -170,57 +197,64 @@ h1 {
   margin-top: var(--space-2);
 }
 
-/* Buttons take their colour from --tone (blue unless .violet). */
-.btn {
-  --tone: var(--blue);
-  --tone-hover: var(--blue-deep);
-  --tone-glow: var(--blue-glow);
-
-  padding: 13px 22px;
-  border: 0;
-  font: 700 0.8125rem / 1 var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--white);
-  background: var(--tone);
-  box-shadow: 0 2px 12px var(--tone-glow);
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    transform 0.06s;
-}
-
-.btn.violet {
-  --tone: var(--violet);
-  --tone-hover: var(--violet-deep);
-  --tone-glow: var(--violet-glow);
-}
-
-.btn:hover {
-  background: var(--tone-hover);
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
-
-.btn[disabled] {
-  opacity: 0.55;
-  box-shadow: none;
-  cursor: default;
-}
-
-/* A button that looks like a link. */
+/* Buttons, as on the site: square, full-size (44px), rising onto a hard ink
+   shadow under the pointer. The main action is pink with ink text; .danger
+   (removing something) is oxblood; .link is the outlined one (Cancel, Back,
+   Copy, Check it). */
+.btn,
 .link {
   all: unset;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: var(--text-xs);
-  letter-spacing: var(--track);
-  text-transform: uppercase;
-  color: var(--gray);
-  border-bottom: 2px solid currentcolor;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 20px;
+  font: 700 var(--text-md) / 1.2 var(--font-text);
   cursor: pointer;
+  transition:
+    transform 0.08s,
+    box-shadow 0.08s;
+}
+
+.btn {
+  background: var(--pink);
+  color: var(--ink);
+}
+
+.btn.danger {
+  background: var(--oxblood);
+  color: var(--white);
+}
+
+.link {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.btn:hover,
+.btn:focus-visible {
+  box-shadow: var(--shadow-lift);
+  transform: translate(-2px, -2px);
+}
+
+/* The outlined button keeps its edge as it rises. */
+.link:hover,
+.link:focus-visible {
+  box-shadow:
+    inset 0 0 0 2px var(--ink),
+    var(--shadow-lift);
+  transform: translate(-2px, -2px);
+}
+
+.btn[disabled],
+.link[disabled] {
+  opacity: 0.55;
+  box-shadow: none;
+  transform: none;
+  cursor: default;
 }
 
 /* `all: unset` above also removes the focus ring, so put it back. */
@@ -487,11 +521,8 @@ h1 {
   user-select: all;
 }
 
-#public .setup-help {
-  margin-top: var(--space-5);
-}
-
-/* The steward link (Go → Show steward link…): one row per address, the
+/* The steward link (Options → Show steward link… on the commons' card): one
+   row per address, the
    link in a white box (selectable in one click) and its Copy button. */
 .links {
   display: grid;
@@ -540,4 +571,158 @@ h1 {
 
 .name-form input:focus-visible {
   outline-offset: 2px;
+}
+
+/* 5. Popups ---------------------------------------------------------------- */
+
+/* The server a popup acts on, as its card in the sidebar shows it: its
+   starburst colour, its name and what kind it is. */
+.server-head {
+  --tone: var(--pink);
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-self: start;
+  width: fit-content;
+  margin-bottom: var(--space-5);
+  padding: 10px 14px 10px 10px;
+  background: var(--surface-sunk);
+}
+
+.server-head[data-kind="commons"] {
+  --tone: var(--violet);
+}
+
+.server-head[data-kind="practice"] {
+  --tone: var(--blue);
+}
+
+.server-head .star {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  background: var(--tone);
+  clip-path: polygon(
+    50% 0%,
+    61% 18%,
+    82% 10%,
+    79% 32%,
+    100% 40%,
+    84% 55%,
+    96% 75%,
+    73% 76%,
+    68% 98%,
+    50% 85%,
+    32% 98%,
+    27% 76%,
+    4% 75%,
+    16% 55%,
+    0% 40%,
+    21% 32%,
+    18% 10%,
+    39% 18%
+  );
+}
+
+.server-head-text {
+  display: grid;
+}
+
+.server-head-name {
+  font-weight: 600;
+}
+
+.server-head-sub {
+  font-size: var(--text-sm);
+  color: var(--gray);
+}
+
+/* A mono label: what a fact or a warning is about. */
+.fact-tag {
+  font: 700 var(--text-xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+.fact-tag.is-loss {
+  color: var(--oxblood);
+}
+
+.fact-tag.is-kept {
+  color: var(--jade-ink);
+}
+
+/* What removing something deletes and keeps, one line each. */
+.facts {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-6);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-lg);
+}
+
+.facts li {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+/* What the room can reach, beside what stays on this computer. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-3);
+}
+
+.pair-box {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding: 14px var(--space-4);
+  background: var(--white);
+}
+
+/* A warning: an oxblood band that says it in words. */
+.warn {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-5);
+  padding: 14px var(--space-4);
+  background: var(--oxblood);
+  color: var(--white);
+  font-size: var(--text-hint);
+}
+
+/* The address and its Check it button, on one line. */
+.input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* "How do I get a public address?": the how-to, folded away. */
+.howto {
+  margin-top: var(--space-5);
+}
+
+.howto summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font: 700 var(--text-xs) var(--font-mono);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.howto .setup-help {
+  margin-top: var(--space-2);
 }
