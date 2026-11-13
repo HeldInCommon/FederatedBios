@@ -1,6 +1,6 @@
 # 0027. Open to the room
 
-- **Status:** Accepted (being built; see `docs/ROOM-PLAN.md`)
+- **Status:** Accepted (built; listing who's in the room deferred; see `docs/ROOM-PLAN.md`)
 - **Date:** 2026-11-13
 - **Amends:** [0004](0004-node-listens-only-locally.md) (a node may listen on
   the room's network while its owner says so), [0011](0011-joining-needs-a-vouch.md)

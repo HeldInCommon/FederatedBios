@@ -1,6 +1,6 @@
 # Plan: open to the room
 
-**Status:** ready to run. Written 13 November 2026. An agent builds this from
+**Status:** built on `feat/open-to-the-room` (13 November 2026); Phase 7 deferred; real-device checks in Needs Phoenix. Was: ready to run. Written 13 November 2026. An agent builds this from
 start to finish; see "How to run this plan" below.
 
 **Goal.** In a classroom or a gallery, everyone's laptop joins the same router.
@@ -532,8 +532,8 @@ progress**, **Done**, **Blocked** (reason in the Run log), **Deferred**,
 | 2 Stop with the app | Done | `60213dd`, fix in the next commit |
 | 3 The switch | Done | `ae33c42` |
 | 4 Address and QR | Done | `ae33c42` |
-| 5 Firewall and network help | Done | (see Run log) |
-| 6 Room code | Done | (see Run log) |
+| 5 Firewall and network help | Done | `dde131b` |
+| 6 Room code | Done | `dde131b` |
 | 7 Who's in the room | Deferred | (see Run log) |
 | 8 Rehearsal | Needs Phoenix | |
 
@@ -597,6 +597,46 @@ and never ticks these boxes itself.
 The agent adds an entry per phase, newest at the bottom: the date, the phase,
 what was built, which checks ran (and any skipped, with why), what the reviewer
 found, and the commit.
+
+### Summary (13 November 2026)
+
+**Built**, on `feat/open-to-the-room`, five commits (`a450fa5` … `dde131b`),
+not pushed:
+
+- **The door** (Phase 1): a node open to the room shows the room only its
+  public pages; sign-in, keys, forms and the steward view stay on the owner's
+  computer.
+- **It never outlives the app** (Phase 2): a crash or force-quit stops the
+  server too.
+- **The switch** (Phase 3): Go → "Open my node to the room…", in memory only,
+  closed at every launch, on quit, on a crash, and when the network address
+  changes; refused on a VPN or Tailscale address or a port Tailscale
+  forwards to. Open servers listen only on the room's address.
+- **QR codes** (Phase 4): `/room` for the owner, `/room/check` and
+  `/room/help` for the room.
+- **Help and room codes** (Phases 5 and 6): firewall hints, the teacher's
+  guide `docs/ROOM-GUIDE.md`, and six-letter room codes for a local commons.
+- **Deferred** (Phase 7): listing who's in the room needs a new signed type.
+
+**Try first:** build the app from this branch, open your node to the room,
+and scan the QR code from your phone on the same Wi-Fi (then try `/login`
+from the phone: it should be refused). Then work down **Needs Phoenix**.
+
+**Unsure about:**
+
+- The macOS and Windows parts (firewall prompts, the Local Network
+  permission, the hints, the console window) were never run on those
+  systems.
+- The desktop app itself wasn't launched here, to keep away from the
+  installed app's data and its live servers on 8080–8082.
+- A forwarder that adds no proxy headers would still make outside visitors
+  look like the owner (ADR 0027 says so).
+- Behind one NAT, everyone shares a wrong-room-code counter.
+
+**Checks at the end:** 287 unit, 108 HTTP, 4 spec and 2 exit tests
+(`commons`); 67 (`src-tauri`); 106 end-to-end; fmt, clippy, docs, spec
+vectors and CSS lint, all green. Every phase had a fresh subagent review; all
+their confirmed findings were fixed (see each entry).
 
 ### 2026-11-13, preflight
 
