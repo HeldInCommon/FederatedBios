@@ -76,14 +76,14 @@ notarized by Apple ([0015](adr/0015-macos-signing.md)).
 - **First launch:** choose **a node** or **a commons**, then **name it**
   ("Studio laptop"). The name shows in the coloured bar and travels, signed,
   with every share; it is never the computer's account name. Rename any time
-  from the **Go** menu. Roles and names are saved in `<app data>/app.json`;
+  from **This computer** in the sidebar. Roles and names are saved in `<app data>/app.json`;
   each has its own data folder (`node-data/`, `commons-data/`, `practice-data/`).
 - **Side by side:** the other role can be added later, and a **local commons**
   (`practice` in code and folders, its first name) opened for a workshop or a
   session: anyone on the same Wi-Fi reaches it at this computer's address, and
   joining needs a vouch as anywhere else. The first-launch role
-  keeps port 8080, the other gets 8081, practice 8082. The **Go** menu and a
-  row of buttons on each page move between them; a node's
+  keeps port 8080, the other gets 8081, practice 8082. The sidebar's **This computer** panel
+  (and, on macOS, the **Go** menu in the menu bar) moves between them; a node's
   **Run a commons** page links into the app with `hic-app://open/…`
   ([0019](adr/0019-node-and-commons-side-by-side.md)).
 - **Running the server:** the app starts the bundled `hic-commons` as a
@@ -190,7 +190,7 @@ A new handle is listed only when someone already there vouches for it
 
 The **steward view** opens at the commons' own computer (the desktop app goes
 straight there), or with the private **steward link** the commons prints in its
-log (in the desktop app: **Go → Show steward link…**; the app keeps it out of
+log (in the desktop app: **This computer → Show steward link…**; the app keeps it out of
 its own log, ADR 0024). Each member can bring in `HIC_VOUCH_LIMIT` people a week (default 100).
 `HIC_OPEN_COMMONS=1` turns vouching off. Everyone already listed stays.
 

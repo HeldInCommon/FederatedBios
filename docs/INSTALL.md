@@ -47,8 +47,9 @@ The first time you open the app it asks **what you want to run**. Choose
 
 Then **name it**, for example "Studio laptop". People see this name next to your
 profile on every commons you share to; if you use Held in Common on more than
-one computer, give each its own name. You can rename it later from the menu
-bar: **Go → Rename your node…**.
+one computer, give each its own name. You can rename it later from **This computer**, the panel in the sidebar of
+every page: **This computer → Rename your node…**. (On a Mac the same items are
+also in the **Go** menu in the menu bar.)
 
 ### 4. Create your handle — and keep your recovery code
 
@@ -116,10 +117,10 @@ Members-only profiles are never shared: they stay encrypted on your computer.
    **Email this invite** button.
 
 **Already have a node?** You don't need a second computer. Choose
-**Go → Set up a commons…** (or the button on **Run a commons**, linked
+**This computer → Set up a commons…** (or the button on **Run a commons**, linked
 at the bottom of every node page). The commons runs beside your node, and the
 buttons in the corner of the window move between them. **Hosting a commons
-and want your own profile in it?** Choose **Go → Add your own node…**, then
+and want your own profile in it?** Choose **This computer → Add your own node…**, then
 share to that commons like anyone else.
 
 **Running a workshop?** Members can write a short **story** on their node
@@ -128,23 +129,23 @@ minute. Write a small story from what you hear."). It stays on their computer
 until they press **Share**, and goes to a commons where they're listed. They
 can **Withdraw** it from there at any time, and **Export** it as a text file.
 
-**A local commons, for a workshop or a session.** **Go → Start a local
-commons** starts a commons on this computer. It starts closed: only this
-computer can reach it. Name it (**Go → Rename local commons…**), and when the
-room is ready choose **Go → Open … to the room…**: anyone on the same Wi-Fi
+**A local commons, for a workshop or a session.** **This computer → Start a
+local commons** starts a commons on this computer. It starts closed: only this
+computer can reach it. Name it (**This computer → Rename local commons…**), and when the
+room is ready choose **This computer → Open … to the room…**: anyone on the same Wi-Fi
 can then reach it at this computer's address (it looks like
 `http://192.168.1.20:8082`). It closes when you choose Close, quit the app, or
 this computer's network address changes. See `docs/ROOM-GUIDE.md` for running a session.
 People share to it from their own nodes and are listed once a member vouches
-(one click on their People tab) or you approve them. **Go → Remove local
-commons…** deletes it when the session's over.
+(one click on their People tab) or you approve them. **This computer → Remove
+local commons…** deletes it when the session's over.
 
 ### Run a commons online
 
 A commons can reach more than one room. There are two ways, and the app
 walks you through both when you choose **A commons** at first launch
 ("Where will people reach this commons?"), or later from
-**Go → Public address…**.
+**This computer → Public address…**.
 
 **1. From this app, at an address you've set up.** The commons runs on this
 computer; something gives it an address people can reach from anywhere:
@@ -158,7 +159,7 @@ computer; something gives it an address people can reach from anywhere:
   to the commons' port (the app says which): a reverse proxy such as Caddy
   for `https://`, or your router's port forwarding.
 
-In **Go → Public address…**, **Check it** asks the commons to visit that
+In **This computer → Public address…**, **Check it** asks the commons to visit that
 address with a random value, and checks the reply carries a secret answer
 only this commons knows: so a ✓ means the address leads to this commons.
 The visit starts on this computer, so to be sure people elsewhere can reach
@@ -188,7 +189,7 @@ run your own node in the app and share to it. More in
 [commons/README.md](../commons/README.md).
 
 **Your steward link** opens the steward view from any computer: in the app,
-choose **Go → Show steward link…** and press **Copy**. Keep it private:
+choose **This computer → Show steward link…** and press **Copy**. Keep it private:
 anyone who has it can approve people and make invite codes.
 
 To host on a server or in Docker instead, see [commons/README.md](../commons/README.md).

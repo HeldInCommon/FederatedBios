@@ -215,7 +215,7 @@ pub fn steward_links(
     chosen: tauri::State<'_, Chosen>,
 ) -> Result<Vec<String>, String> {
     if window.label() != SETUP_WINDOW {
-        return Err("Open the steward link from the Go menu.".into());
+        return Err("Open the steward link from This computer in the sidebar.".into());
     }
     let saved = chosen.0.lock().unwrap().clone();
     if !saved.runs(Kind::Commons) {
@@ -331,7 +331,7 @@ const BAD_ADDRESS: &str = "Enter the whole address, starting with https:// (or h
 #[tauri::command(async)]
 pub fn set_public_address(window: tauri::WebviewWindow, app: AppHandle, address: Option<String>) -> Result<(), String> {
     if window.label() != SETUP_WINDOW {
-        return Err("Set the public address from the Go menu.".into());
+        return Err("Set the public address from This computer in the sidebar.".into());
     }
     let address = match address.filter(|a| !a.trim().is_empty()) {
         Some(a) => Some(settings::clean_address(&a).ok_or(BAD_ADDRESS)?),
@@ -376,7 +376,7 @@ pub fn check_address(
     address: String,
 ) -> Result<network::AddressCheck, String> {
     if window.label() != SETUP_WINDOW {
-        return Err("Check the public address from the Go menu.".into());
+        return Err("Check the public address from This computer in the sidebar.".into());
     }
     let address = settings::clean_address(&address).ok_or(BAD_ADDRESS)?;
     let saved = app.state::<Chosen>().0.lock().unwrap().clone();
@@ -518,7 +518,7 @@ pub fn restart_node(app: AppHandle, which: Option<String>) -> Result<(), String>
 #[tauri::command(async)]
 pub fn open_room_now(window: tauri::WebviewWindow, app: AppHandle, which: String) -> Result<(), String> {
     if window.label() != SETUP_WINDOW {
-        return Err("Open it to the room from the Go menu.".into());
+        return Err("Open it to the room from This computer in the sidebar.".into());
     }
     let kind = Kind::parse(&which).ok_or("Unknown kind of server.")?;
     set_room(&app, kind, true)?;

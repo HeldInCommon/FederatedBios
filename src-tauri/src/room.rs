@@ -232,7 +232,7 @@ pub fn menu_label(kind: Kind, name: &str, open: bool) -> String {
 /// The notice shown when a server closed because the network changed.
 pub fn closed_notice(name: &str) -> String {
     format!(
-        "{name} is closed to the room: this computer's network address changed. Open it again from the Go menu if you're still in the room."
+        "{name} is closed to the room: this computer's network address changed. Open it again from This computer in the sidebar if you're still in the room."
     )
 }
 

@@ -228,7 +228,7 @@ const ADDRESS_CAN_CHANGE: &str = "Your Wi-Fi gives this address and can change i
 /// Said beside the address of a node or local commons open to the room: it
 /// closes by itself (decision record 0027, D3).
 const ROOM_CLOSES: &str =
-    "It closes when you close it in the Go menu, quit the app, or this computer's network address changes.";
+    "It closes when you close it under This computer in the sidebar, quit the app, or this computer's network address changes.";
 
 /// The side rail: the logo, the server this page belongs to, a slot the
 /// desktop app fills with the other servers on this computer (see
@@ -286,7 +286,7 @@ fn rail(site: &Site) -> Markup {
                     }
                 } @else {
                     p class="rail-foot" {
-                        "Closed to the room: only this computer can reach it. Open it from the app's Go menu when the room is ready."
+                        "Closed to the room: only this computer can reach it. Open it from This computer in the sidebar when the room is ready."
                     }
                 }
             } @else if site.is_commons() {

@@ -77,7 +77,7 @@ pub fn room(view: &RoomView) -> Markup {
         section class="prose" {
             h2 class="section-h" { "Opening and closing" }
             p {
-                "Open or close it from the app's " strong { "Go" } " menu. It also closes when you quit the app, "
+                "Open or close it from " strong { "This computer" } ", in the sidebar. It also closes when you quit the app, "
                 "if the app stops unexpectedly, and when this computer's network address changes (the app checks every minute)."
             }
             p { "Only open it on a network you trust: a classroom, a studio, your own hotspot." }

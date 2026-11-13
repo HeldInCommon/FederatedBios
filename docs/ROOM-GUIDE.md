@@ -40,16 +40,17 @@ room closes.
 ### For the host
 
 1. Join your laptop to the room's Wi-Fi.
-2. In the app, open the **Go** menu and choose **Open my node to the room…**.
-   To open your local commons, choose **Open** followed by its name, for
-   example **Open Thursday session to the room…**, from the same menu. (Start
-   it first with **Go → Start a local commons**; it starts closed.)
+2. In the app, under **This computer** in the sidebar, choose **Open my node
+   to the room…**. To open your local commons, choose **Open** followed by its
+   name, for example **Open Thursday session to the room…**, from the same
+   list. (Start it first with **This computer → Start a local commons**; it
+   starts closed.)
 3. The app asks you to confirm: "Only open this on a network you trust: a
    classroom, a studio, your own hotspot." Confirm only if that's where you are.
 4. The `/room` page opens. It shows a big QR code and your address, for example
    `http://192.168.1.23:8080/@ana` (or `…:8080/` if your profile isn't public
    yet). Put it on the big screen. If you close that page, choose **Show the QR
-   code for …** from the **Go** menu to get it back. It may also show a hint
+   code for …** under **This computer** to get it back. It may also show a hint
    about your firewall.
 5. On your local commons, `/room` also shows a **6-letter room code**. People
    type it to join your commons. A new code is made each time you open the
@@ -62,8 +63,8 @@ room closes.
 ### For participants
 
 1. Join the same Wi-Fi as the host.
-2. In the app, open the **Go** menu and choose **Open my node to the room…**,
-   then confirm.
+2. In the app, under **This computer** in the sidebar, choose **Open my node
+   to the room…**, then confirm.
 3. Your `/room` page shows your QR code and address. Turn your screen so others
    can scan it, and scan theirs.
 4. To join the host's local commons, share to it from your node as usual,
@@ -142,7 +143,7 @@ hotspot, for example, gives addresses starting `172.20.10.`.)
 
 ## After the session
 
-1. Choose **Close my node to the room** from the **Go** menu, and **Close …
+1. Choose **Close my node to the room** under **This computer**, and **Close …
    to the room** for your local commons. Quitting the app closes them too.
 2. On Linux, remove the ufw rule you added (above).
 3. On Windows, if you set a network you don't control to Private, set it back
@@ -151,7 +152,7 @@ hotspot, for example, gives addresses starting `172.20.10.`.)
 The room also closes by itself when the app quits or crashes, and when your
 laptop's network address changes (the app checks every minute). Then the app
 says: "… is closed to the room: this computer's network address changed. Open
-it again from the Go menu if you're still in the room." Every time the app
+it again from This computer in the sidebar if you're still in the room." Every time the app
 starts, the room starts closed.
 
 ## What stays private, and what doesn't
