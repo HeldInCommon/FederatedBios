@@ -42,7 +42,7 @@
         <input id="public-address" type="url" placeholder="https://your-computer.your-tailnet.ts.net" autocomplete="off" />
         <p class="help"><b>With Tailscale:</b> on this computer, run <code class="ts-command">tailscale funnel --bg 8080</code>, then paste the <code>https://….ts.net</code> address it shows.</p>
         <p class="help"><b>With your own domain or a fixed IP:</b> forward it (a reverse proxy, or your router) to port <code class="commons-port">8080</code> on this computer.</p>
-        <p class="help">After it starts, check it from <b>Go → Public address…</b>, or add it there later. To be sure people elsewhere can reach it, open it on a phone with Wi-Fi turned off.</p>
+        <p class="help">After it starts, check it from <b>Options → Public address…</b> on its card under <b>This computer</b>, or add it there later. To be sure people elsewhere can reach it, open it on a phone with Wi-Fi turned off.</p>
       </div>
       <label>
         <input type="radio" name="reach" id="reach-server" value="server" />
@@ -58,18 +58,20 @@
         <p class="help">Then <code>docker logs hic-commons</code> shows the commons' steward link and founding invite: keep both private. Make the address lead to port 8080 on the server (a reverse proxy for https, or the IP and port as they are). Then run your own node here and share to it.</p>
       </div>
       <div class="row">
-        <button class="btn violet" id="start-commons" type="button">Start the commons</button>
+        <button class="btn" id="start-commons" type="button">Start the commons</button>
         <button class="link" id="back" type="button">Back</button>
       </div>
     </section>
     <p class="err" id="choose-err" role="alert"></p>
   </main>
 
-  <!-- Name this computer's node or commons (first launch, or once for older installs) -->
+  <!-- Name this computer's node or commons (first launch, once for older
+       installs, adding one, or Options → Rename… on its card) -->
   <main class="choose" id="naming" hidden>
+    <div class="server-head" id="naming-head" hidden></div>
     <p class="eyebrow" id="naming-eyebrow">Held in Common · first launch</p>
-    <h1>What should we call this <span id="naming-role">node</span><span class="dot">?</span></h1>
-    <p class="sub">People see this name next to your profile on every commons you share to. If you run Held in Common on more than one computer, give each its own name, like &ldquo;Studio laptop&rdquo; or &ldquo;Home desktop&rdquo;.</p>
+    <h1><span id="naming-title">What should we call this <span id="naming-role">node</span></span><span class="dot" id="naming-dot">?</span></h1>
+    <p class="sub">People see this name next to your profile on every commons you share to. On more than one computer? Give each its own, like &ldquo;Studio laptop&rdquo; or &ldquo;Home desktop&rdquo;.</p>
     <p class="note" id="naming-why" hidden>Earlier versions used this computer's account name. From now on they'll use the name you choose here.</p>
     <p class="note" id="naming-reach" hidden></p>
     <form class="name-form" id="name-form">
@@ -83,59 +85,86 @@
     <p class="err" id="name-err" role="alert"></p>
   </main>
 
-  <!-- Remove the practice commons (Go → Remove practice commons…) -->
+  <!-- Remove the local commons (Options → Remove local commons… on its card) -->
   <main class="choose" id="remove" hidden>
-    <p class="eyebrow">Held in Common · local commons</p>
+    <div class="server-head" data-for="practice"></div>
     <h1>Remove the local commons<span class="dot">?</span></h1>
-    <p class="sub">Everything shared to it, approved on it or made on it is deleted, and people on this Wi-Fi can no longer reach it. Your node and your online commons stay exactly as they are. You can start a new local commons from <b>This computer</b> in the sidebar any time.</p>
+    <ul class="facts">
+      <li><span class="fact-tag is-loss">Deleted</span><span>Everything shared to it, approved on it or made on it.</span></li>
+      <li><span class="fact-tag is-loss">Gone</span><span>People on this Wi-Fi can no longer reach it.</span></li>
+      <li><span class="fact-tag is-kept">Kept</span><span>Your node and your online commons, exactly as they are.</span></li>
+    </ul>
     <div class="row">
-      <button class="btn" id="remove-go" type="button">Remove it</button>
+      <button class="btn danger" id="remove-go" type="button">Remove local commons</button>
       <button class="link" id="remove-back" type="button">Cancel</button>
     </div>
+    <p class="note">You can start a new one any time: it's a dashed card under <b>This computer</b> in the sidebar.</p>
     <p class="err" id="remove-err" role="alert"></p>
   </main>
 
-  <!-- Open a node or local commons to the room (Go → Open … to the room…), ADR 0027 -->
+  <!-- Open a node or local commons to the room (Options → Open to the room…), ADR 0027 -->
   <main class="choose" id="open-room" hidden>
-    <p class="eyebrow">Held in Common · open to the room</p>
+    <div class="server-head" id="open-room-head"></div>
     <h1>Open <span id="open-room-what">your node</span> to the room<span class="dot">?</span></h1>
-    <p class="sub" id="open-room-who">Anyone on this Wi-Fi will be able to see your public profile and public stories. Signing in, your keys and anything members-only stay on this computer.</p>
-    <p class="sub"><strong>Only open this on a network you trust: a classroom, a studio, your own hotspot.</strong> It closes when you choose Close under <b>This computer</b> in the sidebar, when you quit the app, and when this computer's network address changes (the app checks every minute).</p>
+    <div class="pair">
+      <div class="pair-box">
+        <span class="fact-tag">The room can</span>
+        <span id="open-room-who">See your public profile and public stories.</span>
+      </div>
+      <div class="pair-box">
+        <span class="fact-tag is-kept">Stays on this computer</span>
+        <span id="open-room-stays">Signing in, your keys, anything members-only.</span>
+      </div>
+    </div>
+    <div class="warn">
+      <span class="fact-tag">Only on a network you trust</span>
+      <span>A classroom, a studio, your own hotspot. It closes when you close it on its card under <b>This computer</b>, quit the app, or this computer's network address changes.</span>
+    </div>
     <div class="row">
-      <button class="btn" id="open-room-go" type="button">Open it</button>
+      <button class="btn" id="open-room-go" type="button">Open to the room</button>
       <button class="link" id="open-room-back" type="button">Cancel</button>
     </div>
     <p class="err" id="open-room-err" role="alert"></p>
   </main>
 
-  <!-- The commons' public address (Go → Public address…), ADR 0028 -->
+  <!-- The commons' public address (Options → Public address… on its card), ADR 0028 -->
   <main class="choose" id="public" hidden>
-    <p class="eyebrow">Held in Common · the commons on this computer</p>
+    <div class="server-head" data-for="commons"></div>
     <h1>Public address<span class="dot">.</span></h1>
-    <p class="sub">The address people outside this room use to reach this commons. Invites, steward links and its pages show it first. Leave it empty if only people on this Wi-Fi share to it.</p>
+    <p class="sub">Where people outside this room reach this commons. Invites, steward links and its pages show it first. Leave it empty if only people on this Wi-Fi share to it.</p>
     <form class="name-form" id="public-form">
       <label for="public-input" class="name-label">Public address</label>
-      <input id="public-input" type="url" placeholder="https://your-computer.your-tailnet.ts.net" autocomplete="off" />
-      <div class="row">
-        <button class="btn violet" id="public-save" type="submit">Save</button>
+      <div class="input-row">
+        <input id="public-input" type="url" placeholder="https://your-computer.your-tailnet.ts.net" autocomplete="off" />
         <button class="link" id="public-check" type="button">Check it</button>
+      </div>
+      <p class="note" id="public-result" role="status" hidden></p>
+      <div class="row">
+        <button class="btn" id="public-save" type="submit">Save</button>
         <button class="link" id="public-back" type="button">Cancel</button>
       </div>
     </form>
-    <p class="note" id="public-result" role="status" hidden></p>
     <p class="err" id="public-err" role="alert"></p>
-    <div class="setup-help">
-      <p class="help"><b>With Tailscale:</b> run <code class="ts-command">tailscale funnel --bg 8080</code> on this computer, then use the <code>https://….ts.net</code> address it shows. Your Tailscale admin page needs Funnel allowed for this computer.</p>
-      <p class="help"><b>With your own domain or a fixed IP:</b> point it at this computer and forward it (a reverse proxy such as Caddy, or your router) to port <code class="commons-port">8080</code>.</p>
-      <p class="help"><b>Check it</b> asks the commons to visit that address and confirms it leads back to this commons. The visit starts on this computer, so to be sure people elsewhere can reach it, open the address on a phone with Wi-Fi turned off. Saving restarts the commons with the new address; people on this Wi-Fi can keep using the room address.</p>
-    </div>
+    <details class="howto">
+      <summary>How do I get a public address?</summary>
+      <div class="setup-help">
+        <p class="help"><b>With Tailscale:</b> run <code class="ts-command">tailscale funnel --bg 8080</code> on this computer, then use the <code>https://….ts.net</code> address it shows. Your Tailscale admin page needs Funnel allowed for this computer.</p>
+        <p class="help"><b>With your own domain or a fixed IP:</b> point it at this computer and forward it (a reverse proxy such as Caddy, or your router) to port <code class="commons-port">8080</code>.</p>
+        <p class="help"><b>Check it</b> asks the commons to visit that address and confirms it leads back to this commons. The visit starts on this computer, so to be sure people elsewhere can reach it, open the address on a phone with Wi-Fi turned off.</p>
+      </div>
+    </details>
+    <p class="note">Saving restarts the commons with the new address; people on this Wi-Fi can keep using the room address.</p>
   </main>
 
-  <!-- The commons' steward link (Go → Show steward link…), ADR 0024 -->
+  <!-- The commons' steward link (Options → Show steward link… on its card), ADR 0024 -->
   <main class="choose" id="steward" hidden>
-    <p class="eyebrow">Held in Common · the commons on this computer</p>
+    <div class="server-head" data-for="commons"></div>
     <h1>Steward link<span class="dot">.</span></h1>
-    <p class="sub">Opens this commons' steward view from any computer. Anyone who has it can approve people and make invite codes, so keep it private: don't paste it into group chats, issues or shared documents.</p>
+    <p class="sub">Opens this commons' steward view from any computer, where you approve people and make invite codes.</p>
+    <div class="warn">
+      <span class="fact-tag">Keep it private</span>
+      <span>Anyone who has it can act as the steward. Don't paste it into group chats, issues or shared documents.</span>
+    </div>
     <ul class="links" id="steward-links"></ul>
     <div class="row">
       <button class="link" id="steward-close" type="button">Close</button>

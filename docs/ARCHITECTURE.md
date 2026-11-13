@@ -11,7 +11,7 @@ This document is for the people building on and operating Held in Common. For
 major choice was made, the [decision records](adr/README.md); for the exact
 bytes that are signed, the [format specification](spec/README.md).
 
-Current version: **0.9.1** (November 2026).
+Current version: **0.9.2** (November 2026).
 
 ---
 

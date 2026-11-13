@@ -1,6 +1,8 @@
 // The desktop app's own screens: the first-launch chooser (node or commons),
 // naming, the loading screen shown while a server starts, and, in the small
-// setup window the Go menu opens, adding, renaming or removing a server.
+// setup window that a card's Options (or the Go menu) opens, adding,
+// renaming or removing a server. Each of those popups starts with a header
+// naming the server it acts on, because the Options labels don't.
 //
 // The setup window says what to do in its address (?do=…&role=…):
 //   do=add&role=node|commons      run the other role too: name it, start it
@@ -112,9 +114,34 @@ function showLoading(role, which){
 // `naming` is { role, mode } where mode is:
 //   'first'   first launch: the role isn't saved yet (choose_role saves both)
 //   'migrate' installed before names existed: name it once (set_name)
-//   'rename'  opened from Go → Rename… (set_name)
+//   'rename'  opened from Options → Rename… on its card (set_name)
 //   'add'     opened from Go, or a page's link, to run the other role too (add_role)
 let naming = null, lanUrl = null, commonsPort = 8080, publicAddress = null;
+// What `setup_state` said: each server's name, for the popups' headers.
+let state = {};
+
+// The header at the top of a popup: the server it acts on, as its card in
+// the sidebar shows it (its starburst colour, its name, what kind it is).
+// Built as text, never markup, so a name can't break out.
+function fillHead(head, role){
+  const named = { node: state.node_name, commons: state.commons_name, practice: state.practice_name }[role];
+  const kind = role === 'node' ? 'Your node'
+    : role === 'practice' ? 'Local commons'
+    : state.public_address ? 'Online commons' : 'Commons on this Wi-Fi';
+  // A node leads with "Your node" and gives its name underneath; a commons
+  // leads with its name and says what it is, unless that says it twice.
+  const name = role === 'node' ? kind : (named || kind);
+  const sub = role === 'node' ? named : (named && named !== kind ? kind : '');
+  head.textContent = '';
+  head.dataset.kind = role;
+  const star = document.createElement('span'); star.className = 'star'; star.setAttribute('aria-hidden', 'true');
+  const text = document.createElement('span'); text.className = 'server-head-text';
+  const n = document.createElement('span'); n.className = 'server-head-name'; n.textContent = name;
+  text.append(n);
+  if (sub){ const s = document.createElement('span'); s.className = 'server-head-sub'; s.textContent = sub; text.append(s); }
+  head.append(star, text);
+  head.hidden = false;
+}
 
 const NAMING_TEXT = {
   first:   { eyebrow: 'Held in Common · first launch', note: '', go: 'Start' },
@@ -140,6 +167,15 @@ function showNaming(role, mode, current){
   const t = NAMING_TEXT[mode];
   $('naming-role').textContent = { commons: 'commons', practice: 'local commons' }[role] || 'node';
   $('naming-eyebrow').textContent = t.eyebrow;
+  // Renaming says which server in its header, so the eyebrow isn't needed,
+  // and the heading is a statement rather than a question.
+  const renaming = mode === 'rename';
+  $('naming-eyebrow').hidden = renaming;
+  if (renaming){
+    fillHead($('naming-head'), role);
+    $('naming-title').textContent = 'Rename ' + ({ commons: 'this commons', practice: 'the local commons' }[role] || 'your node');
+    $('naming-dot').textContent = '.';
+  }
   const note = mode === 'add' ? ADD_NOTE[role] : t.note;
   $('naming-why').textContent = note;
   $('naming-why').hidden = !note;
@@ -205,9 +241,11 @@ function showRemove(){
 // The app checks it can (on a network, nothing forwarding to it) and says
 // why not here if it can't.
 function showOpenRoom(role){
+  fillHead($('open-room-head'), role);
   if (role === 'practice' || role === 'commons'){
     $('open-room-what').textContent = role === 'practice' ? 'the local commons' : 'this commons';
-    $('open-room-who').textContent = 'Anyone on this Wi-Fi will be able to share to it and see what is listed, and join with the room code. Your steward view stays on this computer.';
+    $('open-room-who').textContent = 'Share to it, see what is listed, and join with the room code.';
+    $('open-room-stays').textContent = 'Your steward view.';
   }
   $('open-room').hidden = false;
   $('open-room-back').addEventListener('click', () => invoke('close_setup'));
@@ -239,7 +277,7 @@ function dockerCommand(address){
     '  ghcr.io/heldincommon/hic-node:latest';
 }
 
-// Go → Public address…: set it, check it, or clear it.
+// Options → Public address…: set it, check it, or clear it.
 function showPublic(current){
   showPort();
   $('public').hidden = false;
@@ -279,11 +317,12 @@ async function showStewardLink(){
   let links = [];
   try { links = await invoke('steward_links'); }
   catch(err){ $('steward-err').textContent = ('' + err) || 'Could not find the steward link.'; return; }
-  for (const link of links){
+  links.forEach((link, i) => {
     const li = document.createElement('li');
     const code = document.createElement('code'); code.textContent = link;
     const copy = document.createElement('button');
-    copy.className = 'link'; copy.type = 'button'; copy.textContent = 'Copy';
+    // The first link's Copy is the main button; the others are outlined.
+    copy.className = i === 0 ? 'btn' : 'link'; copy.type = 'button'; copy.textContent = 'Copy';
     copy.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied'; }
       catch(e){
@@ -293,7 +332,7 @@ async function showStewardLink(){
     });
     li.append(code, copy);
     $('steward-links').append(li);
-  }
+  });
 }
 
 function showChooser(){
@@ -354,7 +393,10 @@ async function init(){
   if (!invoke){ showLoading('node'); return; }
   let st = null;
   try { st = await invoke('setup_state'); } catch(e){ st = { role: 'node', name: 'node' }; }
+  state = st;
   lanUrl = st.lan_url;
+  // Popups that always act on one kind of server name it in their header.
+  document.querySelectorAll('.server-head[data-for]').forEach(h => fillHead(h, h.dataset.for));
   commonsPort = st.commons_port || commonsPort;
   // The setup window (opened from the Go menu or a page's link).
   const q = new URLSearchParams(location.search);
