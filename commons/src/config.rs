@@ -153,12 +153,18 @@ impl Config {
                 .map(|u| u.trim().trim_end_matches('/').to_string())
                 .filter(|u| !u.is_empty())
                 .unwrap_or_else(|| format!("http://localhost:{port}")),
-            also_known_as: get("HIC_ALSO_KNOWN_AS")
-                .unwrap_or_default()
-                .split(',')
-                .map(|u| u.trim().trim_end_matches('/').to_string())
-                .filter(|u| u.contains("://"))
-                .collect(),
+            // Other addresses only: one that's the same as `HIC_BASE_URL` (a
+            // fixed IP that is also the Wi-Fi address) would give everything
+            // twice, such as two identical steward links.
+            also_known_as: {
+                let base = get("HIC_BASE_URL").unwrap_or_default().trim().trim_end_matches('/').to_string();
+                get("HIC_ALSO_KNOWN_AS")
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(|u| u.trim().trim_end_matches('/').to_string())
+                    .filter(|u| u.contains("://") && *u != base)
+                    .collect()
+            },
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
@@ -335,6 +341,8 @@ mod tests {
             vec!["10.0.0.5:8081", "hic.tail.ts.net", "c.example:8443", "127.0.0.1:8081", "localhost:8081"]
         );
         assert!(cfg(&[]).also_known_as.is_empty());
+        let same = cfg(&[("HIC_BASE_URL", "http://10.0.0.5:8081"), ("HIC_ALSO_KNOWN_AS", "http://10.0.0.5:8081/")]);
+        assert!(same.also_known_as.is_empty(), "the same address isn't another one");
     }
 
     #[test]

@@ -62,7 +62,7 @@ links are `hic-app://menu/<id>`. Like every `hic-app://` link, the app
 follows them only from its own servers' pages (and not while a new page is
 still loading), and only items on the Go menu at that moment. Anything that changes something still asks first in the
 setup window, except closing the room, which only makes a server less
-reachable. The menu bar keeps the Go menu too, where macOS users expect it.
+
 
 ## Why
 "Make it possible, not hard-coded": an address is an address, whether it's
@@ -90,5 +90,5 @@ this server, not just that something answers there.
 Setting up Tailscale Funnel from the app (rejected for now: it needs admin
 rights, and ties the app to one provider); checking the address by sending
 the launch token (rejected: it could leak to whoever owns a mistyped
-address); taking the Go menu out of the menu bar (rejected: macOS users
+address); taking the Go menu out of the macOS menu bar too (rejected: macOS users
 look there).

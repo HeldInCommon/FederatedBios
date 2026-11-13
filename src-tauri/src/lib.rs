@@ -80,19 +80,45 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>, saved: &Saved) -> ta
 /// thread rather than done here: callers may hold the [`Chosen`] lock on
 /// another thread, and waiting for the main thread while it waits for that
 /// lock (to show a page) would freeze the app.
+///
+/// The menu bar is only on macOS, where people expect it at the top of the
+/// screen. On Linux it would sit inside the window, where Phoenix found it
+/// easy to miss and disorienting, so there the page's "This computer" panel
+/// (ADR 0028) is the Go menu. Either way, the panel on the page shown is
+/// redrawn too, so it never offers what's no longer true.
 pub fn refresh_menu(app: &tauri::AppHandle, saved: &Saved) {
     let (app, saved) = (app.clone(), saved.clone());
-    let queued = app.clone().run_on_main_thread(move || match build_menu(&app, &saved) {
-        Ok(menu) => {
-            if let Err(e) = app.set_menu(menu) {
-                log::warn!("couldn't update the menu: {e}");
+    let queued = app.clone().run_on_main_thread(move || {
+        if cfg!(target_os = "macos") {
+            match build_menu(&app, &saved) {
+                Ok(menu) => {
+                    if let Err(e) = app.set_menu(menu) {
+                        log::warn!("couldn't update the menu: {e}");
+                    }
+                }
+                Err(e) => log::warn!("couldn't build the menu: {e}"),
             }
         }
-        Err(e) => log::warn!("couldn't build the menu: {e}"),
+        refresh_panel(&app, &saved);
     });
     if let Err(e) = queued {
         log::warn!("couldn't update the menu: {e}");
     }
+}
+
+/// Redraw the switcher and the "This computer" panel on the page the main
+/// window shows now, if it's one of this computer's servers. Changes only
+/// that page's sidebar.
+fn refresh_panel(app: &tauri::AppHandle, saved: &Saved) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Ok(url) = window.url() else { return };
+    if !is_server_page(url.as_str()) {
+        return;
+    }
+    let here = network::local_port(url.as_str()).and_then(|p| links::kind_on(saved, p));
+    let (open, addresses) = app.try_state::<Servers>().map(|s| (s.open_kinds(), s.addresses())).unwrap_or_default();
+    let actions = if here.is_some() { go_menu::sidebar_items(saved, &open) } else { Vec::new() };
+    let _ = window.eval(links::switcher_js(&links::places(saved, here, &open, &addresses), &actions));
 }
 
 /// A Go menu choice.
