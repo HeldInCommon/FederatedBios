@@ -76,6 +76,9 @@ async fn run(config: Config) -> Result<(), String> {
         }
     }
 
+    if config.exit_with_app {
+        stop_when_the_app_is_gone();
+    }
     let addr = SocketAddr::new(config.bind_addr(role), config.port);
     let state = Arc::new(app::AppState::new(config, role, store));
     if role == role::Role::Node {
@@ -98,6 +101,34 @@ async fn run(config: Config) -> Result<(), String> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| format!("server stopped: {e}"))
+}
+
+/// Stop this process as soon as stdin ends (decision record 0027).
+///
+/// The desktop app holds the writing end of our stdin for as long as it
+/// runs. When the app ends for any reason, including a crash or a
+/// force-quit that skips its own clean-up, the operating system closes that
+/// end, so reading stdin returns "end of file" (or an error), and we exit at
+/// once. That stops a server open to the room from outliving the app. A
+/// plain `exit` rather than a graceful shutdown: nobody is left to answer,
+/// and a long poll could otherwise hold the port open for half a minute.
+///
+/// Runs on its own thread, because reading stdin blocks. Anything the app
+/// writes to stdin is read and ignored.
+fn stop_when_the_app_is_gone() {
+    std::thread::spawn(|| {
+        use std::io::Read;
+        let mut stdin = std::io::stdin();
+        let mut buffer = [0u8; 256];
+        // `Ok(0)` is end of file; an error means stdin is gone too.
+        while let Ok(n) = stdin.read(&mut buffer) {
+            if n == 0 {
+                break;
+            }
+        }
+        println!("hic-commons: the desktop app has gone, so this server is stopping");
+        std::process::exit(0);
+    });
 }
 
 /// Resolves on Ctrl-C, or on SIGTERM (what `docker stop` and the desktop app

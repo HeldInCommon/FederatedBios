@@ -299,6 +299,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
 | `HIC_LAUNCH_TOKEN` | *(set by the app)* | Lets the desktop app recognise its own server |
 | `HIC_SESSION_COOKIE` | `hic_session` | The sign-in cookie's name (the app gives each server on one computer its own) |
+| `HIC_EXIT_WITH_APP` | *(off)* | `1`: stop when stdin ends; the desktop app sets it so a server never outlives the app (ADR 0027) |
 | `HIC_ROOM` | *(off)* | `1`: open to the room (ADR 0027): the door lets the room's network reach only public pages on a node, and not the host's pages on a commons |
 | `HIC_PRACTICE` | *(off)* | `1`: a local commons (once "practice"); its pages say so and show its Wi-Fi address |
 | `HIC_RELAY_HOLD`, `HIC_RELAY_WAIT` | `25`, `8` | Seconds a commons holds a node's "Only while I'm here" poll open, and a reader waits for the node (1–60) |

@@ -44,6 +44,11 @@ pub struct Config {
     /// The door in [`crate::room`] stands in front of every request, and a
     /// node listens on the network unless `HIC_BIND` says otherwise.
     pub room: bool,
+    /// `HIC_EXIT_WITH_APP=1`: stop when stdin ends. The desktop app sets it
+    /// and holds the other end of the pipe, so the server stops when the app
+    /// does, even after a crash (decision record 0027). Off for Docker and
+    /// people running the server by hand, where stdin may be empty.
+    pub exit_with_app: bool,
     /// `HIC_OPEN_COMMONS=1`: anyone may share in without a vouch (decision record 0011).
     pub open_commons: bool,
     /// `HIC_VOUCH_LIMIT`: how many people one member may bring in per week. The
@@ -129,6 +134,7 @@ impl Config {
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
             allow_private_share: get("HIC_ALLOW_PRIVATE_SHARE").is_some_and(|v| v.trim() == "1"),
             room,
+            exit_with_app: get("HIC_EXIT_WITH_APP").is_some_and(|v| v.trim() == "1"),
             open_commons: get("HIC_OPEN_COMMONS").is_some_and(|v| v.trim() == "1"),
             vouch_limit: get("HIC_VOUCH_LIMIT")
                 .and_then(|v| v.trim().parse().ok())
@@ -291,6 +297,8 @@ mod tests {
 
     #[test]
     fn practice_and_app_flags() {
+        assert!(!cfg(&[]).exit_with_app);
+        assert!(cfg(&[("HIC_EXIT_WITH_APP", "1")]).exit_with_app);
         assert!(!cfg(&[]).practice);
         assert!(cfg(&[("HIC_PRACTICE", "1")]).practice);
         assert!(!cfg(&[]).in_app());

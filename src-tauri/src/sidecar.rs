@@ -152,6 +152,10 @@ pub fn server_env(
         ("HIC_ROLE", kind.role().to_string()),
         ("HIC_INSTANCE", instance_label(cfg_override, Some(name), kind.role())),
         ("HIC_SESSION_COOKIE", cookie_name(port)),
+        // Stop when this app does, even after a crash or a force-quit (decision
+        // record 0027): the server watches its stdin, whose writing end the
+        // app holds in `CommandChild` for as long as it runs.
+        ("HIC_EXIT_WITH_APP", "1".to_string()),
     ];
     match kind {
         Kind::Node => env.extend([
@@ -512,6 +516,13 @@ mod tests {
         assert_eq!(local["HIC_PRACTICE"], "1");
         assert_eq!(local["HIC_INSTANCE"], "Name");
         assert!(!local.contains_key("HIC_ALSO_KNOWN_AS"), "a local commons is not online");
+    }
+
+    #[test]
+    fn every_server_stops_with_the_app() {
+        for (kind, port) in [(Kind::Node, 8080), (Kind::Commons, 8081), (Kind::Practice, 8082)] {
+            assert_eq!(env_of(kind, port)["HIC_EXIT_WITH_APP"], "1", "{kind:?}");
+        }
     }
 
     #[test]
