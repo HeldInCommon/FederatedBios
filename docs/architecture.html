@@ -69,7 +69,6 @@
   /* big centered diagrams */
   .fig{display:grid; place-items:center; margin-top:6px;}
   .fig svg{width:100%; height:auto;}
-  .fig.fed svg{max-width:980px;} .fig.flow svg{max-width:1080px;}
   .caption{font-family:var(--grot); font-size:26px; color:var(--gray); margin-top:22px;}
 
   /* numbered steps */
@@ -92,6 +91,28 @@
   .foot{position:fixed; bottom:28px; left:40px; font-family:var(--mono); font-size:15px; letter-spacing:.14em; text-transform:uppercase; color:var(--gray); z-index:40;}
   .foot .dot{color:var(--pink);}
   @media(prefers-reduced-motion:reduce){ *{animation:none!important; transition:none!important} .draw{stroke-dashoffset:0!important} .fragment.rise,.fragment.pop{opacity:1!important; transform:none!important} }
+
+  /* diagrams: the same drawings as the site (commons/src/web/pages/schematics.rs).
+     A square card on a hard shadow is a node, a circle a commons; colour lives
+     in shapes, never words; lines are solid ink with one arrowhead. */
+  .fig.dgfig svg{width:auto; max-width:100%; height:660px;}
+  .dg .fig-line{fill:none; stroke:var(--ink); stroke-width:3;}
+  .dg .fig-dash{stroke-dasharray:6 6;}
+  .dg .fig-head{fill:var(--ink);} .dg .fig-head-jade{fill:var(--jade);}
+  .dg .fig-lifeline{fill:none; stroke:#a4a29b; stroke-width:3; stroke-dasharray:4 8;}
+  .dg .fig-agree,.dg .fig-agree-arrow{fill:none; stroke:var(--jade); stroke-width:4;} .dg .fig-agree{stroke-dasharray:10 8;}
+  .dg .fig-ink{fill:var(--ink);} .dg .fig-pink{fill:var(--pink);} .dg .fig-blue{fill:var(--blue);} .dg .fig-jade{fill:var(--jade);} .dg .fig-paper{fill:#fff;}
+  .dg .fig-card{fill:#fff; stroke:var(--ink); stroke-width:2;}
+  .dg .fig-planned{fill:none; stroke:var(--ink); stroke-width:2; stroke-dasharray:6 6;}
+  .dg .fig-chip{stroke:var(--ink); stroke-width:2;}
+  .dg .fig-hub{fill:#fff; stroke:var(--blue); stroke-width:5;} .dg .fig-hub-violet{stroke:var(--violet);}
+  .dg .fig-band{fill:#e3e1e6;}
+  .dg .fig-pill{fill:#fff; stroke:var(--jade); stroke-width:2;}
+  .dg .fig-label{font:700 20px var(--grot); fill:var(--ink);}
+  .dg .fig-note{font:17px var(--grot); fill:#5e5e5e;}
+  .dg .fig-band-label{font:700 17px var(--grot); fill:#5e5e5e;}
+  .dg .fig-tag{font:16px var(--grot); fill:var(--ink);}
+  .dg .fig-agree-label{font:700 16px var(--grot); fill:var(--jade-ink);}
 </style>
 </head>
 <body>
@@ -156,49 +177,40 @@
 <section><div class="pad">
   <span class="kicker">What's inside your node — the data model</span>
   <h2 class="sm" style="margin-bottom:8px">How your work is held<span class="dot">.</span></h2>
-  <div class="fig flow">
-    <svg viewBox="0 0 1180 330" aria-hidden="true" font-family="Space Mono">
-      <!-- connectors -->
-      <g fill="none" stroke="#111" opacity=".32" stroke-width="2.5">
-        <path class="fragment draw" data-fragment-index="0" d="M100 165 H286"/>
-        <path class="fragment draw" data-fragment-index="1" d="M338 165 C 410 165, 410 98, 500 98"/>
-        <path class="fragment draw" data-fragment-index="1" d="M338 165 C 410 165, 410 248, 500 248"/>
-        <path class="fragment draw" data-fragment-index="2" d="M620 98 C 700 98, 700 165, 772 165"/>
-        <path class="fragment draw" data-fragment-index="2" d="M620 248 C 700 248, 700 165, 772 165"/>
-        <path class="fragment draw" data-fragment-index="3" d="M808 160 C 880 130, 880 112, 936 112"/>
-        <path class="fragment draw" data-fragment-index="3" d="M808 170 C 880 202, 880 224, 936 224"/>
-      </g>
-      <!-- nodes -->
-      <g class="fragment pop" data-fragment-index="0">
-        <circle cx="78" cy="165" r="15" fill="#111"/>
-        <text x="78" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">YOU</text>
-        <text x="78" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="19" fill="#6f6f6f">handle + key</text>
-      </g>
-      <g class="fragment pop" data-fragment-index="0">
-        <circle cx="311" cy="165" r="15" fill="#ff2d9b"/>
-        <text x="311" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">PROFILE</text>
-        <text x="311" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="19" fill="#6f6f6f">who you are</text>
-      </g>
-      <g class="fragment pop" data-fragment-index="1">
-        <circle cx="548" cy="98" r="13" fill="#1f5cff"/>
-        <text x="573" y="91" font-size="21" font-weight="700" fill="#111">WORKS</text>
-        <text x="573" y="115" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">images, sound, text</text>
-        <circle cx="548" cy="248" r="13" fill="#1f5cff"/>
-        <text x="573" y="241" font-size="21" font-weight="700" fill="#111">DATASETS</text>
-        <text x="573" y="265" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">collections</text>
-      </g>
-      <g class="fragment pop" data-fragment-index="2">
-        <circle cx="790" cy="165" r="15" fill="#111"/><circle cx="790" cy="165" r="6" fill="#ff2d9b"/>
-        <text x="790" y="212" text-anchor="middle" font-size="22" font-weight="700" fill="#111">VERSION</text>
-        <text x="790" y="238" text-anchor="middle" font-family="Space Grotesk" font-size="18" fill="#6f6f6f">cid · fingerprint</text>
-      </g>
-      <g class="fragment pop" data-fragment-index="3">
-        <circle cx="936" cy="112" r="12" fill="#12b37d"/>
-        <text x="960" y="119" font-size="21" font-weight="700" fill="#0a7a54">LICENSE</text>
-        <circle cx="936" cy="224" r="12" fill="#12b37d"/>
-        <text x="960" y="231" font-size="21" font-weight="700" fill="#0a7a54">CC SIGNALS</text>
-      </g>
-    </svg>
+  <div class="fig dgfig">
+    <svg class="dg" viewBox="40 96 920 364" aria-hidden="true">
+  <defs><marker id="held-head" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head" d="M0 0 L4 2 L0 4 Z"/></marker></defs>
+  <rect class="fig-band" x="304" y="112" width="264" height="320"/>
+  <text class="fig-band-label" x="328" y="143">On your node</text>
+  <path class="fig-line" d="M240 280 H297" marker-end="url(#held-head)"/>
+  <path class="fig-line" d="M568 280 H657" marker-end="url(#held-head)"/>
+  <path class="fig-line" d="M800 328 V352 M728 352 H872 M728 352 V384 M872 352 V384"/>
+  <rect class="fig-pink" x="70" y="238" width="176" height="96"/>
+  <rect class="fig-card" x="64" y="232" width="176" height="96"/>
+  <text class="fig-label" x="152" y="276" text-anchor="middle">You</text>
+  <text class="fig-note" x="152" y="298" text-anchor="middle">a handle and a key</text>
+  <rect class="fig-ink" x="342" y="166" width="200" height="64"/>
+  <rect class="fig-card" x="336" y="160" width="200" height="64"/>
+  <text class="fig-label" x="436" y="188" text-anchor="middle">Profile</text>
+  <text class="fig-note" x="436" y="210" text-anchor="middle">who you are</text>
+  <rect class="fig-ink" x="342" y="254" width="200" height="64"/>
+  <rect class="fig-card" x="336" y="248" width="200" height="64"/>
+  <text class="fig-label" x="436" y="276" text-anchor="middle">Works</text>
+  <text class="fig-note" x="436" y="298" text-anchor="middle">images, sound, text</text>
+  <rect class="fig-planned" x="336" y="336" width="200" height="64"/>
+  <text class="fig-label" x="436" y="364" text-anchor="middle">Datasets</text>
+  <text class="fig-note" x="436" y="386" text-anchor="middle">planned</text>
+  <rect class="fig-ink" x="670" y="238" width="272" height="96"/>
+  <rect class="fig-card" x="664" y="232" width="272" height="96"/>
+  <text class="fig-label" x="800" y="276" text-anchor="middle">Version</text>
+  <text class="fig-note" x="800" y="298" text-anchor="middle">a permanent fingerprint</text>
+  <rect class="fig-jade" x="670" y="390" width="128" height="56"/>
+  <rect class="fig-card" x="664" y="384" width="128" height="56"/>
+  <text class="fig-label" x="728" y="418" text-anchor="middle">Licence</text>
+  <rect class="fig-jade" x="814" y="390" width="128" height="56"/>
+  <rect class="fig-card" x="808" y="384" width="128" height="56"/>
+  <text class="fig-label" x="872" y="418" text-anchor="middle">CC signals</text>
+</svg>
   </div>
   <p class="body wide fragment rise" data-fragment-index="3" style="max-width:66ch; margin-top:14px; font-size:30px">Read it left to right: <strong>you</strong> hold a handle and a key. Your <strong>profile</strong> points to your <strong>works</strong> and <strong>datasets</strong>. Every change is saved as a <strong>version</strong> with a permanent fingerprint — and each version carries its <strong class="accent-j">license</strong> and <strong class="accent-j">signals</strong>.</p>
 </div></section>
@@ -279,44 +291,83 @@
 <section><div class="pad">
   <span class="kicker">How studios share — the architecture</span>
   <h2 class="sm" style="margin-bottom:6px">Nodes federate<br/>into a commons<span class="dot">.</span></h2>
-  <div class="fig fed">
-    <svg viewBox="0 0 980 400" aria-hidden="true">
-      <g stroke="#111" opacity=".3" stroke-width="2.5">
-        <line class="fragment draw" data-fragment-index="2" x1="170" y1="110" x2="470" y2="200"/>
-        <line class="fragment draw" data-fragment-index="2" x1="810" y1="110" x2="510" y2="200"/>
-        <line class="fragment draw" data-fragment-index="2" x1="170" y1="320" x2="470" y2="230"/>
-        <line class="fragment draw" data-fragment-index="2" x1="810" y1="320" x2="510" y2="230"/>
-      </g>
-      <g class="fragment pop" data-fragment-index="3">
-        <rect x="300" y="140" width="20" height="26" rx="3" fill="#ff2d9b"/>
-        <rect x="662" y="140" width="20" height="26" rx="3" fill="#1f5cff"/>
-        <rect x="300" y="266" width="20" height="26" rx="3" fill="#12b37d"/>
-        <rect x="662" y="266" width="20" height="26" rx="3" fill="#8b3fd9"/>
-      </g>
-      <g class="fragment rise" data-fragment-index="0">
-        <g transform="translate(110,70)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#ff2d9b" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#ff2d9b"/></g>
-        <g transform="translate(750,70)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
-        <g transform="translate(110,280)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
-        <g transform="translate(750,280)"><rect width="120" height="82" rx="12" fill="var(--bg)" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="15" fill="none" stroke="#111" stroke-width="4"/><circle cx="60" cy="41" r="4" fill="#111"/></g>
-      </g>
-      <g class="fragment pop" data-fragment-index="1">
-        <circle cx="490" cy="215" r="64" fill="var(--bg)" stroke="#1f5cff" stroke-width="5"/>
-        <g stroke="#1f5cff" stroke-width="2.5" opacity=".55">
-          <line x1="490" y1="215" x2="463" y2="192"/><line x1="490" y1="215" x2="517" y2="192"/>
-          <line x1="490" y1="215" x2="463" y2="240"/><line x1="490" y1="215" x2="517" y2="240"/></g>
-        <g fill="#1f5cff"><circle cx="463" cy="192" r="6"/><circle cx="517" cy="192" r="6"/><circle cx="463" cy="240" r="6"/><circle cx="517" cy="240" r="6"/></g>
-        <circle cx="490" cy="215" r="7" fill="#ff2d9b"/>
-      </g>
-      <g class="fragment rise" data-fragment-index="0" font-family="Space Mono" font-size="17" fill="#6f6f6f">
-        <text x="170" y="175" text-anchor="middle" fill="#ff2d9b" font-weight="700">YOUR NODE</text>
-        <text x="810" y="175" text-anchor="middle">ANOTHER STUDIO</text>
-        <text x="170" y="385" text-anchor="middle">A COLLABORATOR</text>
-        <text x="810" y="385" text-anchor="middle">A GALLERY'S NODE</text>
-      </g>
-      <text class="fragment rise" data-fragment-index="1" x="490" y="312" text-anchor="middle" font-family="Space Mono" font-size="19" fill="#1f5cff" font-weight="700">THE COMMONS</text>
-    </svg>
+  <div class="fig dgfig">
+    <svg class="dg" viewBox="40 112 920 576" aria-hidden="true">
+  <defs><marker id="federate-head" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head" d="M0 0 L4 2 L0 4 Z"/></marker></defs>
+  <path class="fig-line" d="M264 400 H413" marker-end="url(#federate-head)"/>
+  <path class="fig-line" d="M736 400 H587" marker-end="url(#federate-head)"/>
+  <path class="fig-line" d="M500 224 V313" marker-end="url(#federate-head)"/>
+  <path class="fig-line" d="M500 576 V487" marker-end="url(#federate-head)"/>
+  <rect class="fig-ink" x="406" y="134" width="200" height="96"/>
+  <rect class="fig-card" x="400" y="128" width="200" height="96"/>
+  <text class="fig-label" x="500" y="182" text-anchor="middle">A collaborator</text>
+  <rect class="fig-pink" x="70" y="358" width="200" height="96"/>
+  <rect class="fig-card" x="64" y="352" width="200" height="96"/>
+  <text class="fig-label" x="164" y="396" text-anchor="middle">Your node</text>
+  <text class="fig-note" x="164" y="418" text-anchor="middle">the original stays</text>
+  <rect class="fig-ink" x="742" y="358" width="200" height="96"/>
+  <rect class="fig-card" x="736" y="352" width="200" height="96"/>
+  <text class="fig-label" x="836" y="406" text-anchor="middle">Another studio</text>
+  <rect class="fig-ink" x="406" y="582" width="200" height="96"/>
+  <rect class="fig-card" x="400" y="576" width="200" height="96"/>
+  <text class="fig-label" x="500" y="630" text-anchor="middle">A gallery's node</text>
+  <circle class="fig-hub" cx="500" cy="400" r="78"/>
+  <text class="fig-label" x="500" y="396" text-anchor="middle">The commons</text>
+  <text class="fig-note" x="500" y="418" text-anchor="middle">one directory</text>
+  <rect class="fig-chip fig-pink" x="368" y="388" width="24" height="32"/>
+  <rect class="fig-chip fig-paper" x="624" y="388" width="24" height="32"/>
+  <rect class="fig-chip fig-paper" x="488" y="248" width="24" height="32"/>
+  <rect class="fig-chip fig-paper" x="488" y="520" width="24" height="32"/>
+  <text class="fig-tag" x="320" y="446" text-anchor="middle">signed copy</text>
+</svg>
   </div>
   <p class="body wide fragment rise" data-fragment-index="3" style="max-width:64ch; margin-top:12px; font-size:30px">You send a <strong>signed copy</strong> to a commons; your original never moves. It gathers everyone's copies into one directory people can browse — <strong>no central vault, no landlord</strong>.</p>
+</div></section>
+
+<!-- 11b · Many commons, joined by people -->
+<section><div class="pad">
+  <span class="kicker">Many commons</span>
+  <h2 class="sm" style="margin-bottom:6px">Many commons, joined by people<span class="dot">.</span></h2>
+  <div class="fig dgfig">
+    <svg class="dg" viewBox="104 72 800 560" aria-hidden="true">
+  <defs><marker id="topology-head" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head" d="M0 0 L4 2 L0 4 Z"/></marker></defs>
+  <path class="fig-line" d="M360 160 V208 M220 208 H500"/>
+  <path class="fig-line" d="M220 208 V265" marker-end="url(#topology-head)"/>
+  <path class="fig-line" d="M500 208 V265" marker-end="url(#topology-head)"/>
+  <path class="fig-line" d="M780 160 V265" marker-end="url(#topology-head)"/>
+  <path class="fig-line" d="M640 544 V496 M500 496 H780"/>
+  <path class="fig-line" d="M500 496 V439" marker-end="url(#topology-head)"/>
+  <path class="fig-line" d="M780 496 V439" marker-end="url(#topology-head)"/>
+  <path class="fig-line" d="M220 544 V439" marker-end="url(#topology-head)"/>
+  <rect class="fig-pink" x="266" y="94" width="200" height="72"/>
+  <rect class="fig-card" x="260" y="88" width="200" height="72"/>
+  <text class="fig-label" x="360" y="120" text-anchor="middle">Your node</text>
+  <text class="fig-note" x="360" y="142" text-anchor="middle">on two commons</text>
+  <rect class="fig-ink" x="686" y="94" width="200" height="72"/>
+  <rect class="fig-card" x="680" y="88" width="200" height="72"/>
+  <text class="fig-label" x="780" y="130" text-anchor="middle">A studio's node</text>
+  <circle class="fig-hub fig-hub-violet" cx="220" cy="352" r="78"/>
+  <text class="fig-label" x="220" y="334" text-anchor="middle">A workshop's</text>
+  <text class="fig-label" x="220" y="356" text-anchor="middle">commons</text>
+  <text class="fig-note" x="220" y="378" text-anchor="middle">this Wi-Fi only</text>
+  <circle class="fig-hub" cx="500" cy="352" r="78"/>
+  <text class="fig-label" x="500" y="346" text-anchor="middle">A collective</text>
+  <text class="fig-label" x="500" y="368" text-anchor="middle">commons</text>
+  <circle class="fig-hub" cx="780" cy="352" r="78"/>
+  <text class="fig-label" x="780" y="346" text-anchor="middle">A gallery's</text>
+  <text class="fig-label" x="780" y="368" text-anchor="middle">commons</text>
+  <rect class="fig-ink" x="126" y="550" width="200" height="72"/>
+  <rect class="fig-card" x="120" y="544" width="200" height="72"/>
+  <text class="fig-label" x="220" y="586" text-anchor="middle">A student's node</text>
+  <rect class="fig-ink" x="518" y="550" width="256" height="72"/>
+  <rect class="fig-card" x="512" y="544" width="256" height="72"/>
+  <text class="fig-label" x="640" y="576" text-anchor="middle">A collaborator's node</text>
+  <text class="fig-note" x="640" y="598" text-anchor="middle">on two commons</text>
+  <rect class="fig-chip fig-pink" x="208" y="224" width="24" height="32"/>
+  <rect class="fig-chip fig-pink" x="488" y="224" width="24" height="32"/>
+</svg>
+  </div>
+  <p class="body wide fragment rise" style="max-width:64ch; margin-top:12px; font-size:30px">No commons connects to another, or contacts a node: every line starts at a <strong>node</strong>. Your node shares to as many commons as you choose, so <strong>people are the links</strong> between commons.</p>
 </div></section>
 
 <!-- 12 · What happens when you share (step-by-step) -->
@@ -385,6 +436,99 @@
   <span class="kicker">You set the terms</span>
   <h2 class="sm" style="margin-bottom:36px">No landlord.<br/>You hold the rules<span class="dot">.</span></h2>
   <p class="body wide fragment rise" style="max-width:48ch">A <strong>Creative Commons license</strong> says how people may reuse your work. <strong>CC signals</strong> say how AI may learn from it — <strong class="accent-j">Credit</strong>, <strong class="accent-j">Direct contribution</strong>, <strong class="accent-j">Ecosystem</strong>, <strong class="accent-j">Open</strong>. The people who share decide these together, out loud.</p>
+</div></section>
+
+<!-- 17b · Coming soon: collectives in agreement -->
+<section><div class="pad">
+  <span class="kicker">Coming soon</span>
+  <h2 class="sm" style="margin-bottom:6px">Collectives agree terms<span class="dot">.</span></h2>
+  <div class="fig dgfig">
+    <svg class="dg" viewBox="48 216 904 496" aria-hidden="true">
+  <defs><marker id="collectives-head" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head" d="M0 0 L4 2 L0 4 Z"/></marker></defs>
+  <path class="fig-agree" d="M330 300 H670 M750 380 V540 M330 620 H670"/>
+  <path class="fig-line" d="M104 268 H170" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M104 332 H170" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M104 588 H170" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M104 652 H170" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M896 268 H830" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M896 332 H830" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M896 588 H830" marker-end="url(#collectives-head)"/>
+  <path class="fig-line" d="M896 652 H830" marker-end="url(#collectives-head)"/>
+  <rect class="fig-ink" x="68" y="252" width="40" height="40"/><rect class="fig-card" x="64" y="248" width="40" height="40"/>
+  <rect class="fig-ink" x="68" y="316" width="40" height="40"/><rect class="fig-card" x="64" y="312" width="40" height="40"/>
+  <rect class="fig-ink" x="68" y="572" width="40" height="40"/><rect class="fig-card" x="64" y="568" width="40" height="40"/>
+  <rect class="fig-ink" x="68" y="636" width="40" height="40"/><rect class="fig-card" x="64" y="632" width="40" height="40"/>
+  <rect class="fig-ink" x="900" y="252" width="40" height="40"/><rect class="fig-card" x="896" y="248" width="40" height="40"/>
+  <rect class="fig-ink" x="900" y="316" width="40" height="40"/><rect class="fig-card" x="896" y="312" width="40" height="40"/>
+  <rect class="fig-ink" x="900" y="572" width="40" height="40"/><rect class="fig-card" x="896" y="568" width="40" height="40"/>
+  <rect class="fig-ink" x="900" y="636" width="40" height="40"/><rect class="fig-card" x="896" y="632" width="40" height="40"/>
+  <circle class="fig-hub" cx="250" cy="300" r="80"/>
+  <text class="fig-label" x="250" y="306" text-anchor="middle">Collective A</text>
+  <circle class="fig-hub" cx="750" cy="300" r="80"/>
+  <text class="fig-label" x="750" y="306" text-anchor="middle">Collective B</text>
+  <circle class="fig-hub" cx="250" cy="620" r="80"/>
+  <text class="fig-label" x="250" y="626" text-anchor="middle">Collective C</text>
+  <circle class="fig-hub" cx="750" cy="620" r="80"/>
+  <text class="fig-label" x="750" y="626" text-anchor="middle">Collective D</text>
+  <rect class="fig-pill" x="432" y="284" width="136" height="32"/>
+  <text class="fig-agree-label" x="500" y="305" text-anchor="middle">Terms agreed</text>
+  <rect class="fig-pill" x="682" y="444" width="136" height="32"/>
+  <text class="fig-agree-label" x="750" y="465" text-anchor="middle">Terms agreed</text>
+  <rect class="fig-pill" x="432" y="604" width="136" height="32"/>
+  <text class="fig-agree-label" x="500" y="625" text-anchor="middle">Terms agreed</text>
+  <text class="fig-note" x="64" y="400">A's members, each</text>
+  <text class="fig-note" x="64" y="421">on their own node</text>
+</svg>
+  </div>
+  <p class="body wide fragment rise" style="max-width:64ch; margin-top:12px; font-size:30px">Each pair of collectives agrees its own terms, signed by both stewards. <strong>No agreement, no line</strong>: A and D share nothing, though both deal with B.</p>
+</div></section>
+
+<!-- 17c · Coming soon: how two collectives agree -->
+<section><div class="pad">
+  <span class="kicker">Coming soon</span>
+  <h2 class="sm" style="margin-bottom:6px">Each member decides<span class="dot">.</span></h2>
+  <div class="fig dgfig">
+    <svg class="dg" viewBox="48 100 904 616" aria-hidden="true">
+  <defs>
+    <marker id="agree-head" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head" d="M0 0 L4 2 L0 4 Z"/></marker>
+    <marker id="agree-head-jade" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2"><path class="fig-head-jade" d="M0 0 L4 2 L0 4 Z"/></marker>
+  </defs>
+  <path class="fig-lifeline" d="M160 184 V712 M387 184 V712 M613 184 V712 M840 184 V712"/>
+  <rect class="fig-ink" x="78" y="118" width="176" height="72"/>
+  <rect class="fig-card" x="72" y="112" width="176" height="72"/>
+  <text class="fig-label" x="160" y="144" text-anchor="middle">A's members</text>
+  <text class="fig-note" x="160" y="166" text-anchor="middle">on their own nodes</text>
+  <rect class="fig-blue" x="305" y="118" width="176" height="72"/>
+  <rect class="fig-card" x="299" y="112" width="176" height="72"/>
+  <text class="fig-label" x="387" y="144" text-anchor="middle">Collective A</text>
+  <text class="fig-note" x="387" y="166" text-anchor="middle">its commons</text>
+  <rect class="fig-blue" x="531" y="118" width="176" height="72"/>
+  <rect class="fig-card" x="525" y="112" width="176" height="72"/>
+  <text class="fig-label" x="613" y="144" text-anchor="middle">Collective B</text>
+  <text class="fig-note" x="613" y="166" text-anchor="middle">its commons</text>
+  <rect class="fig-ink" x="758" y="118" width="176" height="72"/>
+  <rect class="fig-card" x="752" y="112" width="176" height="72"/>
+  <text class="fig-label" x="840" y="144" text-anchor="middle">B's members</text>
+  <text class="fig-note" x="840" y="166" text-anchor="middle">on their own nodes</text>
+  <path class="fig-line" d="M393 240 H601" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="500" y="228" text-anchor="middle">B reads A's listings</text>
+  <path class="fig-line" d="M607 304 H399" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="500" y="292" text-anchor="middle">B proposes terms, signed</text>
+  <path class="fig-line" d="M381 368 H172" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="273" y="356" text-anchor="middle">A asks each member</text>
+  <path class="fig-line" d="M166 432 H375" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="273" y="420" text-anchor="middle">Each says yes or no</text>
+  <path class="fig-agree-arrow" d="M393 496 H599" marker-end="url(#agree-head-jade)"/>
+  <text class="fig-agree-label" x="500" y="484" text-anchor="middle">Signs for each yes</text>
+  <path class="fig-line" d="M619 560 H828" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="726" y="548" text-anchor="middle">Used only as agreed</text>
+  <path class="fig-line fig-dash" d="M166 624 H375" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="273" y="612" text-anchor="middle">A member withdraws</text>
+  <path class="fig-line fig-dash" d="M393 688 H601" marker-end="url(#agree-head)"/>
+  <text class="fig-tag" x="500" y="676" text-anchor="middle">Next version leaves it out</text>
+</svg>
+  </div>
+  <p class="body wide fragment rise" style="max-width:64ch; margin-top:12px; font-size:30px">A steward can't sign away anyone's work: the agreement covers only <strong>members who said yes</strong>. A withdrawal reaches the other collective the way the listings did. Files stay on members' nodes.</p>
 </div></section>
 
 <!-- 18 · Close -->

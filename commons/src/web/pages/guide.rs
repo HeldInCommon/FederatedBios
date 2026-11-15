@@ -9,7 +9,9 @@
 
 use maud::{html, Markup};
 
-use super::schematics::{figure, FEDERATE_SVG, JOIN_SVG, REACH_SVG, SIDE_BY_SIDE_SVG};
+use super::schematics::{
+    figure, figure_with_phone, FEDERATE_SVG, JOIN_NARROW_SVG, JOIN_SVG, REACH_SVG, SIDE_BY_SIDE_SVG,
+};
 
 /// Asks the app to open (starting it if needed) the local commons (called
 /// `practice` in links and code, its first name).
@@ -39,7 +41,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
 
             h2 class="section-h" { "Who runs one, and what do they do?" }
             p { "Whoever hosts it is its " strong { "steward" } ". The steward decides who gets listed: a newcomer appears once a member vouches for them or the steward approves them. The steward can also make invite codes to send to people. The very first person needs a " strong { "founding invite" } ", which the commons shows its steward until someone uses it. That first person can be you." }
-            (figure(JOIN_SVG, html! { "How someone gets listed: they share, wait on the commons' list, and are listed once a " strong { "member vouches" } " for them or the " strong { "steward approves" } " them." }))
+            (figure_with_phone(JOIN_SVG, JOIN_NARROW_SVG, html! { "How someone gets listed: they share, wait on the commons' list, and are listed once a " strong { "member vouches" } " for them or the " strong { "steward approves" } " them." }))
 
             h2 class="section-h" { "Do I give up my node?" }
             p { "No. The desktop app can run your node and a commons side by side on this computer, each with its own folder. Your profile, your keys and your sign-in stay on your node. You can even share your own profile to the commons you run, like anyone else would. Move between them from " strong { "This computer" } " in the app's sidebar or the buttons in the corner of the window." }

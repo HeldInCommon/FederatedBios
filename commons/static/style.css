@@ -1013,8 +1013,11 @@ a.rail-foot {
   line-height: 1.65;
 }
 
-/* How this works: diagrams drawn after the workshop slides. The SVG names
-   its parts with classes; the colours come from the tokens here. */
+/* How this works and Run a commons: the diagrams (schematics.rs). The SVG
+   names its parts with classes; every colour comes from the tokens here.
+   One vocabulary: a square card on a hard shadow is a node, a circle is a
+   commons, colour lives in shapes and never in words, and lines are solid
+   ink with one arrowhead. */
 .schematic {
   margin: var(--space-5) 0 var(--space-6);
 }
@@ -1031,19 +1034,63 @@ a.rail-foot {
   height: auto;
 }
 
-.fig-line,
-.fig-spokes {
+/* The frame lets a diagram scroll sideways on a phone (see Small screens)
+   rather than shrink its words below reading size. `contain: inline-size`
+   stops the diagram's minimum width from widening the page itself. */
+.fig-frame {
+  overflow-x: auto;
+  contain: inline-size;
+}
+
+/* A diagram drawn twice: the narrow drawing only shows on phones. */
+.fig-narrow {
+  display: none;
+}
+
+/* Lines: solid ink, 3px, one arrowhead; dashed is a shortcut or later. */
+.fig-line {
   fill: none;
   stroke: var(--ink);
-  stroke-width: 2.5;
-  opacity: 0.32;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.fig-spokes {
-  stroke: var(--blue);
-  opacity: 0.55;
+.fig-dash {
+  stroke-dasharray: 6 6;
 }
 
+.fig-head {
+  fill: var(--ink);
+}
+
+/* A sequence's time lines: faint, so the messages across them lead. */
+.fig-lifeline {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 3;
+  stroke-dasharray: 4 8;
+  stroke-linecap: round;
+}
+
+/* Agreements between collectives (coming soon): jade, heavier. */
+.fig-agree,
+.fig-agree-arrow {
+  fill: none;
+  stroke: var(--jade);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.fig-agree {
+  stroke-dasharray: 10 8;
+}
+
+.fig-head-jade {
+  fill: var(--jade);
+}
+
+/* Fills: the hard shadows under cards, and the tones of chips. */
 .fig-ink {
   fill: var(--ink);
 }
@@ -1060,46 +1107,64 @@ a.rail-foot {
   fill: var(--jade);
 }
 
-.fig-violet {
-  fill: var(--violet);
+.fig-paper {
+  fill: var(--surface);
 }
 
-/* Boxes are nodes, the ring is the commons. */
-.fig-box,
-.fig-ring,
-.fig-hub {
+/* A node: a square card with an ink edge, on one of the shadows above. */
+.fig-card {
   fill: var(--surface);
   stroke: var(--ink);
-  stroke-width: 4;
+  stroke-width: 2;
 }
 
-.fig-box-pink {
-  stroke: var(--pink);
+/* Something planned: dashed, with no shadow. */
+.fig-planned {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
 }
 
-.fig-box-blue {
+/* A signed copy: a small tab with an ink edge. */
+.fig-chip {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+/* A commons: a circle with a blue edge; violet for a local one. */
+.fig-hub {
+  fill: var(--surface);
   stroke: var(--blue);
+  stroke-width: 5;
 }
 
-.fig-box-violet {
+.fig-hub-violet {
   stroke: var(--violet);
+}
+
+/* A group (this computer, your node): a sunk band behind the cards. */
+.fig-band {
+  fill: var(--surface-sunk);
+}
+
+/* "Terms agreed" on an agreement line. */
+.fig-pill {
+  fill: var(--surface);
+  stroke: var(--jade);
+  stroke-width: 2;
 }
 
 /* The reach rings, widest first (online, local, your node). */
 .fig-ring-jade,
-.fig-ring-blue,
 .fig-ring-violet,
 .fig-ring-pink {
   fill: none;
-  stroke-width: 5;
+  stroke-width: 6;
 }
 
 .fig-ring-jade {
   stroke: var(--jade);
-}
-
-.fig-ring-blue {
-  stroke: var(--blue);
 }
 
 .fig-ring-violet {
@@ -1110,40 +1175,32 @@ a.rail-foot {
   stroke: var(--pink);
 }
 
-.fig-hub {
-  stroke: var(--blue);
-  stroke-width: 5;
-}
-
-.fig-ring {
-  fill: none;
-}
-
+/* Words, in sentence case. SVG text sizes are in the drawing's own units,
+   so they scale with the diagram: 20 units is about 13px in the page column. */
 .fig-label {
-  font: 700 21px var(--font-mono);
+  font: 700 20px var(--font-text);
   fill: var(--ink);
 }
 
 .fig-note {
-  font: 18px var(--font-text);
+  font: 17px var(--font-text);
   fill: var(--text-muted);
 }
 
-/* Coloured labels use the darker inks, so they read on white. */
-.fig-jade-text {
+.fig-band-label {
+  font: 700 17px var(--font-text);
+  fill: var(--text-muted);
+}
+
+.fig-tag {
+  font: 16px var(--font-text);
+  fill: var(--ink);
+}
+
+/* Jade words use the darker jade ink, so they read on white. */
+.fig-agree-label {
+  font: 700 16px var(--font-text);
   fill: var(--jade-ink);
-}
-
-.fig-pink-text {
-  fill: var(--pink);
-}
-
-.fig-blue-text {
-  fill: var(--blue);
-}
-
-.fig-violet-text {
-  fill: var(--violet-ink);
 }
 
 /* Reach: who can see a profile. Each reach has a --tone. */
@@ -2704,6 +2761,20 @@ a.rail-foot {
 }
 
 @media (max-width: 640px) {
+  /* Diagrams keep their words readable: at least 640px wide (labels about
+     14px), scrolling sideways inside their frame. */
+  .fig-frame .fig {
+    min-width: 640px;
+  }
+
+  .fig-wide {
+    display: none;
+  }
+
+  .fig-narrow {
+    display: block;
+  }
+
   .name-row,
   .vouch-row {
     grid-template-columns: 1fr;
