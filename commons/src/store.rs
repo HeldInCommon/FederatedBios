@@ -19,6 +19,7 @@
 //!   stories/<keyid>-<id>.json stories shared in from other nodes (commons)
 //!   story-tombstones/<keyid>-<id>.json what remains after a story is withdrawn (commons)
 //!   story-cards/<keyid>-<id>.json "Only while I'm here" cards: no text (commons)
+//!   terms/<time>-<random>.json terms people chose to send for research (commons, decision record 0029)
 //! ```
 //!
 //! Every write is atomic: the data goes to a temporary file in the same
@@ -119,6 +120,7 @@ impl Store {
             "stories",
             "story-tombstones",
             "story-cards",
+            "terms",
         ] {
             std::fs::create_dir_all(root.join(sub))?;
         }
@@ -355,6 +357,18 @@ impl Store {
             self.delete_story_card(author, &c.card.id)?;
         }
         Ok(())
+    }
+
+    // ---- terms sent for research (commons, decision record 0029) -----------
+
+    /// Write one gift of terms to `terms/<received_at>-<random>.json`, a new
+    /// file each time (never overwriting), and return its path. The random
+    /// part keeps two gifts in the same second apart.
+    pub fn save_terms_gift(&self, g: &crate::research::ReceivedGift) -> Result<PathBuf, StoreError> {
+        let name = format!("{}-{}.json", g.received_at, crate::sessions::random_hex(8));
+        let path = self.root.join("terms").join(name);
+        Self::write(&path, g)?;
+        Ok(path)
     }
 
     // ---- "Only while I'm here" cards (decision record 0021) ----------------

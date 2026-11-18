@@ -31,6 +31,10 @@ pub struct Config {
     /// `HIC_SHARE_DEFAULT_NAME`: what to call that commons on pages
     /// ("Held in Common Collective Commons"), instead of its address.
     pub share_default_name: String,
+    /// `HIC_RESEARCH_URL`: where a node sends the terms people choose to
+    /// share for research (decision record 0029). Empty: the default online
+    /// commons ([`Config::share_default`]) instead.
+    pub research_url: String,
     /// `HIC_SHARE_NEARBY`: on a node, the commons the desktop app runs on this
     /// same computer, offered as one-click shares: comma separated
     /// `address=name` pairs (`http://127.0.0.1:8180=spark`). Their
@@ -168,6 +172,7 @@ impl Config {
             instance: get("HIC_INSTANCE").unwrap_or_else(|| "Held in Common".into()),
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
+            research_url: get("HIC_RESEARCH_URL").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             share_nearby: parse_nearby(&get("HIC_SHARE_NEARBY").unwrap_or_default()),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
@@ -247,6 +252,12 @@ impl Config {
     /// leave a local node stuck in a sign-in loop.
     pub fn secure_cookie(&self) -> bool {
         self.base_url.starts_with("https://")
+    }
+
+    /// Where this node sends terms people choose to share for research
+    /// (decision record 0029), if anywhere. See [`crate::research::destination`].
+    pub fn research_destination(&self) -> Option<&str> {
+        crate::research::destination(&self.research_url, &self.share_default)
     }
 
     /// Which addresses this server may contact when a member asks it to

@@ -54,6 +54,7 @@ Writes happen in clearly named places that say what they change.
 | `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `held_signals.rs` | Held in Common Signals (decision record 0025): withdraw even after training, and own terms for AI; read from the form (1,000-character limit) and, strictly, from a signed `ProfileV2` or `StoryV2`. | yes |
+| `research.rs` | Sharing terms for research (decision record 0029): the `TermsGift` (terms and choices, how the person describes themselves; never their handle or story), read from the rights form, checked on a commons. | yes |
 | `handle.rs` | What a handle may contain (also guards file names). | yes |
 | `form.rs` | Parse form posts (keeps repeated keys). | yes |
 | `sessions.rs` | Sessions (expire after 24 h) and the sign-in attempt limit. | cookie helpers yes |
@@ -65,6 +66,7 @@ Writes happen in clearly named places that say what they change.
 | `web/handlers/share.rs` | Sharing to and withdrawing from a commons; sending to a commons' inbox. | no |
 | `web/handlers/steward.rs` | The steward view of a commons: open it, approve, decline, make invites. | no |
 | `web/handlers/membership.rs` | Bringing people in: invite codes and vouches (the People tab's Vouch buttons post here). | no |
+| `web/handlers/research.rs` | `POST /research/terms` on a commons (keeps each gift as a file in `terms/`), and sending a gift from a node. | no |
 | `web/handlers/waiting_list.rs` | `POST /api/waiting` on a commons: who is waiting for a vouch, for a listed member's signed request only. | no |
 | `web/pages/owner_people.rs` | The People tab: who is waiting on each commons, with Vouch buttons; invite someone; vouch by handle and key. | yes |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |

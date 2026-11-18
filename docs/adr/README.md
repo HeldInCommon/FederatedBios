@@ -42,5 +42,6 @@ Statuses: **Accepted** (in place), **Accepted, to build**, **Deferred**,
 | [0026](0026-vouch-with-a-click.md) | Vouching with a click; only listed members see who is waiting | Accepted (built) | 2026-11-12 |
 | [0027](0027-open-to-the-room.md) | Open to the room: a door on a node, a room code, closed by default | Accepted (built) | 2026-11-13 |
 | [0028](0028-online-commons-without-hard-coding.md) | Setting up an online commons from the app (any address, checked); the Go menu in the page | Accepted (built) | 2026-11-13 |
+| [0029](0029-share-terms-for-research.md) | Sharing a story's terms for research: opt in each time, the terms and never the person | Accepted (built) | 2026-11-18 |
 
 Background for the 2026 decisions: [the November 2026 code review](../REVIEW-2026-11.md).

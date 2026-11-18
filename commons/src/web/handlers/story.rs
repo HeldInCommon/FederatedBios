@@ -34,6 +34,18 @@ pub struct DoneQ {
     pub done: Option<String>,
     /// The commons' host, for shared and withdrawn (checked before it's shown).
     pub at: Option<String>,
+    /// `sent` or `not-sent`: what happened to terms shared for research
+    /// (decision record 0029).
+    pub research: Option<String>,
+}
+
+/// What happened to terms shared for research, for `q`, if it says. Pure.
+fn research_note(q: &DoneQ) -> Option<pages::ResearchNote> {
+    match q.research.as_deref() {
+        Some("sent") => Some(pages::ResearchNote::Sent),
+        Some("not-sent") => Some(pages::ResearchNote::NotSent),
+        _ => None,
+    }
 }
 
 /// The confirmation to show for `q`, if it's one we send: a known outcome
@@ -83,6 +95,7 @@ pub async fn own_story(
                 .iter()
                 .filter_map(|c| st.links.status(c, &s.story.handle).map(|link| (c.clone(), link)))
                 .collect(),
+            research: research_note(&q),
         }),
         _ => None,
     };

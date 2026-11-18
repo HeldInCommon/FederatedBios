@@ -22,6 +22,7 @@
 //! | `about.rs` | `GET /about`, `GET /run-a-commons` |
 //! | `account.rs` | recovery key, replacing and recovering a key |
 //! | `membership.rs` | invite codes and vouches, from a member's node (`POST /invite`, `POST /vouch`) |
+//! | `research.rs` | sharing terms for research: `POST /research/terms` on a commons, and sending there from a node |
 //! | `waiting_list.rs` | `POST /api/waiting`: a commons shows its members who is waiting for a vouch |
 //! | `room.rs` | open to the room: `GET /room` (the owner's QR code), `GET /room/check`, `GET /room/help` |
 //! | `steward.rs` | the steward view of a commons |
@@ -47,6 +48,7 @@ mod inbox;
 mod notices;
 mod profile;
 mod publish;
+mod research;
 mod room;
 mod share;
 mod signin;
@@ -69,6 +71,7 @@ pub(crate) use inbox::list_entry_response;
 pub use notices::{check_waiting, dismiss_notices};
 pub use profile::profile;
 pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
+pub use research::receive_terms;
 pub use room::{join_room, room, room_check, room_help};
 pub(crate) use share::{post_to_commons, post_to_commons_at, send_share};
 pub use share::{share, withdraw};

@@ -294,6 +294,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_ALSO_KNOWN_AS` | — | Other addresses it is reached at, comma separated (e.g. a room commons that is also public through Tailscale Funnel). Invites, vouches and withdrawals made for them count as addressed here. The app sets it from `public_address` in `app.json`. |
 | `HIC_SHARE_DEFAULT` | *(blank)* | The commons a node offers first |
 | `HIC_SHARE_DEFAULT_NAME` | *(blank)* | What pages call that commons ("Held in Common Collective Commons") instead of its address |
+| `HIC_RESEARCH_URL` | *(blank: `HIC_SHARE_DEFAULT`)* | Where a node sends terms people choose to share for research (ADR 0029); with neither set, the option isn't offered |
 | `HIC_VOUCH_LIMIT` | `5` | People one member may bring in per week |
 | `HIC_OPEN_COMMONS` | *(off)* | `1`: no vouching |
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |

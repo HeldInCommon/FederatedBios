@@ -5,6 +5,7 @@ use maud::{html, Markup};
 
 use super::parts::{page_head, section_label, terms_panel, Chosen};
 use super::rights::{how_it_travels, rights_fields, RightsFor};
+use crate::research::ABOUT_YOU_MAX;
 use crate::story::{Story, Travel, PROMPT, TEXT_MAX, TITLE_MAX};
 use crate::web::layout::host_label;
 
@@ -68,7 +69,9 @@ pub fn write_form(me: &str, csrf: &str, editing: Option<&Story>) -> Markup {
 /// Step two: who can read it, its licence, signals and Held in Common
 /// Signals, how it travels (`travel`, the story's current choice); then
 /// share it to `share_to` (the commons suggested for this member) or keep it.
-pub fn rights_form(s: &Story, travel: Travel, csrf: &str, share_to: Option<&str>) -> Markup {
+/// `research_to` is what to call where terms shared for research go
+/// (decision record 0029), never its address; `None` leaves the option out.
+pub fn rights_form(s: &Story, travel: Travel, csrf: &str, share_to: Option<&str>, research_to: Option<&str>) -> Markup {
     html! {
         (page_head(
             &format!("Story \u{b7} {}", s.title),
@@ -78,6 +81,7 @@ pub fn rights_form(s: &Story, travel: Travel, csrf: &str, share_to: Option<&str>
         form method="post" action={ "/story/" (s.id) "/rights" } class="stack-form rights-form" {
             input type="hidden" name="csrf" value=(csrf);
             (rights_fields(RightsFor::Story, &Chosen::of_story(s)))
+            @if let Some(to) = research_to { (share_for_research(to)) }
             (how_it_travels(travel))
             (section_label("What travels with every copy", None))
             (terms_panel(&Chosen::of_story(s), true))
@@ -94,6 +98,39 @@ pub fn rights_form(s: &Story, travel: Travel, csrf: &str, share_to: Option<&str>
             }
         }
         script src="/rights.js" {}
+    }
+}
+
+/// The offer to share these terms for research (decision record 0029),
+/// right under "Your terms for AI, in your own words". Never ticked when the
+/// page loads: each save that sends is one the person chose. `to` is what
+/// to call where the terms go ("Held in Common Collective Commons node"),
+/// not its address.
+fn share_for_research(to: &str) -> Markup {
+    html! {
+        div class="rights-step" {
+            div class="choice-panel" {
+                label class="choice" {
+                    span class="choice-head" {
+                        input type="checkbox" name="research" value="yes" aria-describedby="research_hint";
+                        span class="choice-title" { "Share these terms with the Held in Common project for research" }
+                    }
+                    span class="choice-body" id="research_hint" {
+                        "We're learning how people set terms for their work. When you save, a copy of your terms for AI and the choices above (who can see it, licence, signals, and how it travels) goes to the "
+                        (to)
+                        ". We're only interested in the terms, not your data: your handle, your name, and your story's title and words are never sent. Tick it again whenever you want to send a new copy."
+                    }
+                }
+            }
+            div class="field" {
+                label class="field-label" for="about_you" { "If you share: how would you describe yourself?" }
+                input id="about_you" name="about_you" type="text" maxlength=(ABOUT_YOU_MAX) aria-describedby="about_you_hint"
+                    placeholder="For example: an artist sharing work with a collaborator";
+                p class="hint" id="about_you_hint" {
+                    "In terms of how you might use Held in Common: for example, an artist sharing work with a collaborator, or a member of a local art collective. Only sent if you tick the box above."
+                }
+            }
+        }
     }
 }
 
@@ -119,11 +156,11 @@ mod tests {
 
     #[test]
     fn the_rights_step_ends_in_sharing_to_the_room() {
-        let m = rights_form(&story(), Travel::Copy, "c", Some("http://room:8081")).into_string();
+        let m = rights_form(&story(), Travel::Copy, "c", Some("http://room:8081"), None).into_string();
         assert!(m.contains("Share to the room") && m.contains("Keep it on this computer for now"));
         assert!(m.contains("Sharing to room:8081") && m.contains("How it travels"));
         assert!(m.contains("value=\"commons\" data-label=\"Listed in the commons\" checked"));
-        let alone = rights_form(&story(), Travel::Copy, "c", None).into_string();
+        let alone = rights_form(&story(), Travel::Copy, "c", None, None).into_string();
         assert!(!alone.contains("Share to the room") && alone.contains("first share your profile"));
     }
 }
