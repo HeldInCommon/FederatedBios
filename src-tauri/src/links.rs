@@ -232,6 +232,17 @@ pub fn switcher_js(places: &[Place], actions: &[crate::go_menu::SidebarItem]) ->
     }});
     slot.hidden=!places.length&&!actions.length;
     var label=document.getElementById('hic-servers-label'); if(label){{label.hidden=false;}}
+    // On a commons: "Your node" in the main nav too, beside the card in the
+    // rail, so the way back to your node is where people look first. Only
+    // this window gets it, never a visitor arriving over the network.
+    var oldNav=document.getElementById('hic-node-nav'); if(oldNav){{oldNav.remove();}}
+    var node=places.filter(function(p){{return p.kind==='node';}})[0];
+    var nav=document.querySelector('nav.topbar-links');
+    if(node&&nav){{
+      var link=el('a','','Your node'); link.id='hic-node-nav'; link.href=node.url;
+      var about=nav.querySelector('a[href="/about"]');
+      if(about){{nav.insertBefore(link,about);}}else{{nav.appendChild(link);}}
+    }}
     return;
   }}
   if(!places.length||!document.body){{return;}}
@@ -397,5 +408,13 @@ mod tests {
         );
         assert!(!js.contains("innerHTML"), "names are set as text, never as markup");
         assert!(switcher_js(&[], &[]).contains("places=[]"));
+    }
+
+    #[test]
+    fn on_a_commons_your_node_is_also_in_the_main_nav() {
+        let js = switcher_js(&[], &[]);
+        assert!(js.contains("'Your node'") && js.contains("nav.topbar-links"), "a nav link to the node");
+        assert!(js.contains("p.kind==='node'"), "only when there's a node to go back to");
+        assert!(js.contains("getElementById('hic-node-nav')"), "running it again replaces it");
     }
 }

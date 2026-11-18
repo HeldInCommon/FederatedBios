@@ -328,16 +328,12 @@ fn rail_foot(site: &Site, place: Place) -> Markup {
                 @if place == Place::OnThisWifi { " " (ADDRESS_CAN_CHANGE) }
             }
         } @else if !site.share_default.is_empty() {
-            // Coming soon: the online commons is offline for now, so this
-            // isn't a link. To bring the link back, make this an
-            // `a class="btn-solid rail-go" href=(site.share_default)` saying
-            // "Go to the …" with " \u{2197}", and drop the "Coming soon" tag.
+            // The address can be a long Tailscale name: the button says
+            // where it goes instead (HIC_SHARE_DEFAULT_NAME).
             div class="rail-go-wrap" {
-                p class="rail-go is-soon" {
-                    span class="rail-go-name" {
-                        @if site.share_default_name.is_empty() { "The online commons" } @else { "The " (site.share_default_name) }
-                    }
-                    span class="rail-go-tag" { "Coming soon" }
+                a class="btn-solid rail-go" href=(site.share_default) {
+                    @if site.share_default_name.is_empty() { "Go to the commons" } @else { "Go to the " (site.share_default_name) }
+                    " \u{2197}"
                 }
                 p class="rail-go-note" { "An online commons, hosted elsewhere. Your node and your originals stay on this computer." }
             }
@@ -753,9 +749,9 @@ mod tests {
             ..site(Role::Node)
         };
         let page = frame(&named, &Page::new("t", None, html! {})).into_string();
-        // Coming soon: named, but not a link while it's offline.
-        assert!(page.contains("The Held in Common Collective Commons") && page.contains("Coming soon"));
-        assert!(!page.contains(r#"href="https://hic.example.ts.net""#), "no link to it for now");
+        assert!(page.contains("Go to the Held in Common Collective Commons"));
+        assert!(page.contains(r#"href="https://hic.example.ts.net""#), "the button links to the online commons");
+        assert!(!page.contains("Coming soon"));
         assert!(!page.contains(">hic.example.ts.net<"), "the address isn't shown as text");
         let local = Site {
             practice: true,

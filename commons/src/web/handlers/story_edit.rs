@@ -8,6 +8,7 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
 
+use super::research::send_terms_gift;
 use super::story::{authors_story, known_commons_for, owned_story, share_story_to, update_story};
 use super::{authorised_as, session};
 use crate::app::Shared;
@@ -15,6 +16,7 @@ use crate::form::Form;
 use crate::governance::DEFAULT_LICENSE;
 use crate::held_signals::HeldSignals;
 use crate::now;
+use crate::research;
 use crate::sessions;
 use crate::story::{self, OwnStory, Travel, TEXT_MAX, TITLE_MAX};
 use crate::web::layout::{error_page, host_label, not_found, redirect, render, server_error, Page, Section};
@@ -148,7 +150,10 @@ pub async fn rights_form(State(st): State<Shared>, Path(id): Path<String>, heade
         Err(resp) => return *resp,
     };
     let suggested = known_commons_for(&st, &rec).into_iter().next();
-    let body = pages::rights_form(&s.story, s.travel, &sess.csrf, suggested.as_deref());
+    // Where terms shared for research go, by name, never by address (ADR 0029).
+    let research_name =
+        st.config.research_destination().map(|_| research::destination_name(&st.config.share_default_name));
+    let body = pages::rights_form(&s.story, s.travel, &sess.csrf, suggested.as_deref(), research_name.as_deref());
     render(&st.site, Page::new("Who can read it", Some(&sess.handle), body).at(Section::Stories))
 }
 
@@ -172,6 +177,21 @@ pub async fn rights_submit(
         Err(why) => return error_page(&st.site, why),
     };
     let terms = s.story.with_terms(&f.one("visibility"), &f.one("license"), &f.many("signals"), held);
+    // The gift of terms for research, if they agreed (decision record 0029),
+    // worked out before anything is saved so a too-long self-description
+    // changes nothing. It holds the terms just chosen, never the story.
+    let gift = match research::gift_from_form(
+        &f.one("research"),
+        &f.one("about_you"),
+        &terms.held_signals,
+        terms.reach(),
+        &terms.license,
+        &terms.signals,
+        Travel::from_form(&f.one("travel")),
+    ) {
+        Ok(g) => g,
+        Err(why) => return error_page(&st.site, why),
+    };
     let s = if terms == s.story {
         s
     } else {
@@ -196,8 +216,22 @@ pub async fn rights_submit(
         }
         s.with_travel(travel)
     };
+    // Sharing the terms for research (decision record 0029), if they ticked
+    // the box: only the terms and choices just saved, and how they describe
+    // themselves. Saving has already happened, so a failure here only
+    // changes what the story's page says.
+    let research_note = match (&gift, st.config.research_destination()) {
+        (Some(g), Some(to)) => match send_terms_gift(&st, to, g).await {
+            Ok(()) => "&research=sent",
+            Err(e) => {
+                eprintln!("warning: couldn't send terms for research: {e}");
+                "&research=not-sent"
+            }
+        },
+        _ => "",
+    };
     if f.one("action") != "share" {
-        return redirect(&format!("/story/{id}?done=saved"));
+        return redirect(&format!("/story/{id}?done=saved{research_note}"));
     }
     // Only to a commons this member is offered, never one a form makes up.
     let commons = f.one("commons_url").trim_end_matches('/').to_string();
@@ -205,7 +239,7 @@ pub async fn rights_submit(
         return error_page(&st.site, "Share your profile to that commons first.");
     }
     match share_story_to(&st, s, &rec, &commons).await {
-        Ok(taken) => redirect(&format!("/story/{id}?done={}&at={}", taken.done(), host_label(&commons))),
+        Ok(taken) => redirect(&format!("/story/{id}?done={}&at={}{research_note}", taken.done(), host_label(&commons))),
         Err(e) => error_page(&st.site, &e),
     }
 }

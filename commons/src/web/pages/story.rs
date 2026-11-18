@@ -27,6 +27,34 @@ pub enum StoryOutcome {
     Saved,
 }
 
+/// What happened to terms the author chose to share for research
+/// (decision record 0029), shown once beside the outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResearchNote {
+    /// The project kept a copy of the terms.
+    Sent,
+    /// The terms were saved here, but couldn't reach the project.
+    NotSent,
+}
+
+/// The line that says what happened to the terms shared for research.
+fn research_block(note: ResearchNote) -> Markup {
+    match note {
+        ResearchNote::Sent => html! {
+            section class="flash flash-done" role="status" {
+                p class="flash-label" { "Shared for research" }
+                p { strong { "Thank you." } " The Held in Common project has a copy of your terms and choices, without your handle, your name or your story." }
+            }
+        },
+        ResearchNote::NotSent => html! {
+            section class="flash flash-withdrawn" role="status" {
+                p class="flash-label" { "Not shared for research" }
+                p { strong { "Your terms are saved here, but couldn't reach the Held in Common project." } " Nothing was sent. Tick the box and save again later to try once more." }
+            }
+        },
+    }
+}
+
 /// What the author sees beside their own story.
 pub struct StoryOwner {
     /// The session's CSRF token, for the forms.
@@ -37,6 +65,9 @@ pub struct StoryOwner {
     /// node's connection to it (see `crate::relay_node`). Missing: not
     /// connected yet.
     pub links: BTreeMap<String, Link>,
+    /// What happened to terms they just chose to share for research, if
+    /// anything (decision record 0029).
+    pub research: Option<ResearchNote>,
 }
 
 /// What the author is told about a card's connection to a commons: whether
@@ -132,6 +163,7 @@ pub fn own_story(s: &OwnStory, owner: Option<&StoryOwner>, done: Option<&StoryOu
     let st = &s.story;
     html! {
         @if let Some(d) = done { (outcome_block(d, s)) }
+        @if let Some(note) = owner.and_then(|o| o.research) { (research_block(note)) }
         div class="story-layout" {
             article class="story-main" {
                 p class="eyebrow" { "Your story" }
@@ -292,7 +324,12 @@ mod tests {
 
     /// The author's view, offering these commons.
     fn owner(known: &[&str]) -> StoryOwner {
-        StoryOwner { csrf: "c".into(), known: known.iter().map(|k| k.to_string()).collect(), links: BTreeMap::new() }
+        StoryOwner {
+            csrf: "c".into(),
+            known: known.iter().map(|k| k.to_string()).collect(),
+            links: BTreeMap::new(),
+            research: None,
+        }
     }
 
     #[test]

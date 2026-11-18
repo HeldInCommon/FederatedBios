@@ -68,7 +68,7 @@ pub use room::{join_room, room, room_check, room_help, RoomView};
 pub use sharing::{shared, shared_pending, vouch_outcome, withdrawn};
 pub use signin::{commons_gate, join_form, login_form};
 pub use stories::{author_stories, commons_stories, node_stories};
-pub use story::{held_story, own_story, StoryOutcome, StoryOwner};
+pub use story::{held_story, own_story, ResearchNote, StoryOutcome, StoryOwner};
 pub use story_form::{rights_form, write_form};
 
 /// Where a shared profile says it came from, for people to read: its

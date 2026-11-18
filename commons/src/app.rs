@@ -228,6 +228,7 @@ pub fn router(state: Shared) -> Router {
         .route("/federated/{kid}", get(handlers::federated))
         // Federation
         .route("/inbox", post(handlers::inbox))
+        .route("/research/terms", post(handlers::receive_terms))
         // "Only while I'm here" (decision record 0021): nodes open these; nothing opens a node.
         .route("/here/card", post(handlers::here_card))
         .route("/here/poll", post(handlers::here_poll))

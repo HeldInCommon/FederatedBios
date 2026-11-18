@@ -42,6 +42,7 @@
 //! | [`form`] | parsing form posts | none |
 //! | [`text_links`] | finding web links in a story's text, for display | none |
 //! | [`here`] | "Only while I'm here": the signed card and poll, and a commons' rules for them | none |
+//! | [`research`] | what a person may send for research: their terms, never their data (decision record 0029) | none |
 //! | [`relay`] | a commons' readers waiting for an author's node, and who is here | in-memory state |
 //! | [`relay_node`] | a node's outgoing connection to each commons holding its cards | asks commons; in-memory status |
 //! | [`web`] | HTML pages (pure rendering) and the request handlers | handlers only |
@@ -75,6 +76,7 @@ pub mod ramp;
 pub mod ratelimit;
 pub mod relay;
 pub mod relay_node;
+pub mod research;
 pub mod role;
 pub mod room;
 pub mod sessions;
