@@ -785,29 +785,6 @@ a.rail-foot:hover {
   font-size: var(--text-sm);
 }
 
-/* Coming soon: the online commons is offline for now, so it is named but
-   not a link: a dashed outline, and a tag that says so in words. */
-.rail-go.is-soon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 2px dashed var(--faint);
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.rail-go-tag {
-  padding: 2px var(--space-2);
-  background: var(--ink);
-  color: var(--white);
-  font: 700 var(--text-2xs) var(--font-mono);
-  letter-spacing: var(--track);
-  text-transform: uppercase;
-}
-
 /* Says the commons is somewhere else, not on this computer. */
 .rail-go-note {
   margin: 0;

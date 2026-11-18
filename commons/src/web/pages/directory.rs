@@ -99,12 +99,9 @@ fn signed_in_actions(m: &SignedIn) -> Markup {
                 }
                 YourNext::ChooseCommons => { a class="primary" href={ "/@" (h) "?tab=sharing" } { "Share your profile to a commons" } }
                 YourNext::Waiting(c) => { a class="primary" href={ "/@" (h) } { "Waiting to be listed on " (host_label(c)) } }
-                // Hidden for now: the "See your profile on <commons> ↗" link
-                // out to the commons is switched off, so a listed member gets
-                // their own profile page here instead. `your_next` still
-                // works out `commons` and `profile_url`, so turning the link
-                // back on is one line in this arm.
-                YourNext::Listed { .. } => { a class="primary" href={ "/@" (h) } { "Your profile" } }
+                YourNext::Listed { commons, profile_url } => {
+                    a class="primary" href=(profile_url) { "See your profile on " (host_label(commons)) " \u{2197}" }
+                }
                 YourNext::Private => { a class="primary" href={ "/@" (h) } { "Your profile" } }
             }
             a class="secondary-link" href="/join" { "Create another profile for a new commons" }
@@ -313,15 +310,14 @@ mod tests {
     }
 
     #[test]
-    fn a_listed_member_is_not_sent_off_to_the_commons_for_now() {
+    fn a_listed_member_is_offered_their_profile_on_the_commons() {
         let next = YourNext::Listed {
             commons: "https://heldincommon.example.ts.net".into(),
             profile_url: "https://heldincommon.example.ts.net/federated/k".into(),
         };
         let m = SignedIn { handle: "ada".into(), csrf: "c".into(), next };
         let html = signed_in_actions(&m).into_string();
-        assert!(!html.contains("See your profile on"), "the link out is hidden");
-        assert!(!html.contains("/federated/k"), "nothing links to the commons' copy");
-        assert!(html.contains(r#"href="/@ada""#), "their own profile page instead");
+        assert!(html.contains("See your profile on"), "the link out to the commons");
+        assert!(html.contains(r#"href="https://heldincommon.example.ts.net/federated/k""#));
     }
 }
