@@ -10,7 +10,7 @@ use crate::app::{AppState, Shared};
 use crate::form::Form;
 use crate::model::HandleRec;
 use crate::vouch_list::{self, VouchResult};
-use crate::web::handlers::{authorised_as, post_to_commons};
+use crate::web::handlers::{authorised_as, post_to_commons, read_reply};
 use crate::web::layout::{error_page, host_label, render, server_error, Page};
 use crate::web::pages;
 use crate::{handle, now, outbound, vouching};
@@ -122,8 +122,8 @@ pub async fn vouch(State(st): State<Shared>, headers: HeaderMap, body: String) -
     let result = match post_to_commons(&st, &commons, &msg).await {
         Ok(r) => {
             let status = r.status().as_u16();
-            let text = r.text().await.unwrap_or_default();
-            vouch_list::vouch_result(status, &text, &who, &commons)
+            let answer = read_reply(r).await;
+            vouch_list::vouch_result(status, &answer, &who, &commons)
         }
         Err(e) => VouchResult::Refused(e),
     };

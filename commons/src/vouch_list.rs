@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::{AppState, Shared};
 use crate::model::{HandleRec, PendingShare};
+use crate::reply::CommonsReply;
 use crate::web::layout::host_label;
 use crate::{handle, now, outbound, vouching};
 
@@ -200,14 +201,17 @@ pub enum VouchResult {
     Refused(String),
 }
 
-/// Turn a commons' answer to a vouch for `@who` (its HTTP status and text)
-/// into what to tell the member. Pure.
-pub fn vouch_result(status: u16, text: &str, who: &str, commons: &str) -> VouchResult {
+/// Turn a commons' answer to a vouch for `@who` (its HTTP status and what it
+/// said, see [`crate::reply`]) into what to tell the member. Pure.
+pub fn vouch_result(status: u16, answer: &CommonsReply, who: &str, commons: &str) -> VouchResult {
     let place = host_label(commons);
     if (200..300).contains(&status) {
         return VouchResult::Listed;
     }
+    let text = answer.text();
     let why = match status {
+        // Not a commons at all: say so, rather than quote a web page.
+        _ if *answer == CommonsReply::NotACommons => answer.reason_for(&place),
         404 => format!(
             "@{who} isn't waiting on {place} any more. Someone may already have vouched for them, or the steward may have declined them."
         ),
@@ -229,6 +233,7 @@ pub fn vouch_result(status: u16, text: &str, who: &str, commons: &str) -> VouchR
 mod tests {
     use super::*;
     use crate::model::{Profile, RemoteEntry};
+    use crate::reply;
 
     /// A full-looking key made of one repeated hex digit.
     fn key(c: char) -> String {
@@ -315,8 +320,10 @@ mod tests {
     #[test]
     fn a_vouch_answer_is_said_in_plain_words() {
         let c = "http://room:8081";
-        assert_eq!(vouch_result(202, "accepted", "amy", c), VouchResult::Listed);
-        let refused = |status, text| match vouch_result(status, text, "amy", c) {
+        // Each reply is read as a plain-text reason, as a commons sends it.
+        let said = |text: &str| reply::read(Some("text/plain"), text);
+        assert_eq!(vouch_result(202, &said("accepted"), "amy", c), VouchResult::Listed);
+        let refused = |status, text: &str| match vouch_result(status, &said(text), "amy", c) {
             VouchResult::Refused(why) => why,
             VouchResult::Listed => panic!("expected a refusal"),
         };
@@ -327,5 +334,15 @@ mod tests {
         assert!(refused(409, "that handle was taken").contains("took the handle @amy"));
         assert!(refused(429, "").contains("busy"));
         assert!(refused(500, "").contains("HTTP 500"));
+    }
+
+    #[test]
+    fn a_vouch_to_something_that_isnt_a_commons_shows_no_web_page() {
+        let page = reply::read(Some("text/html"), "<!DOCTYPE html><html><body>Only on this computer</body></html>");
+        let VouchResult::Refused(why) = vouch_result(403, &page, "amy", "http://room:8081") else {
+            panic!("expected a refusal")
+        };
+        assert!(why.contains("not as a commons"), "{why}");
+        assert!(!why.contains('<'), "no markup in the message: {why}");
     }
 }

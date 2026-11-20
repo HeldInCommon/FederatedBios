@@ -35,6 +35,7 @@
 //! | [`role`] | deciding whether a data folder is a node or a commons | reads/writes `instance.json` in one wrapper |
 //! | [`config`] | reading settings from the environment | reads env in one wrapper |
 //! | [`room`] | open to the room: what a visitor on the room's network may reach (the door) | none (the middleware only answers) |
+//! | [`reply`] | reading what a commons said back, so only a plain-text reason is ever shown | none |
 //! | [`outbound`] | which addresses this server may contact for a member | DNS lookup in one wrapper |
 //! | [`store`] | reading and writing the data folder | filesystem |
 //! | [`ratelimit`] | at most N requests per minute per sender | in-memory state |
@@ -76,6 +77,7 @@ pub mod ramp;
 pub mod ratelimit;
 pub mod relay;
 pub mod relay_node;
+pub mod reply;
 pub mod research;
 pub mod role;
 pub mod room;
