@@ -10,6 +10,7 @@
 //   do=remove-practice            confirm removing the local commons
 //   do=steward-link               show the commons' steward link (ADR 0024)
 //   do=open-room&role=node|commons|practice   confirm opening it to the room (ADR 0027)
+//   do=host-room                  confirm hosting the room: a local commons, open to the Wi-Fi
 //   do=public-address             set, check or clear the commons' public address (ADR 0028)
 //
 // Talks to the Rust side through Tauri commands (src-tauri/src/commands.rs):
@@ -22,6 +23,7 @@
 //   set_name     (role, name)           name (or rename) the node or commons
 //   remove_practice_now                 delete the local commons
 //   open_room_now (which)               open a node or local commons to the room
+//   host_room_now                       start a local commons if needed and open it to the room
 //   steward_links -> [string]           the commons' steward link, per address
 //   close_setup                         close the setup window
 //   node_up      (which) -> bool        is *our* server of that kind answering yet?
@@ -257,6 +259,25 @@ function showOpenRoom(role){
   });
 }
 
+// Host this room: the same confirm screen as opening to the room, said for a
+// local commons that may not exist yet. The app starts one if needed, opens
+// it to the room and shows its QR code; the node is never opened by this.
+function showHostRoom(){
+  fillHead($('open-room-head'), 'practice');
+  $('open-room-title').textContent = 'Host this room';
+  $('open-room-who').textContent = 'Join with one link or the QR code, and be listed straight away. They share signed copies; their originals stay on their own computers.';
+  $('open-room-stays').textContent = 'Your node, your keys, and the local commons\u2019 steward view.';
+  $('open-room-go').textContent = 'Host this room';
+  $('open-room').hidden = false;
+  $('open-room-back').addEventListener('click', () => invoke('close_setup'));
+  $('open-room-go').addEventListener('click', async () => {
+    $('open-room-go').disabled = true;
+    $('open-room-err').textContent = '';
+    try { await invoke('host_room_now'); }
+    catch(err){ $('open-room-err').textContent = ('' + err) || 'Could not host the room.'; $('open-room-go').disabled = false; }
+  });
+}
+
 // The commons' port, wherever a screen says what a tunnel or forward must
 // lead to (`tailscale funnel --bg 8080`).
 function showPort(){
@@ -407,6 +428,7 @@ async function init(){
   else if (todo === 'remove-practice') showRemove();
   else if (todo === 'steward-link') showStewardLink();
   else if (todo === 'open-room') showOpenRoom(role);
+  else if (todo === 'host-room') showHostRoom();
   else if (todo === 'public-address') showPublic(st.public_address);
   // The main window.
   else if (st.role && st.name) showLoading(st.role);

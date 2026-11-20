@@ -129,7 +129,11 @@ minute. Write a small story from what you hear."). It stays on their computer
 until they press **Share**, and goes to a commons where they're listed. They
 can **Withdraw** it from there at any time, and **Export** it as a text file.
 
-**A local commons, for a workshop or a session.** **This computer → Start a
+**A local commons, for a workshop or a session.** The quickest way is
+**This computer → Host this room…**: after you confirm, it starts a local
+commons, opens it to everyone on the same Wi-Fi and shows its QR code and join
+link. People paste the link into **Share to a commons** and are listed straight
+away. Your node stays as it is. Step by step instead: **This computer → Start a
 local commons** starts a commons on this computer. It starts closed: only this
 computer can reach it. Name it (**This computer → Rename local commons…**), and when the
 room is ready choose **This computer → Open … to the room…**: anyone on the same Wi-Fi

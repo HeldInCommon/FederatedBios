@@ -13,9 +13,10 @@ use super::schematics::{
     figure, figure_with_phone, FEDERATE_SVG, JOIN_NARROW_SVG, JOIN_SVG, REACH_SVG, SIDE_BY_SIDE_SVG,
 };
 
-/// Asks the app to open (starting it if needed) the local commons (called
-/// `practice` in links and code, its first name).
-pub const OPEN_PRACTICE: &str = "hic-app://open/practice";
+/// Asks the app to host the room: it confirms first, then starts a local
+/// commons if there isn't one and opens it to everyone on the Wi-Fi (the Go
+/// menu's "Host this room…", `host-room` in `src-tauri/src/go_menu.rs`).
+pub const HOST_ROOM: &str = "hic-app://menu/host-room";
 /// Asks the app to show this computer's commons, setting one up if needed.
 pub const OPEN_COMMONS: &str = "hic-app://open/commons";
 /// Asks the app to show this computer's node, setting one up if needed.
@@ -59,7 +60,7 @@ pub fn run_a_commons(in_app: bool) -> Markup {
             p { "The copies people share and nothing else. Members-only work is never sent. When someone withdraws a copy, the commons removes it. A copy someone already downloaded stays with them, as with anything shared." }
 
             h2 class="section-h" { "What's a local commons?" }
-            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Start it from " strong { "This computer" } " in the app's sidebar and give it a name. It starts closed: only this computer can reach it. When the room is ready, choose " strong { "Open … to the room" } " there, and show the room its QR code and room code. People share to it from their own nodes and, as on any commons, are listed once a member vouches for them, which is one click, or you approve them. When the session's over, remove it from " strong { "This computer" } " and it's gone." }
+            p { "A commons on this computer that anyone on the same Wi-Fi can reach: for a workshop, a class, or a session between artists hanging out. Choose " strong { "Host this room…" } " under " strong { "This computer" } " in the app's sidebar: it starts a local commons and opens it to the Wi-Fi in one step, and shows a QR code and a link. People paste the link into " strong { "Share to a commons" } " on their own node (or scan the code) and are listed straight away. Your node keeps running as it is. When the session's over, remove it from " strong { "This computer" } " and it's gone." }
             p { "An " strong { "online commons" } " is different: it has an address anyone can reach, on a server or through a tunnel such as Tailscale Funnel, and it stays up for a community over time." }
         }
     }
@@ -71,9 +72,9 @@ fn try_it(in_app: bool) -> Markup {
         section class="recovery try-commons" {
             h2 class="field-label" { "Try it" }
             @if in_app {
-                p { "Start a local commons for a workshop or a session, then open it to the room from This computer in the app's sidebar: anyone on this Wi-Fi can share to it while it's open. Your node keeps running." }
+                p { "Host a workshop or a session: a local commons that anyone on this Wi-Fi can join with one link while it's open. Your node keeps running." }
                 div class="commons-actions" {
-                    a class="primary" href=(OPEN_PRACTICE) { "Start a local commons" }
+                    a class="primary" href=(HOST_ROOM) { "Host this room" }
                     a class="secondary" href=(OPEN_COMMONS) { "Set up a real commons" }
                 }
                 p class="hint" { "A real commons on this computer can be reached by people on the same Wi-Fi." }
@@ -104,7 +105,7 @@ mod tests {
     #[test]
     fn the_app_gets_buttons_a_browser_gets_directions() {
         let app = run_a_commons(true).into_string();
-        assert!(app.contains(OPEN_PRACTICE) && app.contains(OPEN_COMMONS));
+        assert!(app.contains(HOST_ROOM) && app.contains(OPEN_COMMONS));
         let web = run_a_commons(false).into_string();
         assert!(!web.contains("hic-app://"));
         assert!(web.contains(DOCKER_GUIDE));

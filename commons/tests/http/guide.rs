@@ -21,10 +21,11 @@ async fn a_node_has_the_guide_and_a_commons_does_not() {
 }
 
 #[tokio::test]
-async fn in_the_app_the_guide_offers_a_local_commons() {
+async fn in_the_app_the_guide_offers_to_host_the_room() {
     let (node, _) = server_with(Role::Node, &[("HIC_LAUNCH_TOKEN", "t")]);
     let r = send(&node, get("/run-a-commons", None)).await;
-    assert!(r.text.contains("hic-app://open/practice"));
+    // One step: the app confirms, starts a local commons and opens it to the Wi-Fi.
+    assert!(r.text.contains("hic-app://menu/host-room"));
     assert!(r.text.contains("hic-app://open/commons"));
 }
 

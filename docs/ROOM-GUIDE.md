@@ -40,11 +40,12 @@ room closes.
 ### For the host
 
 1. Join your laptop to the room's Wi-Fi.
-2. In the app, under **This computer** in the sidebar, choose **Open my node
-   to the room…**. To open your local commons, choose **Open** followed by its
-   name, for example **Open Thursday session to the room…**, from the same
-   list. (Start it first with **This computer → Start a local commons**; it
-   starts closed.)
+2. In the app, under **This computer** in the sidebar, choose **Host this
+   room…**. It starts a local commons (if you haven't got one), opens it to the
+   room, and shows its QR code and join link: this is what people share to.
+   Your node stays as it is. To let the room see your own public profile too,
+   also choose **Open my node to the room…** from the same list. A node only
+   shows; it never takes shares, so always give people the local commons' link.
 3. The app asks you to confirm: "Only open this on a network you trust: a
    classroom, a studio, your own hotspot." Confirm only if that's where you are.
 4. The `/room` page opens. It shows a big QR code and your address, for example
@@ -67,9 +68,11 @@ room closes.
    to the room…**, then confirm.
 3. Your `/room` page shows your QR code and address. Turn your screen so others
    can scan it, and scan theirs.
-4. To join the host's local commons, share to it from your node as usual,
-   and type the room code from the host's screen into the **Invite or room
-   code** box. Spaces don't matter. Five wrong tries and that laptop has to
+4. To join the host's local commons, paste its join link from the host's
+   screen (it ends in `/join/` and the room code) into **Share to a commons**
+   on your node, or scan the QR code, and press **Share**: you're listed
+   straight away. Or type the address and put the room code in the **Invite
+   or room code** box. Spaces don't matter. Five wrong tries and that laptop has to
    wait a while before trying again.
 
 ## When someone can't connect
