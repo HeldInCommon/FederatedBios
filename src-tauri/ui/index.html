@@ -102,10 +102,11 @@
     <p class="err" id="remove-err" role="alert"></p>
   </main>
 
-  <!-- Open a node or local commons to the room (Options → Open to the room…), ADR 0027 -->
+  <!-- Open a node or local commons to the room (Options → Open to the room…), ADR 0027.
+       Also "Host this room…" (do=host-room), with its own words filled in by app.js. -->
   <main class="choose" id="open-room" hidden>
     <div class="server-head" id="open-room-head"></div>
-    <h1>Open <span id="open-room-what">your node</span> to the room<span class="dot">?</span></h1>
+    <h1><span id="open-room-title">Open <span id="open-room-what">your node</span> to the room</span><span class="dot">?</span></h1>
     <div class="pair">
       <div class="pair-box">
         <span class="fact-tag">The room can</span>

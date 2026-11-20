@@ -64,6 +64,13 @@ pub fn items(saved: &Saved, open: &[Kind]) -> Vec<Item> {
         };
         out.push(item(format!("open:{}", k.key()), label, Group::Servers));
     }
+    // Host this room: one step that starts a local commons (if there isn't
+    // one) and opens it to the room, so people on the Wi-Fi can join with one
+    // link. Offered until the local commons is open; then its card has the
+    // QR code instead. It asks first, in the setup window.
+    if !(saved.practice && open.contains(&Kind::Practice)) {
+        out.push(item(HOST_ROOM.into(), "Host this room\u{2026}".into(), Group::Room));
+    }
     // Open or close each server to the room. Opening asks first (in the
     // setup window); closing doesn't need to.
     for k in Kind::ALL.into_iter().filter(|k| saved.runs(*k) && room::has_switch(*k)) {
@@ -93,6 +100,9 @@ pub fn items(saved: &Saved, open: &[Kind]) -> Vec<Item> {
     }
     out
 }
+
+/// The Go-menu id for "Host this room…" (see [`items`]).
+pub const HOST_ROOM: &str = "host-room";
 
 /// Where an item sits in the sidebar's "This computer" panel. Each server's
 /// actions live on its own card, so they say what they act on by where they
@@ -134,13 +144,15 @@ pub fn server_of(id: &str) -> Option<Kind> {
     match id {
         // Only a commons has a steward and a public address.
         "steward-link" | "public-address" => Some(Kind::Commons),
-        "remove-practice" => Some(Kind::Practice),
+        // Hosting the room is the local commons' job.
+        "remove-practice" | HOST_ROOM => Some(Kind::Practice),
         _ => id.split_once(':').and_then(|(_, kind)| Kind::parse(kind)),
     }
 }
 
-/// Where `item` goes in the sidebar, and what it says there. Pure.
-fn sidebar_entry(item: Item) -> SidebarItem {
+/// Where `item` goes in the sidebar, and what it says there, given whether
+/// this computer runs a local commons yet (`has_practice`). Pure.
+fn sidebar_entry(item: Item, has_practice: bool) -> SidebarItem {
     let server = server_of(&item.id).map(Kind::key);
     // The part of the id before the colon says what the item does.
     let action = item.id.split_once(':').map_or(item.id.as_str(), |(action, _)| action);
@@ -151,6 +163,10 @@ fn sidebar_entry(item: Item) -> SidebarItem {
         "room-open" => (Slot::Option, "Open to the room\u{2026}".to_string()),
         "rename" => (Slot::Option, "Rename\u{2026}".to_string()),
         "remove-practice" => (Slot::Danger, item.label),
+        // With no local commons yet, hosting is the dashed card that makes
+        // one; with one that's closed, it's on that card, in plain sight.
+        HOST_ROOM if !has_practice => (Slot::Add, item.label),
+        HOST_ROOM => (Slot::Card, item.label),
         _ => (Slot::Option, item.label),
     };
     SidebarItem { id: item.id, label, server, slot }
@@ -158,16 +174,21 @@ fn sidebar_entry(item: Item) -> SidebarItem {
 
 /// The items for the sidebar's "This computer" panel: all but the servers
 /// already there as cards (adding one that isn't running stays, as an
-/// [`Slot::Add`] card), each placed on its server's card. Pure.
+/// [`Slot::Add`] card), each placed on its server's card. "Host this room…"
+/// takes the place of the dashed "Start a local commons" card: hosting is
+/// what a local commons is for, and two dashed cards for one thing would
+/// be confusing. (The menu bar keeps both.) Pure.
 pub fn sidebar_items(saved: &Saved, open: &[Kind]) -> Vec<SidebarItem> {
-    items(saved, open)
-        .into_iter()
+    let all = items(saved, open);
+    let offers_hosting = all.iter().any(|i| i.id == HOST_ROOM);
+    all.into_iter()
         .filter(|i| {
             let shown_as_card = i.group == Group::Servers
                 && i.id.strip_prefix("open:").and_then(Kind::parse).is_some_and(|k| saved.runs(k));
-            !shown_as_card
+            let replaced_by_hosting = offers_hosting && i.id == "open:practice";
+            !shown_as_card && !replaced_by_hosting
         })
-        .map(sidebar_entry)
+        .map(|i| sidebar_entry(i, saved.practice))
         .collect()
 }
 
@@ -177,7 +198,7 @@ pub fn is_menu_id(id: &str) -> bool {
     /// Ids that end in a kind of server (`room-close:node`).
     const WITH_KIND: [&str; 5] = ["open:", "room-open:", "room-close:", "room-show:", "rename:"];
     /// Ids that stand alone.
-    const ALONE: [&str; 3] = ["steward-link", "public-address", "remove-practice"];
+    const ALONE: [&str; 4] = ["steward-link", "public-address", "remove-practice", HOST_ROOM];
     ALONE.contains(&id) || WITH_KIND.iter().any(|p| id.strip_prefix(p).and_then(Kind::parse).is_some())
 }
 
@@ -247,8 +268,36 @@ mod tests {
     fn a_server_this_computer_could_add_is_an_add_card() {
         let only_node = Saved { role: Some("node".into()), name: Some("potato".into()), ..Default::default() };
         let side = sidebar_items(&only_node, &[]);
-        let add = side.iter().find(|i| i.id == "open:practice").expect("start a local commons");
-        assert_eq!((add.slot, add.server), (Slot::Add, Some("practice")));
+        let add = side.iter().find(|i| i.id == "open:commons").expect("set up a commons");
+        assert_eq!((add.slot, add.server), (Slot::Add, Some("commons")));
+    }
+
+    #[test]
+    fn with_no_local_commons_hosting_is_the_dashed_card_that_makes_one() {
+        let only_node = Saved { role: Some("node".into()), name: Some("potato".into()), ..Default::default() };
+        let side = sidebar_items(&only_node, &[]);
+        let host = side.iter().find(|i| i.id == HOST_ROOM).expect("host this room");
+        assert_eq!(
+            (host.slot, host.server, host.label.as_str()),
+            (Slot::Add, Some("practice"), "Host this room\u{2026}")
+        );
+        assert!(!side.iter().any(|i| i.id == "open:practice"), "one dashed card for the local commons, not two");
+        // The menu bar keeps "Start a local commons" too, for practising alone.
+        assert!(items(&only_node, &[]).iter().any(|i| i.id == "open:practice"));
+    }
+
+    #[test]
+    fn a_closed_local_commons_has_hosting_on_its_card() {
+        let side = sidebar_items(&spark(), &[]);
+        let host = side.iter().find(|i| i.id == HOST_ROOM).expect("host this room");
+        assert_eq!((host.slot, host.server), (Slot::Card, Some("practice")));
+    }
+
+    #[test]
+    fn once_hosting_the_card_shows_the_qr_code_instead() {
+        let all = items(&spark(), &[Kind::Practice]);
+        assert!(!all.iter().any(|i| i.id == HOST_ROOM));
+        assert!(all.iter().any(|i| i.id == "room-show:practice"));
     }
 
     #[test]
@@ -258,7 +307,9 @@ mod tests {
 
     #[test]
     fn only_real_menu_actions_count() {
-        for good in ["open:node", "room-close:practice", "rename:commons", "public-address", "remove-practice"] {
+        for good in
+            ["open:node", "room-close:practice", "rename:commons", "public-address", "remove-practice", "host-room"]
+        {
             assert!(is_menu_id(good), "{good}");
         }
         for bad in ["about-project", "open:elsewhere", "room-close:", "rm -rf", ""] {

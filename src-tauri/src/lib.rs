@@ -152,6 +152,9 @@ fn on_menu(app: &tauri::AppHandle, id: &str) {
     } else if id == "steward-link" {
         commands::open_setup(app, "do=steward-link", "Steward link");
         Ok(())
+    } else if id == go_menu::HOST_ROOM {
+        commands::open_setup(app, "do=host-room", "Host this room");
+        Ok(())
     } else if id == "remove-practice" {
         commands::open_setup(app, "do=remove-practice", "Remove local commons");
         Ok(())
@@ -344,6 +347,7 @@ pub fn run() {
             commands::restart_node,
             commands::remove_practice_now,
             commands::open_room_now,
+            commands::host_room_now,
             commands::set_public_address,
             commands::check_address,
             commands::steward_links

@@ -83,13 +83,57 @@ pub fn open(app: &AppHandle, kind: Kind) -> Result<(), String> {
         open_setup(app, &format!("do=add&role={}", kind.key()), "Set up");
         return Ok(());
     }
+    start_practice(app, &mut current, true)
+}
+
+/// Start a new local commons (closed to the room) and save that this
+/// computer runs one; `show` switches the main window to it once it
+/// answers. `current` is the saved choice, already locked by the caller.
+/// **Writes `app.json`** and starts a server.
+fn start_practice(app: &AppHandle, current: &mut Saved, show: bool) -> Result<(), String> {
+    let cfg = app.state::<AppConfig>();
     let port = current.port_of(Kind::Practice);
     if network::probe(port, &cfg.launch_token) == Probe::Other {
         return Err(port_taken(port));
     }
     let next = Saved { practice: true, ..current.clone() };
-    sidecar::start(app, &cfg, &app.state::<Servers>(), &next, Kind::Practice, true)?;
-    remember(app, &mut current, next)
+    sidecar::start(app, &cfg, &app.state::<Servers>(), &next, Kind::Practice, show)?;
+    remember(app, current, next)
+}
+
+/// Host this room: a local commons open to everyone on this Wi-Fi, in one
+/// step (see `room::host_step`). Starts a local commons if there isn't one,
+/// opens it to the room (with a fresh room code, as `set_room` always does),
+/// and shows its room page with the QR code and join link. The node is never
+/// opened: it doesn't take shares (ADR 0027).
+///
+/// Checks the network first, so a computer that's not on a room's Wi-Fi
+/// gets the reason and no half-made commons. **Writes `app.json`** when it
+/// starts a local commons, and restarts the local commons' server.
+pub fn host_room(app: &AppHandle) -> Result<(), String> {
+    // A copy of the saved choice, so the lock isn't held while servers start
+    // (`start_practice` and `set_room` take it again themselves).
+    let saved = app.state::<Chosen>().0.lock().unwrap().clone();
+    if !saved.ready() {
+        return Err("Choose a node or a commons first.".into());
+    }
+    let (has_practice, port) = (saved.practice, saved.port_of(Kind::Practice));
+    let practice_open = app.state::<Servers>().get(Kind::Practice).is_open();
+    let step = crate::room::host_step(has_practice, practice_open);
+    if step == crate::room::HostStep::ShowRoom {
+        let cfg = app.state::<AppConfig>();
+        sidecar::show_when_up(app.clone(), cfg.launch_token.clone(), port, sidecar::room_page_url(port));
+        return Ok(());
+    }
+    // The same network rules as opening to the room (`set_room` checks them
+    // again, with Tailscale): here only "is there a room network at all?".
+    crate::room::check_open(Kind::Practice, network::lan_url(port), false).map_err(|why| why.message().to_string())?;
+    if step == crate::room::HostStep::StartAndOpen {
+        let chosen = app.state::<Chosen>();
+        let mut current = chosen.0.lock().unwrap();
+        start_practice(app, &mut current, false)?;
+    }
+    set_room(app, Kind::Practice, true)
 }
 
 /// Stop the local commons and delete everything in it. The node and any
@@ -522,6 +566,22 @@ pub fn open_room_now(window: tauri::WebviewWindow, app: AppHandle, which: String
     }
     let kind = Kind::parse(&which).ok_or("Unknown kind of server.")?;
     set_room(&app, kind, true)?;
+    close_setup(app);
+    Ok(())
+}
+
+/// Host this room (the setup window's confirm button, after it has said who
+/// will be able to reach the local commons): see [`host_room`].
+///
+/// Only the setup window may ask, as for opening to the room, so no page in
+/// the main window can open anything to the room. Runs off the main thread
+/// (`async`): starting and restarting the server take a few seconds.
+#[tauri::command(async)]
+pub fn host_room_now(window: tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
+    if window.label() != SETUP_WINDOW {
+        return Err("Host the room from This computer in the sidebar.".into());
+    }
+    host_room(&app)?;
     close_setup(app);
     Ok(())
 }

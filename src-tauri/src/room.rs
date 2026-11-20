@@ -124,6 +124,31 @@ pub fn check_open(kind: Kind, lan: Option<String>, forwarded: bool) -> Result<St
     Ok(lan)
 }
 
+/// What "Host this room" has to do, from where the local commons is now.
+/// One variant per starting point, so each case is handled on purpose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostStep {
+    /// No local commons yet: start one, then open it to the room.
+    StartAndOpen,
+    /// A local commons that's only on this computer: open it to the room.
+    Open,
+    /// Already open to the room: just show its room page (QR code and link).
+    ShowRoom,
+}
+
+/// The step "Host this room" takes, given whether this computer runs a local
+/// commons (`has_practice`) and whether it's open to the room. Hosting never
+/// touches the node: a node opened to the room only shows its owner's public
+/// work and never takes shares (ADR 0027), so the room needs a commons to
+/// share to. Pure.
+pub fn host_step(has_practice: bool, practice_open: bool) -> HostStep {
+    match (has_practice, practice_open) {
+        (false, _) => HostStep::StartAndOpen,
+        (true, false) => HostStep::Open,
+        (true, true) => HostStep::ShowRoom,
+    }
+}
+
 /// Is `ip` an address a room's router hands out: a private IPv4 range
 /// (`10/8`, `172.16/12`, `192.168/16`) or a private IPv6 one (`fc00::/7`)?
 /// Not `100.64/10` (Tailscale and carrier networks) and not a public address,
@@ -381,5 +406,12 @@ mod tests {
         assert_eq!(where_is(Kind::Commons, false), None, "closed: as app.json says");
         assert_eq!(menu_label(Kind::Node, "Laptop", false), "Open my node to the room\u{2026}");
         assert_eq!(menu_label(Kind::Practice, "Thursday", true), "Close Thursday to the room");
+    }
+
+    #[test]
+    fn hosting_starts_a_local_commons_only_when_there_is_none() {
+        assert_eq!(host_step(false, false), HostStep::StartAndOpen);
+        assert_eq!(host_step(true, false), HostStep::Open);
+        assert_eq!(host_step(true, true), HostStep::ShowRoom, "already hosting: show the QR code again");
     }
 }
