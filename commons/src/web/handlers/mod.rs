@@ -73,7 +73,7 @@ pub use profile::profile;
 pub use publish::{clean_avatar, profile_from_form, publish, publish_form};
 pub use research::receive_terms;
 pub use room::{join_room, room, room_check, room_help};
-pub(crate) use share::{post_to_commons, post_to_commons_at, send_share};
+pub(crate) use share::{post_to_commons, post_to_commons_at, read_reply, send_share};
 pub use share::{share, withdraw};
 pub use signin::{join_form, join_submit, login_form, login_submit, logout};
 pub use stories::{held_story, stories};

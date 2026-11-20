@@ -15,8 +15,8 @@ use crate::app::{AppState, Shared};
 use crate::form::Form;
 use crate::identity::{self, RECOVERY_ROTATION};
 use crate::model::{HandleRec, PendingRotation};
-use crate::web::handlers::{authorised_as, post_to_commons, readable_profile, send_share};
-use crate::web::layout::{error_page, render, server_error, Page};
+use crate::web::handlers::{authorised_as, post_to_commons, read_reply, readable_profile, send_share};
+use crate::web::layout::{error_page, host_label, render, server_error, Page};
 use crate::web::pages;
 use crate::{handle, keys, member, now};
 
@@ -135,7 +135,7 @@ async fn finish_key_change(st: &AppState, h: &str, mut pending: PendingRotation)
         match post_to_commons(st, c, &change).await {
             // 404: that commons doesn't hold the handle, so there's nothing to move.
             Ok(r) if r.status().is_success() || r.status() == StatusCode::NOT_FOUND => pending.done.push(c.clone()),
-            Ok(r) => failed.push((c.clone(), r.text().await.unwrap_or_default())),
+            Ok(r) => failed.push((c.clone(), read_reply(r).await.reason_for(&host_label(c)))),
             Err(e) => failed.push((c.clone(), e)),
         }
     }

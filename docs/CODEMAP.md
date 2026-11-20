@@ -51,6 +51,7 @@ Writes happen in clearly named places that say what they change.
 | `here.rs` | "Only while I'm here" (decision record 0021): the signed `StoryCard` (no text, its SHA-256) and `StoryRelay` (a node's poll with its answers); a commons' rules for them (`admit_card`, `text_matches`). | yes |
 | `relay.rs` | A commons' side of "Only while I'm here": who is here (`Presence`) and readers waiting (`RequestState`), as enums with pure transitions, kept in memory only. | in-memory state |
 | `relay_node.rs` | A node's side: which commons need a connection, what to answer, the connection's state (`Link`), and the loop that keeps each long poll open. | rules yes; asks commons |
+| `reply.rs` | What a commons said back to a node (`CommonsReply`): a plain-text reason, or a web page meaning the address isn't a commons. Only a plain reason is ever shown. | rules yes |
 | `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `held_signals.rs` | Held in Common Signals (decision record 0025): withdraw even after training, and own terms for AI; read from the form (1,000-character limit) and, strictly, from a signed `ProfileV2` or `StoryV2`. | yes |

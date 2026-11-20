@@ -9,7 +9,7 @@ use axum::response::{IntoResponse, Response};
 
 use std::time::Duration;
 
-use super::{authorised_as, post_to_commons, post_to_commons_at, session};
+use super::{authorised_as, post_to_commons, post_to_commons_at, read_reply, session};
 use crate::app::{AppState, Shared};
 use crate::form::Form;
 use crate::here;
@@ -279,7 +279,7 @@ async fn share_copy_to(st: &AppState, s: &OwnStory, rec: &HandleRec, commons: &s
         }
     }
     if !r.status().is_success() {
-        let why = r.text().await.unwrap_or_default();
+        let why = read_reply(r).await.reason_for(&label);
         return Err(format!("{label} didn't take the story: {why}"));
     }
     update_story(st, &s.story.id, |old| old.with_shared_as(commons, now(), Travel::Copy))
@@ -304,7 +304,7 @@ async fn share_card_to(st: &AppState, s: &OwnStory, rec: &HandleRec, commons: &s
         ));
     }
     if !r.status().is_success() {
-        let why = r.text().await.unwrap_or_default();
+        let why = read_reply(r).await.reason_for(&label);
         return Err(format!("{label} didn't take the story's card: {why}"));
     }
     update_story(st, &s.story.id, |old| old.with_shared_as(commons, at, Travel::Here))
@@ -369,7 +369,7 @@ pub async fn story_withdraw(State(st): State<Shared>, headers: HeaderMap, body: 
             redirect(&format!("/story/{}?done=withdrawn&at={label}", s.story.id))
         }
         Ok(r) => {
-            let why = r.text().await.unwrap_or_default();
+            let why = read_reply(r).await.reason_for(&label);
             error_page(&st.site, &format!("{label} didn't accept the withdrawal: {why}"))
         }
         Err(e) => error_page(&st.site, &e),

@@ -268,7 +268,8 @@ async fn poll_once(
         200 => resp.json::<PollReply>().await.map_err(|e| PollError::Failed(e.to_string())),
         404 => Err(PollError::NotSupported),
         code => {
-            let why = resp.text().await.unwrap_or_default();
+            // Never log a whole web page: only a commons' short reason.
+            let why = crate::web::handlers::read_reply(resp).await.reason_for(commons);
             Err(PollError::Failed(format!("{code} {why}")))
         }
     }

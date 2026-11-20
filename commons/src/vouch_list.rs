@@ -27,11 +27,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::{AppState, Shared};
 use crate::model::{HandleRec, PendingShare};
+use crate::reply::CommonsReply;
 use crate::web::layout::host_label;
 use crate::{handle, now, outbound, vouching};
 
 /// How long the People tab waits for each commons before saying it couldn't
-/// reach it. Short, because the page waits for it.
+/// reach it. Short, because the page waits for it: a local commons from a
+/// room session that has since closed never answers, and the page would
+/// wait this long for each one. The online commons answers in under a
+/// second, even through Tailscale Funnel.
 pub const ASK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The longest name shown for someone waiting. A commons could send
@@ -63,8 +67,9 @@ pub enum Lookup {
     /// The commons doesn't have one-click vouching (an older version):
     /// the member can still vouch by handle and key.
     NotOffered,
-    /// No answer in time, or one that made no sense.
-    Unreachable,
+    /// No answer in time, or one that made no sense, with why in plain words
+    /// ("no answer within 10 seconds"), so the page and the log can say.
+    Unreachable(String),
 }
 
 /// The waiting list a commons sends a member: for each share waiting for a
@@ -117,12 +122,12 @@ pub fn lookup_from_answer(status: u16, body: &str) -> Lookup {
     match status {
         200 => match serde_json::from_str::<Answer>(body) {
             Ok(a) => Lookup::Found(tidy(a.waiting)),
-            Err(_) => Lookup::Unreachable,
+            Err(_) => Lookup::Unreachable("its answer wasn't a waiting list".into()),
         },
         // No such route: a commons from before this feature (or not a commons).
         404 | 405 => Lookup::NotOffered,
         400..=499 => Lookup::Refused(sentence(body)),
-        _ => Lookup::Unreachable,
+        _ => Lookup::Unreachable(format!("it had a problem (HTTP {status})")),
     }
 }
 
@@ -150,22 +155,35 @@ fn policy(st: &AppState) -> outbound::Policy {
 pub async fn ask(st: &AppState, rec: &HandleRec, commons: &str) -> Lookup {
     let Ok(request) = vouching::make_waiting_request(&rec.ed_pub, &rec.ed_priv, commons, now()) else {
         // Only fails if the stored key is damaged; nothing to ask with.
-        return Lookup::Unreachable;
+        return Lookup::Unreachable("this node couldn't sign the request".into());
     };
     // The whole exchange (address check, connecting, answer) shares one
-    // timeout, so a commons that is down can't hold the page for long.
+    // timeout, so a commons that is down can't hold the page for long. Each
+    // step that can fail says why, in words for the member.
     let exchange = async {
-        let client = outbound::client_for(commons, policy(st)).await.ok()?;
-        let resp = client.post(format!("{commons}/api/waiting")).json(&request).send().await.ok()?;
+        let client = outbound::client_for(commons, policy(st)).await?;
+        let resp = client
+            .post(format!("{commons}/api/waiting"))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|_| "couldn't connect to it".to_string())?;
         let status = resp.status().as_u16();
-        let body = resp.text().await.ok()?;
-        Some(lookup_from_answer(status, &body))
+        let body = resp.text().await.map_err(|_| "its answer was cut off".to_string())?;
+        Ok::<Lookup, String>(lookup_from_answer(status, &body))
     };
-    match tokio::time::timeout(ASK_TIMEOUT, exchange).await {
-        Ok(Some(lookup)) => lookup,
-        // Refused by the address rules, no connection, or out of time.
-        _ => Lookup::Unreachable,
+    let lookup = match tokio::time::timeout(ASK_TIMEOUT, exchange).await {
+        Ok(Ok(lookup)) => lookup,
+        Ok(Err(why)) => Lookup::Unreachable(why),
+        Err(_) => Lookup::Unreachable(format!("no answer within {} seconds", ASK_TIMEOUT.as_secs())),
+    };
+    // Say in the app's log why a commons couldn't show its list, so a
+    // failure can be traced. Only the commons and the reason: never the
+    // member's handle or key (house style, logging and privacy).
+    if let Lookup::Unreachable(why) = &lookup {
+        eprintln!("warning: couldn't fetch the waiting list from {}: {why}", host_label(commons));
     }
+    lookup
 }
 
 /// Ask each of `commons` who is waiting, all at once, and return the answers
@@ -188,7 +206,11 @@ pub async fn ask_each(st: &Shared, rec: &HandleRec, commons: &[String]) -> Vec<(
         }
     }
     // A task that panicked counts as unreachable rather than vanishing.
-    commons.iter().cloned().zip(answers.into_iter().map(|a| a.unwrap_or(Lookup::Unreachable))).collect()
+    commons
+        .iter()
+        .cloned()
+        .zip(answers.into_iter().map(|a| a.unwrap_or_else(|| Lookup::Unreachable("this node hit a problem".into()))))
+        .collect()
 }
 
 /// What happened when a member pressed **Vouch**.
@@ -200,14 +222,17 @@ pub enum VouchResult {
     Refused(String),
 }
 
-/// Turn a commons' answer to a vouch for `@who` (its HTTP status and text)
-/// into what to tell the member. Pure.
-pub fn vouch_result(status: u16, text: &str, who: &str, commons: &str) -> VouchResult {
+/// Turn a commons' answer to a vouch for `@who` (its HTTP status and what it
+/// said, see [`crate::reply`]) into what to tell the member. Pure.
+pub fn vouch_result(status: u16, answer: &CommonsReply, who: &str, commons: &str) -> VouchResult {
     let place = host_label(commons);
     if (200..300).contains(&status) {
         return VouchResult::Listed;
     }
+    let text = answer.text();
     let why = match status {
+        // Not a commons at all: say so, rather than quote a web page.
+        _ if *answer == CommonsReply::NotACommons => answer.reason_for(&place),
         404 => format!(
             "@{who} isn't waiting on {place} any more. Someone may already have vouched for them, or the steward may have declined them."
         ),
@@ -229,6 +254,7 @@ pub fn vouch_result(status: u16, text: &str, who: &str, commons: &str) -> VouchR
 mod tests {
     use super::*;
     use crate::model::{Profile, RemoteEntry};
+    use crate::reply;
 
     /// A full-looking key made of one repeated hex digit.
     fn key(c: char) -> String {
@@ -287,9 +313,9 @@ mod tests {
             Lookup::Found(vec![Waiting { handle: "amy".into(), name: "Amy".into(), key: key('b') }])
         );
         assert_eq!(lookup_from_answer(200, r#"{"waiting":[]}"#), Lookup::Found(vec![]));
-        assert_eq!(lookup_from_answer(200, "not json"), Lookup::Unreachable);
+        assert!(matches!(lookup_from_answer(200, "not json"), Lookup::Unreachable(_)));
         assert_eq!(lookup_from_answer(404, ""), Lookup::NotOffered);
-        assert_eq!(lookup_from_answer(500, "boom"), Lookup::Unreachable);
+        assert_eq!(lookup_from_answer(500, "boom"), Lookup::Unreachable("it had a problem (HTTP 500)".into()));
         assert_eq!(
             lookup_from_answer(403, "whoever made this isn't a member of this commons"),
             Lookup::Refused("Whoever made this isn't a member of this commons.".into())
@@ -315,8 +341,10 @@ mod tests {
     #[test]
     fn a_vouch_answer_is_said_in_plain_words() {
         let c = "http://room:8081";
-        assert_eq!(vouch_result(202, "accepted", "amy", c), VouchResult::Listed);
-        let refused = |status, text| match vouch_result(status, text, "amy", c) {
+        // Each reply is read as a plain-text reason, as a commons sends it.
+        let said = |text: &str| reply::read(Some("text/plain"), text);
+        assert_eq!(vouch_result(202, &said("accepted"), "amy", c), VouchResult::Listed);
+        let refused = |status, text: &str| match vouch_result(status, &said(text), "amy", c) {
             VouchResult::Refused(why) => why,
             VouchResult::Listed => panic!("expected a refusal"),
         };
@@ -327,5 +355,15 @@ mod tests {
         assert!(refused(409, "that handle was taken").contains("took the handle @amy"));
         assert!(refused(429, "").contains("busy"));
         assert!(refused(500, "").contains("HTTP 500"));
+    }
+
+    #[test]
+    fn a_vouch_to_something_that_isnt_a_commons_shows_no_web_page() {
+        let page = reply::read(Some("text/html"), "<!DOCTYPE html><html><body>Only on this computer</body></html>");
+        let VouchResult::Refused(why) = vouch_result(403, &page, "amy", "http://room:8081") else {
+            panic!("expected a refusal")
+        };
+        assert!(why.contains("not as a commons"), "{why}");
+        assert!(!why.contains('<'), "no markup in the message: {why}");
     }
 }

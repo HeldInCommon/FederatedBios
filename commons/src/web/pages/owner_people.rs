@@ -73,8 +73,8 @@ fn waiting_panel(handle: &str, o: &OwnerPanel) -> Markup {
                     Lookup::NotOffered => {
                         p class="hint" { (place) " doesn't offer one-click vouching yet. You can still vouch by handle and key, below." }
                     }
-                    Lookup::Unreachable => {
-                        p class="hint" role="status" { "Couldn't reach " (place) " to see who's waiting. It may be offline, or this computer may not be on its network. Reload this page to try again." }
+                    Lookup::Unreachable(why) => {
+                        p class="hint" role="status" { "Couldn't reach " (place) " to see who's waiting: " (why) ". It may be offline, or this computer may not be on its network. Reload this page to try again, or vouch by handle and key below." }
                     }
                 }
             }
@@ -196,7 +196,9 @@ mod tests {
     fn every_kind_of_answer_says_something() {
         let says = |l| people_tab("tega", &panel(l)).into_string();
         assert!(says(Lookup::Found(vec![])).contains("Nobody is waiting on room:8081"));
-        assert!(says(Lookup::Unreachable).contains("Couldn't reach room:8081"));
+        let page = says(Lookup::Unreachable("no answer within 5 seconds".into()));
+        assert!(page.contains("Couldn't reach room:8081"));
+        assert!(page.contains("no answer within 5 seconds"), "the page says why");
         assert!(says(Lookup::NotOffered).contains("vouch by handle and key"));
         assert!(says(Lookup::Refused("Too old.".into())).contains("didn't show its waiting list: Too old."));
     }

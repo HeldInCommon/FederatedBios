@@ -10,6 +10,7 @@ use crate::app::{AppState, Shared};
 use crate::federation::{self, Sender, ShareFormat};
 use crate::form::Form;
 use crate::model::{HandleRec, Reach, Version};
+use crate::reply::{self, CommonsReply};
 use crate::web::layout::{error_page, render, server_error, Page};
 use crate::web::pages;
 use crate::{handle, now, outbound};
@@ -71,35 +72,49 @@ pub async fn share(State(st): State<Shared>, headers: HeaderMap, body: String) -
             };
             render(&st.site, Page::new("Shared", Some(&h), body))
         }
-        Ok((r, _)) if r.status() == StatusCode::FORBIDDEN => {
-            let why = r.text().await.unwrap_or_default();
-            error_page(&st.site, &format!("{label} didn't accept the invite code: {why}"))
+        Ok((r, _)) => {
+            let status = r.status();
+            let answer = read_reply(r).await;
+            error_page(&st.site, &share_refused(status, &answer, &label, &h))
         }
-        // A local commons waiting out wrong room codes (decision record 0027)
-        // says how long in its reply; pass it on as it is.
-        Ok((r, _)) if r.status() == StatusCode::TOO_MANY_REQUESTS => {
-            let why = r.text().await.unwrap_or_default();
-            error_page(&st.site, &format!("{label} asked us to wait: {why}"))
-        }
-        Ok((r, _)) if r.status() == StatusCode::CONFLICT => {
-            let reason = r.text().await.unwrap_or_default();
-            if reason.contains("newer") {
-                error_page(
-                    &st.site,
-                    &format!("{label} already has a newer version of @{h}. Publish again, then share."),
-                )
-            } else {
-                error_page(&st.site, &format!(
-                    "@{h} is already used on {label} by someone else. Each commons keeps its handles unique, so this one can't join there — but you can still share it to other commons, or make a new handle for this one."
-                ))
-            }
-        }
-        Ok((r, _)) => error_page(
-            &st.site,
-            &format!("That commons rejected the share (HTTP {}). It may not accept federation.", r.status().as_u16()),
-        ),
         Err(e) => error_page(&st.site, &e),
     }
+}
+
+/// What to tell `@handle` when `label` refused their share with `status` and
+/// `answer`. A web page instead of a reason means the address isn't a
+/// commons (most often someone's node opened to the room), whatever the
+/// status. Pure.
+fn share_refused(status: StatusCode, answer: &CommonsReply, label: &str, handle: &str) -> String {
+    if *answer == CommonsReply::NotACommons {
+        return reply::not_a_commons(label);
+    }
+    let why = answer.reason_for(label);
+    match status {
+        StatusCode::FORBIDDEN => format!("{label} didn't accept the invite code: {why}"),
+        // A local commons waiting out wrong room codes (decision record 0027)
+        // says how long in its reply; pass it on as it is.
+        StatusCode::TOO_MANY_REQUESTS => format!("{label} asked us to wait: {why}"),
+        StatusCode::CONFLICT if why.contains("newer") => {
+            format!("{label} already has a newer version of @{handle}. Publish again, then share.")
+        }
+        StatusCode::CONFLICT => format!(
+            "@{handle} is already used on {label} by someone else. Each commons keeps its handles unique, so this one can't join there — but you can still share it to other commons, or make a new handle for this one."
+        ),
+        _ => format!("That commons rejected the share (HTTP {}). It may not accept federation.", status.as_u16()),
+    }
+}
+
+/// Read a commons' reply to something this node sent into a
+/// [`CommonsReply`], so only a plain-text reason is ever shown to the member
+/// (see [`crate::reply`]). Takes the response by value because reading the
+/// body uses it up.
+pub(crate) async fn read_reply(response: reqwest::Response) -> CommonsReply {
+    // The header is copied out first: `.text()` consumes the response.
+    let content_type =
+        response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok()).map(String::from);
+    let body = response.text().await.unwrap_or_default();
+    reply::read(content_type.as_deref(), &body)
 }
 
 /// POST `body` to a commons' `/inbox`, checking first that this server may
@@ -204,7 +219,7 @@ pub async fn withdraw(State(st): State<Shared>, headers: HeaderMap, body: String
             render(&st.site, Page::new("Withdrawn", Some(&h), pages::withdrawn(&h, &label)))
         }
         Ok(r) => {
-            let why = r.text().await.unwrap_or_default();
+            let why = read_reply(r).await.reason_for(&label);
             error_page(&st.site, &format!("{label} didn't accept the withdrawal: {why}"))
         }
         Err(e) => error_page(&st.site, &e),

@@ -298,6 +298,11 @@ else
   curl -s http://127.0.0.1:8095/room | grep -q "<code>http://$LAN:8095/</code>" && ok "the owner's room page shows the address the room uses" || no "room page missing the room address"
   [ "$(code "http://$LAN:8095/room")" = "403" ] && ok "the room can't see the room page" || no "the room saw the room page"
   [ "$(code "http://$LAN:8095/room/check")" = "200" ] && ok "the room can check it reached this computer" || no "room check failed"
+  # Sharing to a node opened to the room (not a commons): its door answers
+  # with a web page, which must never be pasted into the sharer's page.
+  TO_NODE=$(curl -s -X POST http://localhost:8090/share -H "Cookie: hic_session=$SID" --data-urlencode "handle=tega" --data-urlencode "csrf=$CSRF" --data-urlencode "commons_url=http://$LAN:8095")
+  printf '%s' "$TO_NODE" | grep -q "isn't a commons, so it can't take your profile" && ok "sharing to a room node says it isn't a commons" || no "sharing to a room node gave no plain answer"
+  printf '%s' "$TO_NODE" | grep -q "&lt;!DOCTYPE" && no "sharing to a room node showed the node's HTML" || ok "and shows none of the node's HTML"
   kill $RPID 2>/dev/null; wait $RPID 2>/dev/null
 
   # A local commons open to the room, joined with the room code (ADR 0027, D4).
