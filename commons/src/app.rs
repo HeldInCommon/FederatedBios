@@ -194,6 +194,7 @@ pub fn router(state: Shared) -> Router {
         // Pages
         .route("/", get(handlers::directory))
         .route("/about", get(handlers::about))
+        .route("/feedback", get(handlers::feedback_form).post(handlers::feedback_submit))
         .route("/run-a-commons", get(handlers::run_a_commons))
         .route("/join", get(handlers::join_form).post(handlers::join_submit))
         .route("/login", get(handlers::login_form).post(handlers::login_submit))

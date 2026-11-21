@@ -11,7 +11,8 @@ fits together, and [adr/](adr/README.md) for why each major decision was made.
 | `commons/` | `hic-commons`, the server. One binary that runs as a **node** or a **commons**. |
 | `src-tauri/` | The desktop app. Starts `hic-commons` as a "sidecar" and shows its pages. |
 
-Everything else: `scripts/test-federation.sh` (end-to-end test), `docs/`,
+Everything else: `scripts/test-federation.sh` (end-to-end test),
+`tools/feedback-sheet/` (the Google Apps Script behind the Feedback page), `docs/`,
 `.github/workflows/` (CI). An older onboarding prototype is kept at the git
 tag `legacy-onboarding`, not on `main`.
 
@@ -53,6 +54,7 @@ Writes happen in clearly named places that say what they change.
 | `relay_node.rs` | A node's side: which commons need a connection, what to answer, the connection's state (`Link`), and the loop that keeps each long poll open. | rules yes; asks commons |
 | `reply.rs` | What a commons said back to a node (`CommonsReply`): a plain-text reason, or a web page meaning the address isn't a commons. Only a plain reason is ever shown. | rules yes |
 | `text_links.rs` | Finds web addresses and `[words](https://…)` links in a story's plain text, for display only (`http`/`https` only; the signed text never changes). | yes |
+| `feedback.rs` | Feedback to the project (decision record 0030): what a message holds (never the handle), `check()` the form's answers, did the sheet keep it. | yes |
 | `governance.rs` | The licence and signal vocabularies. | yes |
 | `held_signals.rs` | Held in Common Signals (decision record 0025): withdraw even after training, and own terms for AI; read from the form (1,000-character limit) and, strictly, from a signed `ProfileV2` or `StoryV2`. | yes |
 | `research.rs` | Sharing terms for research (decision record 0029): the `TermsGift` (terms and choices, how the person describes themselves; never their handle or story), read from the rights form, checked on a commons. | yes |
@@ -70,6 +72,7 @@ Writes happen in clearly named places that say what they change.
 | `web/handlers/research.rs` | `POST /research/terms` on a commons (keeps each gift as a file in `terms/`), and sending a gift from a node. | no |
 | `web/handlers/waiting_list.rs` | `POST /api/waiting` on a commons: who is waiting for a vouch, for a listed member's signed request only. | no |
 | `web/pages/owner_people.rs` | The People tab: who is waiting on each commons, with Vouch buttons; invite someone; vouch by handle and key. | yes |
+| `web/handlers/feedback.rs`, `web/pages/feedback.rs` | `GET\|POST /feedback`: the form for someone signed in, sent to the Google Sheet's script (`tools/feedback-sheet/`). | handler no, page yes |
 | `web/handlers/account.rs` | A member's keys: recovery key, replacing a key, recovering. | no |
 | `web/handlers/stories.rs` | Story lists (a node's; a commons', with recent withdrawals) and a story on a commons. | no |
 | `web/handlers/here.rs` | "Only while I'm here" on a commons: `/here/card`, the long poll `/here/poll`, and reading a card's story (page and `here.json`), never cached. | no |

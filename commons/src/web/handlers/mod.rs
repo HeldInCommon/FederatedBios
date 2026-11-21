@@ -19,6 +19,7 @@
 //! | `here.rs` | "Only while I'm here" on a commons: `POST /here/card`, `POST /here/poll`, reading a card's story |
 //! | `backup.rs` | `POST /backup`, `/restore` |
 //! | `federated.rs` | `GET /federated/{keyid}` |
+//! | `feedback.rs` | `GET\|POST /feedback`: feedback and the mailing list, sent to the project's Google Sheet |
 //! | `about.rs` | `GET /about`, `GET /run-a-commons` |
 //! | `account.rs` | recovery key, replacing and recovering a key |
 //! | `membership.rs` | invite codes and vouches, from a member's node (`POST /invite`, `POST /vouch`) |
@@ -43,6 +44,7 @@ mod about;
 mod backup;
 mod directory;
 mod federated;
+mod feedback;
 mod here;
 mod inbox;
 mod notices;
@@ -65,6 +67,7 @@ pub use about::{about, run_a_commons};
 pub use backup::{backup, backup_later, restore_form, restore_submit};
 pub use directory::directory;
 pub use federated::federated;
+pub use feedback::{feedback_form, feedback_submit};
 pub use here::{here_card, here_json, here_poll};
 pub use inbox::inbox;
 pub(crate) use inbox::list_entry_response;

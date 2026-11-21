@@ -12,6 +12,7 @@ mod common;
 
 mod accounts;
 mod basics;
+mod feedback;
 mod guide;
 mod held_signals;
 mod here;

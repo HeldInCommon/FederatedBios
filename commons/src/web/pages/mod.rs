@@ -19,6 +19,7 @@
 //! | `invites.rs` | invite codes made by a member or the steward |
 //! | `federated.rs` | a profile shared in from another node |
 //! | `about.rs` | how this works |
+//! | `feedback.rs` | feedback to the project: a bug, an idea or anything else, and the mailing list |
 //! | `schematics.rs` | the diagrams on How this works and Run a commons |
 //! | `guide.rs` | run a commons: questions and answers, and a local commons |
 //! | `stories.rs` | story lists: a node's, and a commons' (with recent withdrawals) |
@@ -35,6 +36,7 @@ mod about;
 mod account;
 mod directory;
 mod federated;
+mod feedback;
 mod guide;
 mod here;
 mod invites;
@@ -57,6 +59,7 @@ pub use about::about;
 pub use account::{key_change, recovery_code, restore_form};
 pub use directory::{directory, your_next, Card, SignedIn, StewardView, Viewer, YourNext};
 pub use federated::federated;
+pub use feedback::{feedback, FeedbackView};
 pub use guide::{run_a_commons, steward_node_note};
 pub use here::here_story;
 pub use invites::{invite_code, steward_invite};

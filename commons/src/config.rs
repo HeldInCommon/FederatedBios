@@ -7,6 +7,13 @@
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 
+/// The feedback address compiled into this binary, if the build set
+/// `HIC_FEEDBACK_URL` (the release workflow does, so the desktop app's
+/// server has it without any setting). `option_env!` reads the variable when
+/// the code is *compiled*, not when it runs. Not a secret: anyone with the
+/// app could find it, so the sheet's script checks every message itself.
+pub const BUILT_IN_FEEDBACK_URL: Option<&str> = option_env!("HIC_FEEDBACK_URL");
+
 /// Everything the server needs to know before it starts.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -35,6 +42,11 @@ pub struct Config {
     /// share for research (decision record 0029). Empty: the default online
     /// commons ([`Config::share_default`]) instead.
     pub research_url: String,
+    /// `HIC_FEEDBACK_URL`: the Google Apps Script web app that adds feedback
+    /// to the project's sheet (decision record 0030). When it isn't set,
+    /// the address baked in at build time ([`BUILT_IN_FEEDBACK_URL`]);
+    /// when neither is, the Feedback page says it isn't set up here.
+    pub feedback_url: String,
     /// `HIC_SHARE_NEARBY`: on a node, the commons the desktop app runs on this
     /// same computer, offered as one-click shares: comma separated
     /// `address=name` pairs (`http://127.0.0.1:8180=spark`). Their
@@ -173,6 +185,11 @@ impl Config {
             share_default: get("HIC_SHARE_DEFAULT").unwrap_or_default().trim().trim_end_matches('/').to_string(),
             share_default_name: get("HIC_SHARE_DEFAULT_NAME").unwrap_or_default().trim().to_string(),
             research_url: get("HIC_RESEARCH_URL").unwrap_or_default().trim().trim_end_matches('/').to_string(),
+            feedback_url: get("HIC_FEEDBACK_URL")
+                .or_else(|| BUILT_IN_FEEDBACK_URL.map(String::from))
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
             share_nearby: parse_nearby(&get("HIC_SHARE_NEARBY").unwrap_or_default()),
             role_env: get("HIC_ROLE"),
             launch_token: get("HIC_LAUNCH_TOKEN").filter(|t| !t.is_empty()),
@@ -258,6 +275,12 @@ impl Config {
     /// (decision record 0029), if anywhere. See [`crate::research::destination`].
     pub fn research_destination(&self) -> Option<&str> {
         crate::research::destination(&self.research_url, &self.share_default)
+    }
+
+    /// Where feedback goes (decision record 0030), if anywhere. See
+    /// [`crate::feedback::destination`].
+    pub fn feedback_destination(&self) -> Option<&str> {
+        crate::feedback::destination(&self.feedback_url)
     }
 
     /// Which addresses this server may contact when a member asks it to

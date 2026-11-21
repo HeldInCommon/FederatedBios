@@ -80,6 +80,8 @@ pub enum Section {
     SignIn,
     /// How this works.
     About,
+    /// Feedback to the project, and the mailing list.
+    Feedback,
 }
 
 /// One HTML page to send.
@@ -387,6 +389,9 @@ fn frame(site: &Site, page: &Page) -> Markup {
                                 a href="/login" aria-current=[current(page, Section::SignIn)] { "Sign in" }
                             }
                             a href="/about" aria-current=[current(page, Section::About)] { "How this works" }
+                            // Shown to everyone; the page asks people
+                            // without an account to sign in first.
+                            a href="/feedback" aria-current=[current(page, Section::Feedback)] { "Feedback" }
                             // "About the project ↗" is in the footer, so the
                             // main links fit on one line.
                         }

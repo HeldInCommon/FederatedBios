@@ -276,7 +276,7 @@ code,
 }
 
 /* Form controls */
-input:is([type="text"], [type="password"], [type="url"]),
+input:is([type="text"], [type="password"], [type="url"], [type="email"]),
 textarea,
 select {
   width: 100%;

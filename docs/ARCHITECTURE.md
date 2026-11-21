@@ -295,6 +295,7 @@ copies outside the node, not against whoever runs it; the `/about` page says so.
 | `HIC_SHARE_DEFAULT` | *(blank)* | The commons a node offers first |
 | `HIC_SHARE_DEFAULT_NAME` | *(blank)* | What pages call that commons ("Held in Common Collective Commons") instead of its address |
 | `HIC_RESEARCH_URL` | *(blank: `HIC_SHARE_DEFAULT`)* | Where a node sends terms people choose to share for research (ADR 0029); with neither set, the option isn't offered |
+| `HIC_FEEDBACK_URL` | *(blank: the address built in, if any)* | The Google Apps Script web app that adds feedback and mailing list sign-ups to the project's sheet (ADR 0030, `tools/feedback-sheet/`); with neither, the Feedback page says it isn't set up |
 | `HIC_VOUCH_LIMIT` | `5` | People one member may bring in per week |
 | `HIC_OPEN_COMMONS` | *(off)* | `1`: no vouching |
 | `HIC_ALLOW_PRIVATE_SHARE` | *(off)* | `1`: a networked node may share to local-network addresses |
