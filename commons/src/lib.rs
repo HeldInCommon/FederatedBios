@@ -43,6 +43,7 @@
 //! | [`form`] | parsing form posts | none |
 //! | [`text_links`] | finding web links in a story's text, for display | none |
 //! | [`here`] | "Only while I'm here": the signed card and poll, and a commons' rules for them | none |
+//! | [`feedback`] | what a member's feedback and mailing list sign-up hold, and the rules for them (decision record 0030) | none |
 //! | [`research`] | what a person may send for research: their terms, never their data (decision record 0029) | none |
 //! | [`relay`] | a commons' readers waiting for an author's node, and who is here | in-memory state |
 //! | [`relay_node`] | a node's outgoing connection to each commons holding its cards | asks commons; in-memory status |
@@ -60,6 +61,7 @@ pub mod canonical;
 pub mod config;
 pub mod envelope;
 pub mod federation;
+pub mod feedback;
 pub mod form;
 pub mod governance;
 pub mod handle;

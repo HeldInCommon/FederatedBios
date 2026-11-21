@@ -19,6 +19,7 @@
 #   HIC_SIGNING_IDENTITY signing identity               (default: the first Developer ID in the keychain)
 #   HIC_SHARE_DEFAULT    commons pre-filled in the app  (default: the repo's Actions variable)
 #   HIC_SHARE_DEFAULT_NAME  what pages call it          (default: the repo's Actions variable)
+#   HIC_FEEDBACK_URL     the feedback sheet's script     (default: the repo's Actions variable)
 #
 # Publishes to the numbered release v<version> (from src-tauri/Cargo.toml),
 # creating it and marking it Latest if needed. Edit its notes on GitHub after.
@@ -33,6 +34,7 @@ ID="${HIC_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 
 [ -n "$ID" ] || { echo "No Developer ID Application certificate found in the keychain." >&2; exit 1; }
 SHARE="${HIC_SHARE_DEFAULT:-$(gh variable get HIC_SHARE_DEFAULT --repo "$REPO" 2>/dev/null || true)}"
 SHARE_NAME="${HIC_SHARE_DEFAULT_NAME:-$(gh variable get HIC_SHARE_DEFAULT_NAME --repo "$REPO" 2>/dev/null || true)}"
+FEEDBACK="${HIC_FEEDBACK_URL:-$(gh variable get HIC_FEEDBACK_URL --repo "$REPO" 2>/dev/null || true)}"
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
 OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
 DMG="$OUT/Held-In-Common-macOS-AppleSilicon.dmg"
@@ -42,7 +44,7 @@ step "Version $VERSION, signing as: $ID"
 [ -z "$(git status --porcelain -- commons src-tauri)" ] || echo "warning: uncommitted changes in commons/ or src-tauri/ will be included"
 
 step "Building the server"
-cargo build --release --locked --manifest-path commons/Cargo.toml
+HIC_FEEDBACK_URL="$FEEDBACK" cargo build --release --locked --manifest-path commons/Cargo.toml
 TRIPLE=$(rustc -vV | sed -n 's/host: //p')
 mkdir -p src-tauri/binaries
 cp commons/target/release/hic-commons "src-tauri/binaries/hic-commons-$TRIPLE"
